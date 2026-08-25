@@ -1,0 +1,43 @@
+diff --git a/core/java/android/app/ActivityThread.java b/core/java/android/app/ActivityThread.java
+index 0c6afb47a8fe..acce83f292b5 100644
+--- a/core/java/android/app/ActivityThread.java
++++ b/core/java/android/app/ActivityThread.java
+@@ -8034,6 +8034,10 @@ public final class ActivityThread extends ClientTransactionHandler
+             pifService.spoofPhotosProps();
+         }
+ 
++        if (pifService.shouldSpoofAiWallpapers(data.appInfo.packageName)) {
++            pifService.spoofAiWallpapersProps();
++        }
++
+         // Initialize the default http proxy in this process.
+         Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "Setup proxies");
+         try {
+diff --git a/core/java/android/security/pif/PlayIntegritySpoofService.java b/core/java/android/security/pif/PlayIntegritySpoofService.java
+index 5551d003f099..3247587884cc 100644
+--- a/core/java/android/security/pif/PlayIntegritySpoofService.java
++++ b/core/java/android/security/pif/PlayIntegritySpoofService.java
+@@ -34,6 +34,7 @@ public final class PlayIntegritySpoofService {
+     private static final String VENDING_PACKAGE = "com.android.vending";
+     private static final String GMS_PACKAGE = "com.google.android.gms";
+     private static final String GPHOTOS_PACKAGE = "com.google.android.apps.photos";
++    private static final String AI_WALLPAPERS_PACKAGE = "com.google.android.apps.aiwallpapers";
+ 
+     private static final Map<String, Object> PIXEL_XL_PROPS = Map.of(
+         "BRAND", "google",
+@@ -619,6 +620,15 @@ public final class PlayIntegritySpoofService {
+         Log.i(TAG, "Photos spoofing enabled - device appears as Pixel XL");
+     }
+ 
++    public boolean shouldSpoofAiWallpapers(String packageName) {
++        return TextUtils.equals(AI_WALLPAPERS_PACKAGE, packageName);
++    }
++
++    public void spoofAiWallpapersProps() {
++        spoofField("BRAND", "google", "AIWallpapers");
++        Log.i(TAG, "AI Wallpapers spoofing enabled - Build.BRAND=google");
++    }
++
+     public Boolean hasSystemFeature(String name, int version) {
+         if (name == null) return null;
+ 

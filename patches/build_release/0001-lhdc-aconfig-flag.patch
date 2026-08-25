@@ -1,0 +1,12 @@
+diff --git a/aconfig/bp4a/com.android.bluetooth.flags/lhdc_codec_support_flag_values.textproto b/aconfig/bp4a/com.android.bluetooth.flags/lhdc_codec_support_flag_values.textproto
+new file mode 100644
+index 000000000..bc3a4b5e3
+--- /dev/null
++++ b/aconfig/bp4a/com.android.bluetooth.flags/lhdc_codec_support_flag_values.textproto
+@@ -0,0 +1,6 @@
++flag_value {
++    package: "com.android.bluetooth.flags"
++    name: "lhdc_codec_support"
++    state: ENABLED
++    permission: READ_ONLY
++}

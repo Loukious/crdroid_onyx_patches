@@ -1,0 +1,137 @@
+diff --git a/media/java/android/media/AudioSystem.java b/media/java/android/media/AudioSystem.java
+index 442fc38d13d9..baffe6985d5f 100644
+--- a/media/java/android/media/AudioSystem.java
++++ b/media/java/android/media/AudioSystem.java
+@@ -22,6 +22,7 @@ import android.annotation.Nullable;
+ import android.annotation.RequiresPermission;
+ import android.annotation.TestApi;
+ import android.bluetooth.BluetoothCodecConfig;
++import android.bluetooth.BluetoothCodecType;
+ import android.bluetooth.BluetoothLeAudioCodecConfig;
+ import android.compat.annotation.UnsupportedAppUsage;
+ import android.content.Context;
+@@ -248,6 +249,8 @@ public class AudioSystem
+     /** @hide */
+     public static final int AUDIO_FORMAT_LDAC           = 0x23000000;
+     /** @hide */
++    public static final int AUDIO_FORMAT_LHDC           = 0x28000000;
++    /** @hide */
+     public static final int AUDIO_FORMAT_LC3            = 0x2B000000;
+     /** @hide */
+     public static final int AUDIO_FORMAT_OPUS           = 0x08000000;
+@@ -263,6 +266,7 @@ public class AudioSystem
+             AUDIO_FORMAT_APTX,
+             AUDIO_FORMAT_APTX_HD,
+             AUDIO_FORMAT_LDAC,
++            AUDIO_FORMAT_LHDC,
+             AUDIO_FORMAT_LC3,
+             AUDIO_FORMAT_OPUS,
+             AUDIO_FORMAT_OPUS_HI_RES,
+@@ -306,6 +310,7 @@ public class AudioSystem
+             case AUDIO_FORMAT_LDAC: return BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC;
+             case AUDIO_FORMAT_LC3: return BluetoothCodecConfig.SOURCE_CODEC_TYPE_LC3;
+             case AUDIO_FORMAT_OPUS: return BluetoothCodecConfig.SOURCE_CODEC_TYPE_OPUS;
++            case AUDIO_FORMAT_LHDC: return BluetoothCodecConfig.SOURCE_CODEC_TYPE_LHDCV5;
+             default:
+                 Log.e(TAG, "Unknown audio format 0x" + Integer.toHexString(audioFormat)
+                         + " for conversion to BT codec");
+@@ -334,32 +339,41 @@ public class AudioSystem
+     /**
+      * @hide
+      * Convert an A2DP Bluetooth codec to an audio format enum
+-     * @param btCodec the codec to convert.
++     * @param codecId the codec to convert.
+      * @return the audio format, or {@link #AUDIO_FORMAT_DEFAULT} if unknown
+      */
+     public static @AudioFormatNativeEnumForBtCodec int bluetoothA2dpCodecToAudioFormat(
+-            int btCodec) {
+-        switch (btCodec) {
+-            case BluetoothCodecConfig.SOURCE_CODEC_TYPE_SBC:
+-                return AudioSystem.AUDIO_FORMAT_SBC;
+-            case BluetoothCodecConfig.SOURCE_CODEC_TYPE_AAC:
+-                return AudioSystem.AUDIO_FORMAT_AAC;
+-            case BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX:
+-                return AudioSystem.AUDIO_FORMAT_APTX;
+-            case BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_HD:
+-                return AudioSystem.AUDIO_FORMAT_APTX_HD;
+-            case BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC:
+-                return AudioSystem.AUDIO_FORMAT_LDAC;
+-            case BluetoothCodecConfig.SOURCE_CODEC_TYPE_LC3:
+-                return AudioSystem.AUDIO_FORMAT_LC3;
+-            case BluetoothCodecConfig.SOURCE_CODEC_TYPE_OPUS:
+-                return AudioSystem.AUDIO_FORMAT_OPUS;
+-            default:
+-                Log.e(TAG, "Unknown A2DP BT codec 0x" + Integer.toHexString(btCodec)
+-                        + " for conversion to audio format");
+-                // TODO returning DEFAULT is the current behavior, should this return INVALID?
+-                return AudioSystem.AUDIO_FORMAT_DEFAULT;
++            long codecId) {
++        if (codecId == BluetoothCodecType.CODEC_ID_SBC) {
++            return AudioSystem.AUDIO_FORMAT_SBC;
++        }
++        if (codecId == BluetoothCodecType.CODEC_ID_AAC) {
++            return AudioSystem.AUDIO_FORMAT_AAC;
++        }
++        if (codecId == BluetoothCodecType.CODEC_ID_APTX) {
++            return AudioSystem.AUDIO_FORMAT_APTX;
++        }
++        if (codecId == BluetoothCodecType.CODEC_ID_APTX_HD) {
++            return AudioSystem.AUDIO_FORMAT_APTX_HD;
+         }
++        if (codecId == BluetoothCodecType.CODEC_ID_LDAC
++                || codecId == (BluetoothCodecType.CODEC_ID_LDAC & 0xFFFFFFFFL)) {
++            return AudioSystem.AUDIO_FORMAT_LDAC;
++        }
++        if (codecId == BluetoothCodecType.CODEC_ID_OPUS) {
++            return AudioSystem.AUDIO_FORMAT_OPUS;
++        }
++        if (codecId == BluetoothCodecType.CODEC_ID_LHDCV2
++                || codecId == BluetoothCodecType.CODEC_ID_LHDCV3
++                || codecId == BluetoothCodecType.CODEC_ID_LHDCV5) {
++            return AudioSystem.AUDIO_FORMAT_LHDC;
++        }
++        Log.e(
++                TAG,
++                "Unknown A2DP BT codec 0x"
++                        + Long.toHexString(codecId)
++                        + " for conversion to audio format");
++        return AudioSystem.AUDIO_FORMAT_DEFAULT;
+     }
+ 
+     /**
+diff --git a/services/core/java/com/android/server/audio/BtHelper.java b/services/core/java/com/android/server/audio/BtHelper.java
+index c954bc626459..e593e3c68b6c 100644
+--- a/services/core/java/com/android/server/audio/BtHelper.java
++++ b/services/core/java/com/android/server/audio/BtHelper.java
+@@ -35,6 +35,7 @@ import android.bluetooth.BluetoothAdapter;
+ import android.bluetooth.BluetoothClass;
+ import android.bluetooth.BluetoothCodecConfig;
+ import android.bluetooth.BluetoothCodecStatus;
++import android.bluetooth.BluetoothCodecType;
+ import android.bluetooth.BluetoothDevice;
+ import android.bluetooth.BluetoothHeadset;
+ import android.bluetooth.BluetoothHearingAid;
+@@ -311,10 +312,22 @@ public class BtHelper {
+                     mA2dpCodecConfig = null;
+                     return new Pair<>(AudioSystem.AUDIO_FORMAT_DEFAULT, changed);
+                 }
++                final BluetoothCodecType btCodecType = btCodecConfig.getExtendedCodecType();
++                if (btCodecType == null) {
++                    mA2dpCodecConfig = null;
++                    return new Pair<>(AudioSystem.AUDIO_FORMAT_DEFAULT, changed);
++                }
+                 changed = !btCodecConfig.equals(mA2dpCodecConfig);
+                 mA2dpCodecConfig = btCodecConfig;
++                // A2DP LC3 has no static codec identifier in BluetoothCodecType.
++                // Preserve the legacy mapping while vendor codecs use their
++                // full identifiers below.
++                if (btCodecConfig.getCodecType()
++                        == BluetoothCodecConfig.SOURCE_CODEC_TYPE_LC3) {
++                    return new Pair<>(AudioSystem.AUDIO_FORMAT_LC3, changed);
++                }
+                 return new Pair<>(AudioSystem.bluetoothA2dpCodecToAudioFormat(
+-                        btCodecConfig.getCodecType()), changed);
++                        btCodecType.getCodecId()), changed);
+             }
+             case BluetoothProfile.LE_AUDIO: {
+                 boolean changed = mLeAudioCodecConfig != null;

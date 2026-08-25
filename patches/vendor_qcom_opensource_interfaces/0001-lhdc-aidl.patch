@@ -1,0 +1,872 @@
+diff --git a/bluetooth_audio/aidl/Android.bp b/bluetooth_audio/aidl/Android.bp
+index 62f0b8b..9203fbb 100644
+--- a/bluetooth_audio/aidl/Android.bp
++++ b/bluetooth_audio/aidl/Android.bp
+@@ -10,7 +10,7 @@ aidl_interface {
+         ndk: {
+             apex_available: [
+                 "//apex_available:platform",
+-                "com.android.btservices",
++                "com.android.bt",
+             ],
+             min_sdk_version: "31",
+         },
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/.hash b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/.hash
+index c90a552..2edf6b9 100644
+--- a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/.hash
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/.hash
+@@ -1 +1 @@
+-be7f6f90eb88c54a08b4bd98ba130b87a3a467c4
++66be451afc8e22485c148f0741c520430d6f9b9c
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcChannelMode.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcChannelMode.aidl
+new file mode 100644
+index 0000000..4530f09
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcChannelMode.aidl
+@@ -0,0 +1,25 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcChannelMode {
++  UNKNOWN = 0,
++  STEREO = 1,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcChannelSplitMode.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcChannelSplitMode.aidl
+new file mode 100644
+index 0000000..b5f8cef
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcChannelSplitMode.aidl
+@@ -0,0 +1,27 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcChannelSplitMode {
++  UNKNOWN = 0,
++  LHDC_CH_SPLIT_NONE = 1,
++  LHDC_CH_SPLIT_TWS = 2,
++  LHDC_CH_SPLIT_TWS_PLUS = 4,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcMaxTargetBitrate.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcMaxTargetBitrate.aidl
+new file mode 100644
+index 0000000..dd395c1
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcMaxTargetBitrate.aidl
+@@ -0,0 +1,27 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcMaxTargetBitrate {
++  MaxTargetBitrate_900kV4_noLimitV5 = 0x00,
++  MaxTargetBitrate_500kV4_400kV5 = 0x10,
++  MaxTargetBitrate_400kV4_600kV5 = 0x20,
++  MaxTargetBitrate_ReservedV4_900kV5 = 0x30,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcMinTargetBitrate.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcMinTargetBitrate.aidl
+new file mode 100644
+index 0000000..72f989e
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcMinTargetBitrate.aidl
+@@ -0,0 +1,27 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcMinTargetBitrate {
++  MinTargetBitrate_defaultV4_noLimitV5 = 0,
++  MinTargetBitrate_320kV4_128kV5 = 1,
++  MinTargetBitrate_256kV5 = 2,
++  MinTargetBitrate_400kV5 = 3,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcMode.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcMode.aidl
+new file mode 100644
+index 0000000..efc7071
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcMode.aidl
+@@ -0,0 +1,27 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcMode {
++  UNKNOWN = 0,
++  HQ = 1,
++  LL = 2,
++  LOSSLESS = 4,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcQualityIndex.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcQualityIndex.aidl
+new file mode 100644
+index 0000000..d668c2a
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcQualityIndex.aidl
+@@ -0,0 +1,29 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcQualityIndex {
++  UNKNOWN = 0,
++  QUALITY_ABR = 4,
++  QUALITY_LOW = 5,
++  QUALITY_MID = 6,
++  QUALITY_HIGH = 7,
++  QUALITY_LOW4 = 8,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcVersion.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcVersion.aidl
+new file mode 100644
+index 0000000..50feb55
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/LhdcVersion.aidl
+@@ -0,0 +1,29 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcVersion {
++  UNKNOWN = 0,
++  LHDC_V1 = 1,
++  LHDC_V2 = 2,
++  LHDC_V3 = 3,
++  LHDC_V4 = 4,
++  LHDC_V5 = 5,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl
+index 79bdb48..85e4f82 100644
+--- a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl
+@@ -55,4 +55,6 @@ enum VendorCodecType {
+   LC3Q = 0,
+   APTX_ADAPTIVE_R3 = 1,
+   APTX_ADAPTIVE_R4 = 2,
++  LHDC = 3,
++  MIHC = 4,
+ }
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl
+index 6a41d16..aff13ce 100644
+--- a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl
+@@ -61,7 +61,27 @@ parcelable classicVendorCapabilities {
+     byte[] decoder_capability;
+     int decoder_capability_len;
+   }
++  parcelable LhdcCapabilities {
++    int[] sampleRateHz;
++    vendor.qti.hardware.bluetooth.audio.LhdcChannelMode[] channelMode;
++    vendor.qti.hardware.bluetooth.audio.LhdcQualityIndex[] qualityIndex;
++    byte[] bitsPerSample;
++    vendor.qti.hardware.bluetooth.audio.LhdcVersion[] version;
++    vendor.qti.hardware.bluetooth.audio.LhdcMode[] mode;
++    vendor.qti.hardware.bluetooth.audio.LhdcMaxTargetBitrate[] maxTargetBitrate;
++    vendor.qti.hardware.bluetooth.audio.LhdcMinTargetBitrate[] minTargetBitrate;
++    vendor.qti.hardware.bluetooth.audio.LhdcChannelSplitMode[] channelSplitMode;
++    boolean llacEnable;
++    boolean losslessEnable;
++    boolean jasEnable;
++    boolean xmsaEnable;
++  }
++  parcelable MihcCapabilities {
++  }
+   union CodecSpecific {
+     vendor.qti.hardware.bluetooth.audio.classicVendorCapabilities.AptxAdaptiveR4Capabilities aptxAdaptiveR4Cap;
++    @nullable vendor.qti.hardware.bluetooth.audio.classicVendorCapabilities.LhdcCapabilities lhdcCapabilities;
++    @nullable vendor.qti.hardware.bluetooth.audio.classicVendorCapabilities.MihcCapabilities mihcCapabilities;
+   }
++  vendor.qti.hardware.bluetooth.audio.classicVendorCapabilities.CodecSpecific capabilities;
+ }
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl
+index f6d0ac5..a6c12c3 100644
+--- a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl
+@@ -61,7 +61,27 @@ parcelable classicVendorConfiguration {
+     byte[] decoder_capability;
+     int decoder_capability_len;
+   }
++  parcelable LhdcConfiguration {
++    int sampleRateHz;
++    vendor.qti.hardware.bluetooth.audio.LhdcChannelMode channelMode;
++    vendor.qti.hardware.bluetooth.audio.LhdcQualityIndex qualityIndex;
++    byte bitsPerSample;
++    vendor.qti.hardware.bluetooth.audio.LhdcVersion version;
++    vendor.qti.hardware.bluetooth.audio.LhdcMode mode;
++    vendor.qti.hardware.bluetooth.audio.LhdcMaxTargetBitrate maxTargetBitrate;
++    vendor.qti.hardware.bluetooth.audio.LhdcMinTargetBitrate minTargetBitrate;
++    vendor.qti.hardware.bluetooth.audio.LhdcChannelSplitMode channelSplitMode;
++    boolean llacEnable;
++    boolean losslessEnable;
++    boolean jasEnable;
++    boolean xmsaEnable;
++  }
++  parcelable MihcConfiguration {
++  }
+   union CodecSpecific {
+     vendor.qti.hardware.bluetooth.audio.classicVendorConfiguration.AptxAdaptiveR4Configuration aptxAdaptiveR4Config;
++    @nullable vendor.qti.hardware.bluetooth.audio.classicVendorConfiguration.LhdcConfiguration lhdcConfig;
++    @nullable vendor.qti.hardware.bluetooth.audio.classicVendorConfiguration.MihcConfiguration mihcConfig;
+   }
++  vendor.qti.hardware.bluetooth.audio.classicVendorConfiguration.CodecSpecific config;
+ }
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcChannelMode.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcChannelMode.aidl
+new file mode 100644
+index 0000000..4530f09
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcChannelMode.aidl
+@@ -0,0 +1,25 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcChannelMode {
++  UNKNOWN = 0,
++  STEREO = 1,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcChannelSplitMode.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcChannelSplitMode.aidl
+new file mode 100644
+index 0000000..b5f8cef
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcChannelSplitMode.aidl
+@@ -0,0 +1,27 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcChannelSplitMode {
++  UNKNOWN = 0,
++  LHDC_CH_SPLIT_NONE = 1,
++  LHDC_CH_SPLIT_TWS = 2,
++  LHDC_CH_SPLIT_TWS_PLUS = 4,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcMaxTargetBitrate.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcMaxTargetBitrate.aidl
+new file mode 100644
+index 0000000..dd395c1
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcMaxTargetBitrate.aidl
+@@ -0,0 +1,27 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcMaxTargetBitrate {
++  MaxTargetBitrate_900kV4_noLimitV5 = 0x00,
++  MaxTargetBitrate_500kV4_400kV5 = 0x10,
++  MaxTargetBitrate_400kV4_600kV5 = 0x20,
++  MaxTargetBitrate_ReservedV4_900kV5 = 0x30,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcMinTargetBitrate.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcMinTargetBitrate.aidl
+new file mode 100644
+index 0000000..72f989e
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcMinTargetBitrate.aidl
+@@ -0,0 +1,27 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcMinTargetBitrate {
++  MinTargetBitrate_defaultV4_noLimitV5 = 0,
++  MinTargetBitrate_320kV4_128kV5 = 1,
++  MinTargetBitrate_256kV5 = 2,
++  MinTargetBitrate_400kV5 = 3,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcMode.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcMode.aidl
+new file mode 100644
+index 0000000..efc7071
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcMode.aidl
+@@ -0,0 +1,27 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcMode {
++  UNKNOWN = 0,
++  HQ = 1,
++  LL = 2,
++  LOSSLESS = 4,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcQualityIndex.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcQualityIndex.aidl
+new file mode 100644
+index 0000000..d668c2a
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcQualityIndex.aidl
+@@ -0,0 +1,29 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcQualityIndex {
++  UNKNOWN = 0,
++  QUALITY_ABR = 4,
++  QUALITY_LOW = 5,
++  QUALITY_MID = 6,
++  QUALITY_HIGH = 7,
++  QUALITY_LOW4 = 8,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcVersion.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcVersion.aidl
+new file mode 100644
+index 0000000..50feb55
+--- /dev/null
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/LhdcVersion.aidl
+@@ -0,0 +1,29 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++///////////////////////////////////////////////////////////////////////////////
++// THIS FILE IS IMMUTABLE. DO NOT EDIT IN ANY CASE.                          //
++///////////////////////////////////////////////////////////////////////////////
++
++// This file is a snapshot of an AIDL file. Do not edit it manually. There are
++// two cases:
++// 1). this is a frozen version file - do not edit this in any case.
++// 2). this is a 'current' file. If you make a backwards compatible change to
++//     the interface (from the latest frozen version), the build system will
++//     prompt you to update this file with `m <name>-update-api`.
++//
++// You must not make a backward incompatible change to any AIDL file built
++// with the aidl_interface module type with versions property set. The module
++// type is used to build AIDL files in a way that they can be used across
++// independently updatable components of the system. If a device is shipped
++// with such a backward incompatible change, it has a high risk of breaking
++// later when a module using the interface is updated, e.g., Mainline modules.
++
++package vendor.qti.hardware.bluetooth.audio;
++@Backing(type="byte") @VintfStability
++enum LhdcVersion {
++  UNKNOWN = 0,
++  LHDC_V1 = 1,
++  LHDC_V2 = 2,
++  LHDC_V3 = 3,
++  LHDC_V4 = 4,
++  LHDC_V5 = 5,
++}
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl
+index 79bdb48..85e4f82 100644
+--- a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl
+@@ -55,4 +55,6 @@ enum VendorCodecType {
+   LC3Q = 0,
+   APTX_ADAPTIVE_R3 = 1,
+   APTX_ADAPTIVE_R4 = 2,
++  LHDC = 3,
++  MIHC = 4,
+ }
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl
+index 6a41d16..aff13ce 100644
+--- a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl
+@@ -61,7 +61,27 @@ parcelable classicVendorCapabilities {
+     byte[] decoder_capability;
+     int decoder_capability_len;
+   }
++  parcelable LhdcCapabilities {
++    int[] sampleRateHz;
++    vendor.qti.hardware.bluetooth.audio.LhdcChannelMode[] channelMode;
++    vendor.qti.hardware.bluetooth.audio.LhdcQualityIndex[] qualityIndex;
++    byte[] bitsPerSample;
++    vendor.qti.hardware.bluetooth.audio.LhdcVersion[] version;
++    vendor.qti.hardware.bluetooth.audio.LhdcMode[] mode;
++    vendor.qti.hardware.bluetooth.audio.LhdcMaxTargetBitrate[] maxTargetBitrate;
++    vendor.qti.hardware.bluetooth.audio.LhdcMinTargetBitrate[] minTargetBitrate;
++    vendor.qti.hardware.bluetooth.audio.LhdcChannelSplitMode[] channelSplitMode;
++    boolean llacEnable;
++    boolean losslessEnable;
++    boolean jasEnable;
++    boolean xmsaEnable;
++  }
++  parcelable MihcCapabilities {
++  }
+   union CodecSpecific {
+     vendor.qti.hardware.bluetooth.audio.classicVendorCapabilities.AptxAdaptiveR4Capabilities aptxAdaptiveR4Cap;
++    @nullable vendor.qti.hardware.bluetooth.audio.classicVendorCapabilities.LhdcCapabilities lhdcCapabilities;
++    @nullable vendor.qti.hardware.bluetooth.audio.classicVendorCapabilities.MihcCapabilities mihcCapabilities;
+   }
++  vendor.qti.hardware.bluetooth.audio.classicVendorCapabilities.CodecSpecific capabilities;
+ }
+diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl
+index f6d0ac5..a6c12c3 100644
+--- a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl
++++ b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/current/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl
+@@ -61,7 +61,27 @@ parcelable classicVendorConfiguration {
+     byte[] decoder_capability;
+     int decoder_capability_len;
+   }
++  parcelable LhdcConfiguration {
++    int sampleRateHz;
++    vendor.qti.hardware.bluetooth.audio.LhdcChannelMode channelMode;
++    vendor.qti.hardware.bluetooth.audio.LhdcQualityIndex qualityIndex;
++    byte bitsPerSample;
++    vendor.qti.hardware.bluetooth.audio.LhdcVersion version;
++    vendor.qti.hardware.bluetooth.audio.LhdcMode mode;
++    vendor.qti.hardware.bluetooth.audio.LhdcMaxTargetBitrate maxTargetBitrate;
++    vendor.qti.hardware.bluetooth.audio.LhdcMinTargetBitrate minTargetBitrate;
++    vendor.qti.hardware.bluetooth.audio.LhdcChannelSplitMode channelSplitMode;
++    boolean llacEnable;
++    boolean losslessEnable;
++    boolean jasEnable;
++    boolean xmsaEnable;
++  }
++  parcelable MihcConfiguration {
++  }
+   union CodecSpecific {
+     vendor.qti.hardware.bluetooth.audio.classicVendorConfiguration.AptxAdaptiveR4Configuration aptxAdaptiveR4Config;
++    @nullable vendor.qti.hardware.bluetooth.audio.classicVendorConfiguration.LhdcConfiguration lhdcConfig;
++    @nullable vendor.qti.hardware.bluetooth.audio.classicVendorConfiguration.MihcConfiguration mihcConfig;
+   }
++  vendor.qti.hardware.bluetooth.audio.classicVendorConfiguration.CodecSpecific config;
+ }
+diff --git a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcChannelMode.aidl b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcChannelMode.aidl
+new file mode 100644
+index 0000000..5d35192
+--- /dev/null
++++ b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcChannelMode.aidl
+@@ -0,0 +1,9 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++package vendor.qti.hardware.bluetooth.audio;
++
++@VintfStability
++@Backing(type="byte")
++enum LhdcChannelMode {
++    UNKNOWN = 0,
++    STEREO = 1,
++}
+diff --git a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcChannelSplitMode.aidl b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcChannelSplitMode.aidl
+new file mode 100644
+index 0000000..a3b0906
+--- /dev/null
++++ b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcChannelSplitMode.aidl
+@@ -0,0 +1,11 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++package vendor.qti.hardware.bluetooth.audio;
++
++@VintfStability
++@Backing(type="byte")
++enum LhdcChannelSplitMode {
++    UNKNOWN = 0,
++    LHDC_CH_SPLIT_NONE = 1,
++    LHDC_CH_SPLIT_TWS = 2,
++    LHDC_CH_SPLIT_TWS_PLUS = 4,
++}
+diff --git a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcMaxTargetBitrate.aidl b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcMaxTargetBitrate.aidl
+new file mode 100644
+index 0000000..8d61fca
+--- /dev/null
++++ b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcMaxTargetBitrate.aidl
+@@ -0,0 +1,11 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++package vendor.qti.hardware.bluetooth.audio;
++
++@VintfStability
++@Backing(type="byte")
++enum LhdcMaxTargetBitrate {
++    MaxTargetBitrate_900kV4_noLimitV5 = 0x00,
++    MaxTargetBitrate_500kV4_400kV5 = 0x10,
++    MaxTargetBitrate_400kV4_600kV5 = 0x20,
++    MaxTargetBitrate_ReservedV4_900kV5 = 0x30,
++}
+diff --git a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcMinTargetBitrate.aidl b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcMinTargetBitrate.aidl
+new file mode 100644
+index 0000000..857a05b
+--- /dev/null
++++ b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcMinTargetBitrate.aidl
+@@ -0,0 +1,11 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++package vendor.qti.hardware.bluetooth.audio;
++
++@VintfStability
++@Backing(type="byte")
++enum LhdcMinTargetBitrate {
++    MinTargetBitrate_defaultV4_noLimitV5 = 0,
++    MinTargetBitrate_320kV4_128kV5 = 1,
++    MinTargetBitrate_256kV5 = 2,
++    MinTargetBitrate_400kV5 = 3,
++}
+diff --git a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcMode.aidl b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcMode.aidl
+new file mode 100644
+index 0000000..63b5158
+--- /dev/null
++++ b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcMode.aidl
+@@ -0,0 +1,11 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++package vendor.qti.hardware.bluetooth.audio;
++
++@VintfStability
++@Backing(type="byte")
++enum LhdcMode {
++    UNKNOWN = 0,
++    HQ = 1,
++    LL = 2,
++    LOSSLESS = 4,
++}
+diff --git a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcQualityIndex.aidl b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcQualityIndex.aidl
+new file mode 100644
+index 0000000..d7e4f90
+--- /dev/null
++++ b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcQualityIndex.aidl
+@@ -0,0 +1,13 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++package vendor.qti.hardware.bluetooth.audio;
++
++@VintfStability
++@Backing(type="byte")
++enum LhdcQualityIndex {
++    UNKNOWN = 0,
++    QUALITY_ABR = 4,
++    QUALITY_LOW = 5,
++    QUALITY_MID = 6,
++    QUALITY_HIGH = 7,
++    QUALITY_LOW4 = 8,
++}
+diff --git a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcVersion.aidl b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcVersion.aidl
+new file mode 100644
+index 0000000..c01aa45
+--- /dev/null
++++ b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/LhdcVersion.aidl
+@@ -0,0 +1,13 @@
++/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
++package vendor.qti.hardware.bluetooth.audio;
++
++@VintfStability
++@Backing(type="byte")
++enum LhdcVersion {
++    UNKNOWN = 0,
++    LHDC_V1 = 1,
++    LHDC_V2 = 2,
++    LHDC_V3 = 3,
++    LHDC_V4 = 4,
++    LHDC_V5 = 5,
++}
+diff --git a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl
+index 6e0cab0..527847a 100644
+--- a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl
++++ b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/VendorCodecType.aidl
+@@ -37,7 +37,9 @@ package vendor.qti.hardware.bluetooth.audio;
+ @VintfStability
+ @Backing(type="int")
+ enum VendorCodecType {
+-    LC3Q,
+-    APTX_ADAPTIVE_R3,
+-    APTX_ADAPTIVE_R4
++    LC3Q = 0,
++    APTX_ADAPTIVE_R3 = 1,
++    APTX_ADAPTIVE_R4 = 2,
++    LHDC = 3,
++    MIHC = 4,
+ }
+diff --git a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl
+index ce95971..62232fb 100644
+--- a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl
++++ b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.aidl
+@@ -38,6 +38,13 @@ import vendor.qti.hardware.bluetooth.audio.VendorCodecType;
+ import vendor.qti.hardware.bluetooth.audio.AptxAdaptiveR4SampleRate;
+ import vendor.qti.hardware.bluetooth.audio.AptxAdaptiveR4ChannelMode;
+ import vendor.qti.hardware.bluetooth.audio.AptxAdaptiveR4_TTP;
++import vendor.qti.hardware.bluetooth.audio.LhdcChannelMode;
++import vendor.qti.hardware.bluetooth.audio.LhdcChannelSplitMode;
++import vendor.qti.hardware.bluetooth.audio.LhdcMaxTargetBitrate;
++import vendor.qti.hardware.bluetooth.audio.LhdcMinTargetBitrate;
++import vendor.qti.hardware.bluetooth.audio.LhdcMode;
++import vendor.qti.hardware.bluetooth.audio.LhdcQualityIndex;
++import vendor.qti.hardware.bluetooth.audio.LhdcVersion;
+ 
+ @VintfStability
+ parcelable classicVendorCapabilities {
+@@ -51,8 +58,30 @@ parcelable classicVendorCapabilities {
+       byte[] decoder_capability;
+       int decoder_capability_len;
+   }
++
++  parcelable LhdcCapabilities {
++      int[] sampleRateHz;
++      LhdcChannelMode[] channelMode;
++      LhdcQualityIndex[] qualityIndex;
++      byte[] bitsPerSample;
++      LhdcVersion[] version;
++      LhdcMode[] mode;
++      LhdcMaxTargetBitrate[] maxTargetBitrate;
++      LhdcMinTargetBitrate[] minTargetBitrate;
++      LhdcChannelSplitMode[] channelSplitMode;
++      boolean llacEnable;
++      boolean losslessEnable;
++      boolean jasEnable;
++      boolean xmsaEnable;
++  }
++
++  parcelable MihcCapabilities {}
++
+   VendorCodecType vendorCodecType;
+   union CodecSpecific {
+     AptxAdaptiveR4Capabilities aptxAdaptiveR4Cap;
++    @nullable LhdcCapabilities lhdcCapabilities;
++    @nullable MihcCapabilities mihcCapabilities;
+   }
++  CodecSpecific capabilities;
+ }
+diff --git a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl
+index 0cdb133..9e1c893 100644
+--- a/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl
++++ b/bluetooth_audio/aidl/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.aidl
+@@ -38,6 +38,13 @@ import vendor.qti.hardware.bluetooth.audio.VendorCodecType;
+ import vendor.qti.hardware.bluetooth.audio.AptxAdaptiveR4SampleRate;
+ import vendor.qti.hardware.bluetooth.audio.AptxAdaptiveR4ChannelMode;
+ import vendor.qti.hardware.bluetooth.audio.AptxAdaptiveR4_TTP;
++import vendor.qti.hardware.bluetooth.audio.LhdcChannelMode;
++import vendor.qti.hardware.bluetooth.audio.LhdcChannelSplitMode;
++import vendor.qti.hardware.bluetooth.audio.LhdcMaxTargetBitrate;
++import vendor.qti.hardware.bluetooth.audio.LhdcMinTargetBitrate;
++import vendor.qti.hardware.bluetooth.audio.LhdcMode;
++import vendor.qti.hardware.bluetooth.audio.LhdcQualityIndex;
++import vendor.qti.hardware.bluetooth.audio.LhdcVersion;
+ 
+ @VintfStability
+ parcelable classicVendorConfiguration {
+@@ -51,8 +58,30 @@ parcelable classicVendorConfiguration {
+       byte[] decoder_capability;
+       int decoder_capability_len;
+   }
++
++  parcelable LhdcConfiguration {
++      int sampleRateHz;
++      LhdcChannelMode channelMode;
++      LhdcQualityIndex qualityIndex;
++      byte bitsPerSample;
++      LhdcVersion version;
++      LhdcMode mode;
++      LhdcMaxTargetBitrate maxTargetBitrate;
++      LhdcMinTargetBitrate minTargetBitrate;
++      LhdcChannelSplitMode channelSplitMode;
++      boolean llacEnable;
++      boolean losslessEnable;
++      boolean jasEnable;
++      boolean xmsaEnable;
++  }
++
++  parcelable MihcConfiguration {}
++
+   VendorCodecType vendorCodecType;
+   union CodecSpecific {
+     AptxAdaptiveR4Configuration aptxAdaptiveR4Config;
++    @nullable LhdcConfiguration lhdcConfig;
++    @nullable MihcConfiguration mihcConfig;
+   }
++  CodecSpecific config;
+ }

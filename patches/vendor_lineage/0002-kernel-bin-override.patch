@@ -1,0 +1,21 @@
+diff --git a/build/tasks/kernel.mk b/build/tasks/kernel.mk
+index a40187ed..0983291b 100644
+--- a/build/tasks/kernel.mk
++++ b/build/tasks/kernel.mk
+@@ -781,6 +781,16 @@ $(BOARD_PREBUILT_DTBOIMAGE): $(TARGET_PREBUILT_INT_KERNEL) $(MKDTBOIMG)
+ endif
+ endif
+ 
++# Install a prebuilt kernel image while still building the kernel source, so
++# that its modules and device trees are produced normally. Unlike
++# TARGET_FORCE_PREBUILT_KERNEL this leaves FULL_KERNEL_BUILD alone; it only
++# swaps the binary that gets copied to $(PRODUCT_OUT)/kernel. KERNEL_BIN is
++# used as a prerequisite solely by the rule below, so overriding it here
++# cannot affect the module or dtb/dtbo rules defined above.
++ifneq ($(TARGET_OVERRIDE_KERNEL_BIN),)
++KERNEL_BIN := $(TARGET_OVERRIDE_KERNEL_BIN)
++endif
++
+ ifeq ($(NEEDS_KERNEL_COPY),true)
+ $(INSTALLED_KERNEL_TARGET): $(KERNEL_BIN)
+ 	$(transform-prebuilt-to-target)

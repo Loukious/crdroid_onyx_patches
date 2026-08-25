@@ -1,0 +1,80 @@
+diff --git a/configs/release/aconfig/bp4a/Android.bp b/configs/release/aconfig/bp4a/Android.bp
+new file mode 100644
+index 0000000..918b363
+--- /dev/null
++++ b/configs/release/aconfig/bp4a/Android.bp
+@@ -0,0 +1,6 @@
++aconfig_value_set {
++    name: "aconfig_value_set-onyx-bp4a",
++    srcs: [
++        "*/Android.bp",
++    ],
++}
+diff --git a/configs/release/aconfig/bp4a/com.android.bluetooth.flags/Android.bp b/configs/release/aconfig/bp4a/com.android.bluetooth.flags/Android.bp
+new file mode 100644
+index 0000000..64e68c4
+--- /dev/null
++++ b/configs/release/aconfig/bp4a/com.android.bluetooth.flags/Android.bp
+@@ -0,0 +1,7 @@
++aconfig_values {
++    name: "aconfig-values-onyx-bp4a-com.android.bluetooth.flags-all",
++    package: "com.android.bluetooth.flags",
++    srcs: [
++        "*_flag_values.textproto",
++    ],
++}
+diff --git a/configs/release/aconfig/bp4a/com.android.bluetooth.flags/a2dp_lhdc_api_flag_values.textproto b/configs/release/aconfig/bp4a/com.android.bluetooth.flags/a2dp_lhdc_api_flag_values.textproto
+new file mode 100644
+index 0000000..dc39e3b
+--- /dev/null
++++ b/configs/release/aconfig/bp4a/com.android.bluetooth.flags/a2dp_lhdc_api_flag_values.textproto
+@@ -0,0 +1,6 @@
++flag_value {
++    package: "com.android.bluetooth.flags"
++    name: "a2dp_lhdc_api"
++    state: ENABLED
++    permission: READ_ONLY
++}
+diff --git a/configs/release/aconfig/bp4a/com.android.bluetooth.flags/lhdc_codec_support_flag_values.textproto b/configs/release/aconfig/bp4a/com.android.bluetooth.flags/lhdc_codec_support_flag_values.textproto
+new file mode 100644
+index 0000000..bc3a4b5
+--- /dev/null
++++ b/configs/release/aconfig/bp4a/com.android.bluetooth.flags/lhdc_codec_support_flag_values.textproto
+@@ -0,0 +1,6 @@
++flag_value {
++    package: "com.android.bluetooth.flags"
++    name: "lhdc_codec_support"
++    state: ENABLED
++    permission: READ_ONLY
++}
+diff --git a/configs/release/release_config_map.textproto b/configs/release/release_config_map.textproto
+new file mode 100644
+index 0000000..72ffc1a
+--- /dev/null
++++ b/configs/release/release_config_map.textproto
+@@ -0,0 +1,2 @@
++description: "Onyx-specific release config contributions"
++default_containers: "vendor"
+diff --git a/configs/release/release_configs/bp4a.textproto b/configs/release/release_configs/bp4a.textproto
+new file mode 100644
+index 0000000..587985b
+--- /dev/null
++++ b/configs/release/release_configs/bp4a.textproto
+@@ -0,0 +1,2 @@
++name: "bp4a"
++aconfig_value_sets: "//device/xiaomi/onyx:aconfig_value_set-onyx-bp4a"
+diff --git a/device.mk b/device.mk
+index a185e78..a621c9e 100644
+--- a/device.mk
++++ b/device.mk
+@@ -3,6 +3,10 @@
+ # SPDX-License-Identifier: Apache-2.0
+ #
+ 
++# Release configuration
++PRODUCT_RELEASE_CONFIG_MAPS += \
++    $(LOCAL_PATH)/configs/release/release_config_map.textproto
++
+ # Generic ramdisk allow list
+ $(call inherit-product, $(SRC_TARGET_DIR)/product/generic_ramdisk.mk)
+ 

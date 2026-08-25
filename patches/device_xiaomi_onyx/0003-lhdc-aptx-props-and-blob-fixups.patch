@@ -1,0 +1,102 @@
+diff --git a/extract-files.py b/extract-files.py
+index e3e437d..0b24739 100755
+--- a/extract-files.py
++++ b/extract-files.py
+@@ -93,7 +93,80 @@ def blob_fixup_graphic_buffer_size(
+                 f.write(b'\x00\xa6\x81\x52')  # AArch64 mov w0, #0xd30
+ 
+ 
++def _apply_guarded_patches(file_path: str, patches: dict[int, tuple[bytes, bytes]]):
++    with open(file_path, 'rb+') as f:
++        for offset, (expected, replacement) in patches.items():
++            f.seek(offset)
++            current = f.read(len(expected))
++            if current == replacement:
++                continue
++            if current != expected:
++                raise ValueError(
++                    f'Unexpected blob bytes at 0x{offset:x}: '
++                    f'{current.hex()} (expected {expected.hex()})'
++                )
++            f.seek(offset)
++            f.write(replacement)
++
++
++def blob_fixup_lhdcv5_quality_modes(
++    ctx: BlobFixupCtx,
++    file: File,
++    file_path: str,
++    *args,
++    **kwargs,
++):
++    # Preserve QTI8 as Qualcomm's stock V5 ABR path. The public
++    # QTI enum has no fixed 320-kbps or 1000-kbps values, so use raw QTI0 for
++    # fixed 320 kbps and raw QTI9 for the DSP's special 1-Mbps token (100000).
++    # Values 0..3 and >=9 normally share the bridge's unknown fallback; split
++    # raw 9 explicitly and make the remaining extension fallback fixed 320k.
++    patches = {
++        # Unknown extension path: raw QTI9 -> token 100000, otherwise 320000.
++        0x180dc: (bytes.fromhex('08508352'), bytes.fromhex('1f250071')),
++        0x180e0: (bytes.fromhex('61ffffd0'), bytes.fromhex('a0000054')),
++        0x180e4: (bytes.fromhex('21f01d91'), bytes.fromhex('08409c52')),
++        0x180e8: (bytes.fromhex('c800a072'), bytes.fromhex('8800a072')),
++        0x180ec: (bytes.fromhex('62ffffd0'), bytes.fromhex('280700b9')),
++        0x180f0: (bytes.fromhex('42340191'), bytes.fromhex('06000014')),
++        0x180f4: (bytes.fromhex('63ffffb0'), bytes.fromhex('08d49052')),
++        0x180f8: (bytes.fromhex('63000f91'), bytes.fromhex('2800a072')),
++        0x180fc: (bytes.fromhex('c0008052'), bytes.fromhex('280700b9')),
++        0x18100: (bytes.fromhex('280700b9'), bytes.fromhex('02000014')),
++        # V5 maxTargetBitrate=0 (no limit): 900000 -> 1000000.
++        0x183e8: (bytes.fromhex('08749752'), bytes.fromhex('08488852')),
++        0x183ec: (bytes.fromhex('a801a072'), bytes.fromhex('e801a072')),
++    }
++    _apply_guarded_patches(file_path, patches)
++
++
++def blob_fixup_lhdcv5_extended_quality_capability(
++    ctx: BlobFixupCtx,
++    file: File,
++    file_path: str,
++    *args,
++    **kwargs,
++):
++    # Expand the provider's quality vector from [7, 6, 5, 4, 8] to
++    # [7, 6, 5, 4, 8, 9, 0]. Stock QTI8 remains ABR; raw QTI9 carries
++    # fixed 1 Mbps and raw QTI0 carries fixed 320 kbps. Allocate 8 bytes so
++    # the 32-bit store at +4 is in-bounds, while the vector end remains +7.
++    patches = {
++        0x192b8: (bytes.fromhex('a0008052'), bytes.fromhex('00018052')),
++        0x192c4: (bytes.fromhex('19018052'), bytes.fromhex('19218152')),
++        0x192d0: (bytes.fromhex('19100039'), bytes.fromhex('190400b9')),
++        0x192d8: (bytes.fromhex('08140091'), bytes.fromhex('081c0091')),
++    }
++    _apply_guarded_patches(file_path, patches)
++
++
+ blob_fixups: blob_fixups_user_type = {
++    'vendor/lib64/btaudio_offload_if.so': blob_fixup()
++        .call(blob_fixup_lhdcv5_quality_modes),
++
++    'vendor/lib64/libbluetooth_audio_session_aidl_qti.so': blob_fixup()
++        .call(blob_fixup_lhdcv5_extended_quality_capability),
++
+     (
+         'odm/bin/hw/vendor.xiaomi.hw.touchfeature-service',
+         'odm/lib64/libadaptivehdr.so',
+diff --git a/properties/product.prop b/properties/product.prop
+index a847d40..8155b3d 100644
+--- a/properties/product.prop
++++ b/properties/product.prop
+@@ -30,6 +30,12 @@ bluetooth.profile.pan.panu.enabled=true
+ bluetooth.profile.pbap.server.enabled=true
+ bluetooth.profile.vcp.controller.enabled=false
+ 
++# Qualcomm's Onyx DSP exposes aptX Adaptive R2.2 lossless profiles.  The
++# legacy V4 Bluetooth stack has no controller add-on parcelable, so the
++# source frontend uses this explicit bring-up gate for the split-TX path.
++persist.vendor.qcom.bluetooth.aptxadaptiver2_2_support=true
++persist.vendor.qcom.bluetooth.aptxadaptive_split_tx_support=true
++
+ # Phantom process monitoring
+ persist.sys.fflag.override.settings_enable_monitor_phantom_procs=false
+ 
