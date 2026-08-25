@@ -20,7 +20,7 @@ rather than shipping a half-patched ROM.
 | `SKIP_FIRMWARE=1` | don't overlay the firmware blobs |
 | `GITHUB_TOKEN` | used for the release API if the kernel repo is private |
 
-## The three features
+## The four features
 
 **Gesture navigation space** — an extra settable inset below the gesture pill.
 `frameworks/base` (`Settings.java`, `DisplayPolicy.java`) plus a small launcher
@@ -39,6 +39,48 @@ verdict for the wallpaper generator, hooked from `ActivityThread`.
 (props + the `extract-files.py` blob fixups that byte-patch the two Qualcomm
 offload libs).
 
+**Pixel Lockscreen Now Playing** — ambient song recognition on the lockscreen
+and AOD. Ported from Evolution-X
+[`c83186b`](https://github.com/Evolution-X/frameworks_base/commit/c83186b883bd01a2c91b889184ebc9c8545ddc7d),
+which reverse-engineered it out of CP2A `SystemUIGoogle`. 53 files, all in
+`frameworks/base/packages/SystemUI`.
+
+This is only the *display* half. The recognition itself is done by Device
+Personalization Services (`com.google.android.as`), which broadcasts
+`com.google.android.ambientindication.action.AMBIENT_INDICATION_{SHOW,HIDE,EXPAND}`;
+`AmbientIndicationService` is the receiver. Both halves of what that needs are
+already satisfied by the existing tree, so this patch is self-sufficient:
+
+- DPS ships in the PixelOS GApps as
+  `DevicePersonalizationPrebuiltPixel2024` (the Pixel 9 AiAi build).
+- The gating system features are installed — `vendor/pixel/gms`'s
+  `common-vendor.mk` copies `pixel_experience_2017.xml` … `_2024.xml`, and
+  `nexus.xml` declares `com.google.android.feature.PIXEL_EXPERIENCE`.
+- crDroid's `AndroidManifest.xml` already declared the
+  `AMBIENT_INDICATION` permission; the patch relocates it and widens the
+  protection level to `system|signature` so DPS in `/product/priv-app` can
+  hold it.
+
+Two integration points had to be re-done by hand rather than taken from the
+upstream diff, and they are the parts to re-check whenever `frameworks/base`
+moves under us:
+
+- `SystemUICoreStartableModule.kt` — same binding, but crDroid's import block
+  differs from Evolution-X's, so the upstream hunk's context does not match.
+- `DefaultBlueprint.kt` — Evolution-X registers the compose lockscreen element
+  through an `ElementProviderModule` dagger multibind that crDroid does not
+  have. crDroid assembles providers by passing them to
+  `LockscreenElementFactoryImpl.createRemembered(vararg)` instead, so
+  `GoogleAmbientIndicationElementProvider` is added there. The
+  `AmbientIndicationArea` element key and its slot in `LockscreenSceneLayout`
+  already exist in crDroid, commented "vendor defined, not included in AOSP" —
+  the port just fills them.
+
+The legacy (non-compose) keyguard blueprint path needed no hand-holding:
+crDroid already has the `@BindsOptionalOf @Named(KEYGUARD_AMBIENT_INDICATION_AREA_SECTION)`
+hook, and the upstream `SystemUIModule.java` hunk that binds
+`DefaultAmbientIndicationAreaSection` into it applies as-is.
+
 ## Layout
 
 One directory per git project, project path with `/` → `_`. Patches are
@@ -54,6 +96,7 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
 patches/frameworks_base/                      0001-gesture-navbar-space
                                               0002-wallpaper-ai-spoof
                                               0003-lhdc-audio
+                                              0004-pixel-lockscreen-now-playing
 patches/packages_modules_Bluetooth/           0001-lhdc-codec
 patches/packages_modules_common/              0001-lhdc-allowed-deps
 patches/vendor_lineage/                       0001-roomservice-allow-loukious
@@ -97,3 +140,9 @@ build breaks:
   `build/release/.../a2dp_lhdc_api_flag_values.textproto`
 - the 350 MB of binaries in `vendor/xiaomi/onyx` (that's the overlay project's
   job, not a patch's)
+
+See [`unapplied/`](unapplied/) for patches kept only for reference — notably
+Evolution-X `1a9ae21`, the *non-Pixel* ambient Now Playing indicator, which is a
+MediaSession re-skin rather than real recognition and needs nine prerequisite
+commits crDroid does not have. `apply.sh` never looks outside `patches/*/`, so
+nothing there can break a build.
