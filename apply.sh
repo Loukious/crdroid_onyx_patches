@@ -46,6 +46,7 @@ declare -A PROJECT=(
 fail=0 applied=0 already=0
 
 for pdir in "$HERE"/patches/*/; do
+    [ -d "$pdir" ] || continue   # unexpanded glob: no patch dirs at all
     key="$(basename "$pdir")"
     proj="${PROJECT[$key]:-}"
     if [ -z "$proj" ]; then
