@@ -1,6 +1,6 @@
 # crDroid 16 `onyx` patch set
 
-Everything I carry on top of upstream crDroid for the Xiaomi Pad 7 (`onyx`),
+Everything I carry on top of upstream crDroid for the POCO F7 (`onyx`),
 kept as patches so the tree can be `repo sync`'d freely and re-patched
 afterwards. Driven by `apply.sh`.
 
