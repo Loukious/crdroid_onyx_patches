@@ -20,10 +20,14 @@ erroring.
 `vendor/lineage/build/tools/createjson.sh` already emits exactly this schema at
 `bacon` time, with the real timestamp, size, md5 and sha256 of the zip it just
 built, and it takes the maintainer / buildtype / donate fields from
-`vendor/crDroidOTA/onyx.json` (which
-`patches/vendor_crDroidOTA/0001-unofficial-ota-metadata.patch` rewrites for this
-build). So publishing is: `crave pull out/target/product/onyx/onyx.json`, fix
-the `download` field, and commit it over this file.
+`vendor/crDroidOTA/onyx.json` — which `apply.sh` overwrites with
+[`crDroidOTA-onyx.json`](crDroidOTA-onyx.json) in this directory. So publishing
+is: `crave pull out/target/product/onyx/onyx.json`, fix the `download` field, and
+commit it over this file.
+
+That metadata file is deliberately an overlay rather than a patch: upstream
+regenerates `vendor/crDroidOTA/onyx.json` on every weekly release, so a context
+patch against it breaks about once a week (and did, on 2026-08-26).
 
 The `download` field is the one thing that is *not* right out of the box —
 createjson.sh hardcodes a SourceForge path. A GitHub release asset needs the

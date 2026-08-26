@@ -13,6 +13,7 @@
 #   env: KERNEL_RELEASE_TAG   konoha release to pull the Image from (default: latest)
 #        SKIP_KERNEL=1        don't fetch/stage the kernel Image
 #        SKIP_FIRMWARE=1      don't overlay the firmware blobs
+#        SKIP_OTA_METADATA=1  don't overlay vendor/crDroidOTA/<device>.json
 #        GITHUB_TOKEN         used for the release API if the repo is private
 #
 set -uo pipefail
@@ -20,6 +21,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROM="$(cd "${1:-$PWD}" && pwd)"
 
+DEVICE="${DEVICE:-onyx}"
 KERNEL_REPO="${KERNEL_REPO:-Loukious/konoha-kernel-gki}"
 KERNEL_DEST="vendor/extra/kernel/onyx/Image"
 
@@ -39,7 +41,6 @@ declare -A PROJECT=(
     [packages_apps_Updater]="packages/apps/Updater"
     [packages_modules_Bluetooth]="packages/modules/Bluetooth"
     [packages_modules_common]="packages/modules/common"
-    [vendor_crDroidOTA]="vendor/crDroidOTA"
     [vendor_lineage]="vendor/lineage"
     [vendor_pixel_launcher]="vendor/pixel/launcher"
     [vendor_qcom_opensource_interfaces]="vendor/qcom/opensource/interfaces"
@@ -140,6 +141,35 @@ overlay_firmware() {
 if [ "${SKIP_FIRMWARE:-0}" != "1" ]; then
     echo "== firmware overlay"
     overlay_firmware || fail=1
+fi
+
+# ---------------------------------------------------------- OTA metadata overlay
+# vendor/lineage/build/tools/createjson.sh reads vendor/crDroidOTA/$DEVICE.json at
+# `bacon` time to fill the maintainer / buildtype / donate fields of the OTA json
+# it emits next to the zip. Upstream's copy names the official onyx maintainer and
+# their PayPal, so it has to be replaced -- but *not* with a patch: upstream
+# rewrites that file on every weekly release (filename, timestamp, md5, sha256,
+# size all change), so a context patch there breaks about once a week and takes the
+# whole build down with it. It did exactly that on 2026-08-26. A whole-file copy
+# cannot conflict, and createjson.sh's extract_field() is grep/sed based, so it
+# neither needs nor notices the rest of upstream's shape.
+overlay_ota_metadata() {
+    local src="$HERE/ota/crDroidOTA-$DEVICE.json"
+    local dst="$ROM/vendor/crDroidOTA/$DEVICE.json"
+    [ -f "$src" ] || { red "FATAL: $src missing"; return 1; }
+    [ -d "$ROM/vendor/crDroidOTA" ] || { red "FATAL: vendor/crDroidOTA missing (sync incomplete?)"; return 1; }
+
+    if cmp -s "$src" "$dst"; then
+        echo "   -- $DEVICE.json (already current)"
+        return 0
+    fi
+    cp -f "$src" "$dst" || { red "FATAL: cp failed for $DEVICE.json"; return 1; }
+    grn "   ++ vendor/crDroidOTA/$DEVICE.json"
+}
+
+if [ "${SKIP_OTA_METADATA:-0}" != "1" ]; then
+    echo "== OTA metadata overlay"
+    overlay_ota_metadata || fail=1
 fi
 
 # ---------------------------------------------------------------- kernel Image

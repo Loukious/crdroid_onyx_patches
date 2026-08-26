@@ -18,6 +18,7 @@ rather than shipping a half-patched ROM.
 | `KERNEL_RELEASE_TAG` | konoha release to take the kernel Image from (default: latest) |
 | `SKIP_KERNEL=1` | don't fetch/stage the kernel Image |
 | `SKIP_FIRMWARE=1` | don't overlay the firmware blobs |
+| `SKIP_OTA_METADATA=1` | don't overlay `vendor/crDroidOTA/<device>.json` |
 | `GITHUB_TOKEN` | used for the release API if the kernel repo is private |
 
 ## The four features
@@ -101,7 +102,6 @@ patches/packages_apps_Settings/               0001-maintainer-from-prop
 patches/packages_apps_Updater/                0001-self-hosted-ota-url
 patches/packages_modules_Bluetooth/           0001-lhdc-codec
 patches/packages_modules_common/              0001-lhdc-allowed-deps
-patches/vendor_crDroidOTA/                    0001-unofficial-ota-metadata
 patches/vendor_lineage/                       0001-roomservice-allow-loukious
                                               0002-kernel-bin-override
                                               0003-unofficial-buildtype
@@ -145,9 +145,15 @@ entirely; leaving it unset restores the stock behaviour exactly.
 real update there; until then it is an empty `response` array, which the app
 reports as "no updates".
 
-`vendor_crDroidOTA/0001` rewrites the metadata `createjson.sh` reads at `bacon`
-time (maintainer, buildtype, donate link), so the OTA json the build emits
-describes this build rather than the official one.
+**OTA metadata** — [`ota/crDroidOTA-onyx.json`](ota/crDroidOTA-onyx.json) is
+copied by `apply.sh` over `vendor/crDroidOTA/onyx.json`, the file
+`createjson.sh` reads at `bacon` time for the maintainer / buildtype / donate
+fields of the OTA json it emits beside the zip. This one is an **overlay, not a
+patch**, and that distinction is load-bearing: upstream regenerates that file on
+every weekly release, so a context patch against it conflicts within days — it
+took a build down on 2026-08-26 for exactly that reason. A whole-file copy
+cannot conflict, and `createjson.sh`'s `extract_field()` is grep/sed based, so
+it neither needs nor notices upstream's exact shape.
 
 ## What `apply.sh` does beyond patching
 
@@ -163,6 +169,10 @@ Forking the 4 GB vendor repo was the obvious alternative and is a trap: its
 history holds several revisions of the 137 MB `modem.img`, so a GitHub fork
 blows the 1 GB free LFS tier and approaches the 2 GB per-push limit. The
 overlay costs ~350 MB of ordinary git objects and no metered bandwidth.
+
+**OTA metadata.** `ota/crDroidOTA-onyx.json` is copied over
+`vendor/crDroidOTA/onyx.json` when the two differ. See "Unofficial build
+identity" above for why this is a copy rather than a patch.
 
 **Kernel Image.** Fetched from the latest `konoha-kernel-gki` release —
 specifically the `KernelSU-Next` `root` asset that is *not* the

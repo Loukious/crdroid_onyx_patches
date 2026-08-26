@@ -50,8 +50,10 @@ emit() {
 }
 
 PROJECTS="build/release device/xiaomi/onyx frameworks/base
-packages/modules/Bluetooth packages/modules/common vendor/lineage
-vendor/pixel/launcher vendor/qcom/opensource/interfaces vendor/xiaomi/onyx"
+packages/apps/Settings packages/apps/Updater
+packages/modules/Bluetooth packages/modules/common
+vendor/lineage vendor/pixel/launcher vendor/qcom/opensource/interfaces
+vendor/xiaomi/onyx"
 
 cleanup() {
     for p in $PROJECTS; do
@@ -79,69 +81,17 @@ emit frameworks/base 0003-lhdc-audio.patch \
     media/java/android/media/AudioSystem.java \
     services/core/java/com/android/server/audio/BtHelper.java
 
-# The Pixel Lockscreen Now Playing port (Evolution-X c83186b, reverse-engineered
-# from CP2A SystemUIGoogle) plus the two integration points that had to be
-# re-done by hand for crDroid: SystemUICoreStartableModule.kt (crDroid's import
-# block differs) and DefaultBlueprint.kt (crDroid assembles compose lockscreen
-# element providers through createRemembered(vararg) rather than Evolution-X's
-# ElementProviderModule dagger multibind, which crDroid does not have).
-#
-# The pathspec is enumerated rather than globbed: `packages/SystemUI/res` would
-# happily swallow any unrelated SystemUI resource edit sitting in the tree.
-emit frameworks/base 0004-pixel-lockscreen-now-playing.patch \
-    packages/SystemUI/AndroidManifest.xml \
-    packages/SystemUI/compose/features/src/com/android/systemui/keyguard/ui/composable/blueprint/DefaultBlueprint.kt \
-    packages/SystemUI/res/anim/audioanim_animation.xml \
-    packages/SystemUI/res/color/bg_smartspace_card_solid.xml \
-    packages/SystemUI/res/drawable/avd_nowplaying_searching.xml \
-    packages/SystemUI/res/drawable/bg_smartspace_action_button.xml \
-    packages/SystemUI/res/drawable/bg_smartspace_card.xml \
-    packages/SystemUI/res/drawable/ic_cloud_off.xml \
-    packages/SystemUI/res/drawable/ic_error.xml \
-    packages/SystemUI/res/drawable/ic_favorite.xml \
-    packages/SystemUI/res/drawable/ic_favorite_border.xml \
-    packages/SystemUI/res/drawable/ic_favorite_note.xml \
-    packages/SystemUI/res/drawable/ic_music_not_found.xml \
-    packages/SystemUI/res/drawable/ic_music_search.xml \
-    packages/SystemUI/res/drawable/ic_now_playing_heart_minus.xml \
-    packages/SystemUI/res/drawable/ic_now_playing_heart_plus.xml \
-    packages/SystemUI/res/drawable/ic_now_playing_lockscreen.xml \
-    packages/SystemUI/res/drawable/ic_now_playing_music_note.xml \
-    packages/SystemUI/res/drawable/ic_now_playing_music_off.xml \
-    packages/SystemUI/res/drawable/rounded_rectangle_20dp.xml \
-    packages/SystemUI/res/drawable/vd_nowplaying_iconsearch_v2.xml \
-    packages/SystemUI/res/interpolator/even.xml \
-    packages/SystemUI/res/layout/ambient_indication.xml \
-    packages/SystemUI/res/layout/ambient_indication_inner.xml \
-    packages/SystemUI/res/values-h650dp/ambientindication_dimens.xml \
-    packages/SystemUI/res/values-h700dp/ambientindication_dimens.xml \
-    packages/SystemUI/res/values-h800dp/ambientindication_dimens.xml \
-    packages/SystemUI/res/values-sw600dp-land/ambientindication_dimens.xml \
-    packages/SystemUI/res/values/ambientindication_colors.xml \
-    packages/SystemUI/res/values/ambientindication_dimens.xml \
-    packages/SystemUI/res/values/ambientindication_strings.xml \
-    packages/SystemUI/res/xml/ambient_indication_inner_downwards.xml \
-    packages/SystemUI/res/xml/ambient_indication_inner_upwards.xml \
-    packages/SystemUI/src/com/android/systemui/dagger/SystemUICoreStartableModule.kt \
-    packages/SystemUI/src/com/android/systemui/dagger/SystemUIModule.java \
-    packages/SystemUI/src/com/android/systemui/keyguard/data/quickaffordance/KeyguardDataQuickAffordanceModule.kt \
-    packages/SystemUI/src/com/google/android/systemui/ambientmusic/AmbientIndicationAnimationHelper.kt \
-    packages/SystemUI/src/com/google/android/systemui/ambientmusic/AmbientIndicationAnimationUtils.kt \
-    packages/SystemUI/src/com/google/android/systemui/ambientmusic/AmbientIndicationArtworkHelper.kt \
-    packages/SystemUI/src/com/google/android/systemui/ambientmusic/AmbientIndicationContainer.kt \
-    packages/SystemUI/src/com/google/android/systemui/ambientmusic/AmbientIndicationService.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/AmbientIndicationCoreStartable.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/data/quickaffordance/NowPlayingQuickAffordanceConfig.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/data/repository/AmbientIndicationRepository.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/domain/interactor/AmbientIndicationInteractor.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/shared/AmbientIndicationMusic.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/shared/AmbientIndicationMusicStatus.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/shared/ExpandedIndicationData.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/shared/ExtendedIndication.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/ui/binder/KeyguardAmbientIndicationAreaViewBinder.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/ui/composable/elements/GoogleAmbientIndicationElementProvider.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/ui/sections/DefaultAmbientIndicationAreaSection.kt \
-    packages/SystemUI/src/com/google/android/systemui/keyguard/ui/viewmodel/KeyguardAmbientIndicationViewModel.kt
+# Pixel lockscreen Now Playing, ported from Evolution-X c83186b. 53 files, all
+# under packages/SystemUI, enumerated in a list rather than globbed: SystemUI is
+# full of unrelated local churn, and `packages/SystemUI` as a pathspec would
+# hoover it up. The list is authoritative -- regenerate it with
+#   sed -n 's|^diff --git a/\(.*\) b/.*|\1|p' <the patch> | sort -u
+# if the port grows a file.
+NOWPLAYING_PATHS="${NOWPLAYING_PATHS:-$(dirname "${BASH_SOURCE[0]}")/nowplaying-paths.txt}"
+[ -f "$NOWPLAYING_PATHS" ] || die "missing path list $NOWPLAYING_PATHS"
+mapfile -t NP_PATHS < "$NOWPLAYING_PATHS"
+[ "${#NP_PATHS[@]}" -eq 53 ] || die "expected 53 Now Playing paths, got ${#NP_PATHS[@]}"
+emit frameworks/base 0004-pixel-lockscreen-now-playing.patch "${NP_PATHS[@]}"
 
 # ------------------------------------------------------------------------- LHDC
 emit packages/modules/Bluetooth 0001-lhdc-codec.patch .
@@ -173,6 +123,20 @@ emit vendor/pixel/launcher 0001-gesture-hint-controller.patch \
 emit vendor/lineage 0001-roomservice-allow-loukious.patch build/tools/roomservice.py
 
 emit vendor/lineage 0002-kernel-bin-override.patch build/tasks/kernel.mk
+
+emit vendor/lineage 0003-unofficial-buildtype.patch config/version.mk
+
+# --------------------------------------------------- unofficial build identity
+# onyx has official crDroid support, and three separate places assume that means
+# an official build. Two are corrected by a patch in their own project; the third,
+# vendor/crDroidOTA/onyx.json, is *not* patched -- upstream regenerates that file
+# every weekly release, so a patch there conflicts within days. apply.sh copies
+# ota/crDroidOTA-onyx.json over it instead.
+emit packages/apps/Settings 0001-maintainer-from-prop.patch \
+    src/com/android/settings/deviceinfo/firmwareversion/BuildMaintainerPreference.kt
+
+emit packages/apps/Updater 0001-self-hosted-ota-url.patch \
+    app/src/main/res/values/strings.xml
 
 # --------------------------------------------------------------- vendor/xiaomi/onyx
 # Only Android.mk. The 351MB of rebuilt radio/ images and the 2 byte-patched

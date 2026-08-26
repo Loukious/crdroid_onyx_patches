@@ -1,0 +1,19 @@
+{
+    "_note": "Overlaid onto vendor/crDroidOTA/<device>.json by apply.sh -- NOT a patch. Upstream rewrites that file on every weekly release (filename, timestamp, md5, sha256, size), so a context patch against it breaks about once a week; a whole-file copy cannot. Only the fields listed here are read by vendor/lineage/build/tools/createjson.sh; everything else in the generated json (filename, download, timestamp, md5, sha256, size, version, os_patch_level, os_sdk_level) is computed from the zip that was just built.",
+
+    "maintainer": "Loukious",
+    "oem": "Poco",
+    "device": "Poco F7",
+    "buildtype": "Unofficial",
+    "forum": "",
+    "gapps": "",
+    "firmware": "https://xmfirmwareupdater.com/hyperos/onyx/",
+    "modem": "",
+    "bootloader": "",
+    "recovery": "",
+    "paypal": "https://buymeacoffee.com/loukious",
+    "telegram": "",
+    "dt": "https://github.com/crdroidandroid/android_device_xiaomi_onyx",
+    "common-dt": "",
+    "kernel": "https://github.com/Loukious/konoha-kernel-gki"
+}
