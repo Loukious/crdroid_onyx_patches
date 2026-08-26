@@ -70,13 +70,40 @@ say "applying the onyx patch set"
 "$HERE/apply.sh" .
 
 # ------------------------------------------------------------------ configure
-export BUILD_USERNAME="${BUILD_USERNAME:-Loukious}"
-export BUILD_HOSTNAME=crave
+# NOTE: BUILD_USERNAME / BUILD_HOSTNAME are deliberately *not* set here.
+# vendor/lineage/build/envsetup.sh:1017 generate_host_overrides() runs at source
+# time and unconditionally overwrites both with android-build / r-<random>,
+# exactly as crDroid's own release builds do. Exporting them before sourcing is
+# dead code, and forcing them afterwards would only leak the builder identity
+# into ro.build.{user,host}. The maintainer name users actually see comes from
+# ro.crdroid.maintainer (vendor/extra/product.mk), not from the fingerprint.
 
 say "breakfast $DEVICE userdebug"
+# The strict-shell options have to come off before envsetup, and stay off for
+# the rest of the script. Two separate landmines, both confirmed by hand
+# against this tree:
+#
+#   * -u    build/envsetup.sh:21 is `if [ -n "$TOP" -a -f "$TOP/$TOPFILE" ]`
+#           with no :- guard, so under -u it aborts instantly with
+#           "build/envsetup.sh: line 21: TOP: unbound variable". That is what
+#           killed crave build 295490.
+#   * -e + pipefail
+#           vendor/lineage/build/envsetup.sh:1020 is
+#           `cat /dev/urandom | tr -dc 'a-z0-9' | head -c 4`. head exits after
+#           4 bytes, cat takes SIGPIPE, pipefail reports 141, -e kills the
+#           script. Fixing only -u just moves the failure three seconds later.
+#
+# Nor is re-arming them afterwards worth it: envsetup, lunch, breakfast,
+# soong_ui and the vendor hooks all read unset variables and pipe into head as
+# a matter of course. So every command that matters from here on is checked
+# explicitly instead.
+set +u
+set +e
+set +o pipefail
+
 # shellcheck disable=SC1091
-source build/envsetup.sh
-breakfast "$DEVICE" userdebug
+source build/envsetup.sh || { echo "FATAL: envsetup failed"; exit 1; }
+breakfast "$DEVICE" userdebug || { echo "FATAL: breakfast $DEVICE failed"; exit 1; }
 
 # Cheap sanity check on the two things most likely to be silently wrong: the
 # Android 16 release config, and whether the LHDC aconfig flag actually landed.
@@ -95,10 +122,15 @@ fi
 # installclean, NOT `make clean` / `rm -rf out`: it drops the installed image
 # staging without throwing away the object cache the queue depends on.
 say "make installclean"
-make installclean
+make installclean || { echo "FATAL: installclean failed"; exit 1; }
 
 say "mka bacon"
 mka bacon
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    echo "FATAL: mka bacon failed (exit $rc)"
+    exit "$rc"
+fi
 
 say "artifacts"
 ls -lh "out/target/product/$DEVICE"/*.zip 2>/dev/null || true

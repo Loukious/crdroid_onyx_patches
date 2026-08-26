@@ -97,14 +97,55 @@ patches/frameworks_base/                      0001-gesture-navbar-space
                                               0002-wallpaper-ai-spoof
                                               0003-lhdc-audio
                                               0004-pixel-lockscreen-now-playing
+patches/packages_apps_Settings/               0001-maintainer-from-prop
+patches/packages_apps_Updater/                0001-self-hosted-ota-url
 patches/packages_modules_Bluetooth/           0001-lhdc-codec
 patches/packages_modules_common/              0001-lhdc-allowed-deps
+patches/vendor_crDroidOTA/                    0001-unofficial-ota-metadata
 patches/vendor_lineage/                       0001-roomservice-allow-loukious
                                               0002-kernel-bin-override
+                                              0003-unofficial-buildtype
 patches/vendor_pixel_launcher/                0001-gesture-hint-controller
 patches/vendor_qcom_opensource_interfaces/    0001-lhdc-aidl
 patches/vendor_xiaomi_onyx/                   0001-firmware-sha1s-os3.0.302.0
 ```
+
+## Unofficial build identity
+
+`onyx` **has** official crDroid support, and three separate places in the tree
+take that to mean any build for `onyx` is one. All three are corrected, because
+otherwise this build credits someone else's work, solicits donations on their
+behalf, and offers to overwrite itself with an official weekly.
+
+**Version string** — `vendor_lineage/0003` sets `LINEAGE_BUILDTYPE :=
+UNOFFICIAL` and appends it to both `LINEAGE_VERSION` and
+`LINEAGE_DISPLAY_VERSION`, so the zip is
+`crDroidAndroid-16.0-<date>-onyx-v12.11-UNOFFICIAL.zip` and Settings shows
+`v12.11-<date>-UNOFFICIAL`. The suffix goes *last* deliberately:
+`createjson.sh` reads the release version out of the zip name with
+`cut -d'-' -f5`, which stays `v12.11`. `UNOFFICIAL` is also outside the
+`RELEASE NIGHTLY SNAPSHOT EXPERIMENTAL` set that `kernel.mk:231` refuses a
+prebuilt kernel for — which this build needs, since it ships the Kono-Ha Image.
+
+**Maintainer and donate link** — `packages_apps_Settings/0001` teaches
+`BuildMaintainerPreference` to honour `ro.crdroid.maintainer` and
+`ro.crdroid.donate.url`, set in
+[`vendor/extra/product.mk`](https://github.com/Loukious/android_vendor_extra) to
+`Loukious` and `https://buymeacoffee.com/loukious`. A property, not a resource
+overlay, because the stock code looks the maintainer up over the network from
+crDroid's OTA index keyed on the device codename alone and *overrides* the
+overlay string with whatever it finds — for `onyx` that is the official
+maintainer and their PayPal. Setting the property short-circuits the fetch
+entirely; leaving it unset restores the stock behaviour exactly.
+
+**OTA source** — `packages_apps_Updater/0001` repoints `updater_server_url` at
+[`ota/`](ota/) in this repo. See that directory's README for how to publish a
+real update there; until then it is an empty `response` array, which the app
+reports as "no updates".
+
+`vendor_crDroidOTA/0001` rewrites the metadata `createjson.sh` reads at `bacon`
+time (maintainer, buildtype, donate link), so the OTA json the build emits
+describes this build rather than the official one.
 
 ## What `apply.sh` does beyond patching
 
