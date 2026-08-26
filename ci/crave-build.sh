@@ -69,6 +69,17 @@ fi
 say "applying the onyx patch set"
 "$HERE/apply.sh" .
 
+# Fast symbol gate. ~25s, and it runs here -- right after sync, before the
+# multi-hour compile -- because that is the only place it saves anything.
+# It indexes every simple name declared in the tree and checks every in-tree
+# import the patch set adds against that index. Build 295615 died 38% into a 4h
+# compile (after a 3h queue) on exactly one missing symbol,
+# BaseLockscreenElement.ElementSource: the Now Playing port came from
+# Evolution-X, whose lockscreen plugin API has that nested type, and crDroid's
+# tree predates it. This check reports that in seconds instead.
+say "checking patched imports resolve against this tree"
+"$HERE/check-imports.sh" .
+
 # ------------------------------------------------------------------ configure
 # NOTE: BUILD_USERNAME / BUILD_HOSTNAME are deliberately *not* set here.
 # vendor/lineage/build/envsetup.sh:1017 generate_host_overrides() runs at source

@@ -1,0 +1,2 @@
+# Fully-qualified imports that are generated at build time and therefore never
+# appear as a declaration in tree source. One per line, exact match.
