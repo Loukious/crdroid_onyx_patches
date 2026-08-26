@@ -1,5 +1,5 @@
 diff --git a/config/version.mk b/config/version.mk
-index 2ee2d5d4..91e6a850 100644
+index 2ee2d5d4..f68f37f2 100644
 --- a/config/version.mk
 +++ b/config/version.mk
 @@ -4,11 +4,20 @@ PRODUCT_VERSION_MINOR = 0
@@ -7,10 +7,10 @@ index 2ee2d5d4..91e6a850 100644
  CR_VERSION := 12.11
  
 +# Unofficial build marker. This tree is not a crDroid release: it carries a
-+# local patch set and a prebuilt Kono-Ha kernel, so it must not present itself
-+# as one. UNOFFICIAL is deliberately outside the
-+# RELEASE/NIGHTLY/SNAPSHOT/EXPERIMENTAL set that
-+# vendor/lineage/build/tasks/kernel.mk:231 refuses a prebuilt kernel for.
++# local patch set and swaps in a prebuilt Kono-Ha Image, so it must not present
++# itself as one. Keep the value outside RELEASE/NIGHTLY/SNAPSHOT/EXPERIMENTAL --
++# vendor/lineage/build/tasks/kernel.mk:231 hard-errors on those if a prebuilt
++# kernel is ever forced here.
 +LINEAGE_BUILDTYPE := UNOFFICIAL
 +
  # Internal version

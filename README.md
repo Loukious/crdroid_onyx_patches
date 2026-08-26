@@ -123,9 +123,11 @@ UNOFFICIAL` and appends it to both `LINEAGE_VERSION` and
 `crDroidAndroid-16.0-<date>-onyx-v12.11-UNOFFICIAL.zip` and Settings shows
 `v12.11-<date>-UNOFFICIAL`. The suffix goes *last* deliberately:
 `createjson.sh` reads the release version out of the zip name with
-`cut -d'-' -f5`, which stays `v12.11`. `UNOFFICIAL` is also outside the
-`RELEASE NIGHTLY SNAPSHOT EXPERIMENTAL` set that `kernel.mk:231` refuses a
-prebuilt kernel for — which this build needs, since it ships the Kono-Ha Image.
+`cut -d'-' -f5`, which stays `v12.11`. The value is also kept outside the
+`RELEASE NIGHTLY SNAPSHOT EXPERIMENTAL` set that `kernel.mk:231` hard-errors on
+when a prebuilt kernel is forced — that guard is dormant here (this tree uses
+`TARGET_OVERRIDE_KERNEL_BIN`, not `TARGET_FORCE_PREBUILT_KERNEL`) but there is
+no reason to arm it.
 
 **Maintainer and donate link** — `packages_apps_Settings/0001` teaches
 `BuildMaintainerPreference` to honour `ro.crdroid.maintainer` and
