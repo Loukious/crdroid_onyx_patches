@@ -2,9 +2,7 @@ diff --git a/config/version.mk b/config/version.mk
 index 2ee2d5d4..f68f37f2 100644
 --- a/config/version.mk
 +++ b/config/version.mk
-@@ -4,11 +4,20 @@ PRODUCT_VERSION_MINOR = 0
- # Increase CR Version with each major release.
- CR_VERSION := 12.11
+@@ -6,7 +6,16 @@ CR_VERSION := 12.11
  
 +# Unofficial build marker. This tree is not a crDroid release: it carries a
 +# local patch set and swaps in a prebuilt Kono-Ha Image, so it must not present
@@ -23,5 +21,3 @@ index 2ee2d5d4..f68f37f2 100644
 -LINEAGE_DISPLAY_VERSION := v$(CR_VERSION)-$(shell date +%Y%m%d)
 +LINEAGE_DISPLAY_VERSION := v$(CR_VERSION)-$(shell date +%Y%m%d)-$(LINEAGE_BUILDTYPE)
  
- # LineageOS version properties
- PRODUCT_PRODUCT_PROPERTIES += \

@@ -14,6 +14,8 @@ OUT="${OUT:-/home/loukious/android/rom-automation/crdroid_onyx_patches}"
 
 die() { echo "FATAL: $*" >&2; exit 1; }
 
+CTX=""   # per-patch diff context override, see emit()
+
 [ -d "$ROM/.repo" ] || die "no .repo in $ROM"
 
 rm -rf "$OUT/patches"
@@ -41,7 +43,11 @@ emit() {
     local dir="$OUT/patches/${proj//\//_}"
     mkdir -p "$dir"
     local target="$dir/$name"
-    git -C "$ROM/$proj" diff --no-color --no-renames --binary -- "$@" > "$target"
+    # CTX overrides the diff context width. Fewer context lines make a patch
+    # survive unrelated churn near the hunk -- see the version.mk emit below.
+    # shellcheck disable=SC2086  # deliberately unquoted: empty CTX must vanish
+    git -C "$ROM/$proj" diff --no-color --no-renames --binary \
+        ${CTX:+-U$CTX} -- "$@" > "$target"
     if [ ! -s "$target" ]; then
         rm -f "$target"
         die "$proj: patch $name came out EMPTY (pathspec: $*)"
@@ -124,7 +130,16 @@ emit vendor/lineage 0001-roomservice-allow-loukious.patch build/tools/roomservic
 
 emit vendor/lineage 0002-kernel-bin-override.patch build/tasks/kernel.mk
 
+# -U1, deliberately. With the default 3 lines of context this hunk carries
+# `CR_VERSION := 12.11` as a context line, and upstream bumps that literal every
+# crDroid release -- which would rot the patch the same way the vendor/crDroidOTA
+# one did, and `--depth 1` leaves --3way no blob to recover with. The changed
+# lines cannot be moved away from it (they sit two lines below), so drop the
+# context instead: `# Internal version` and `LINEAGE_VERSION :=` are distinctive
+# enough on their own.
+CTX=1
 emit vendor/lineage 0003-unofficial-buildtype.patch config/version.mk
+CTX=""
 
 # --------------------------------------------------- unofficial build identity
 # onyx has official crDroid support, and three separate places assume that means

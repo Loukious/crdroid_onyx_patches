@@ -123,7 +123,10 @@ UNOFFICIAL` and appends it to both `LINEAGE_VERSION` and
 `crDroidAndroid-16.0-<date>-onyx-v12.11-UNOFFICIAL.zip` and Settings shows
 `v12.11-<date>-UNOFFICIAL`. The suffix goes *last* deliberately:
 `createjson.sh` reads the release version out of the zip name with
-`cut -d'-' -f5`, which stays `v12.11`. The value is also kept outside the
+`cut -d'-' -f5`, which stays `v12.11`. That patch is generated with `-U1`
+(`CTX=1` in `gen-patches.sh`) rather than the usual three lines of context,
+because at `-U3` the hunk carries `CR_VERSION := 12.11` as a context line and
+upstream bumps that literal every release. The value is also kept outside the
 `RELEASE NIGHTLY SNAPSHOT EXPERIMENTAL` set that `kernel.mk:231` hard-errors on
 when a prebuilt kernel is forced — that guard is dormant here (this tree uses
 `TARGET_OVERRIDE_KERNEL_BIN`, not `TARGET_FORCE_PREBUILT_KERNEL`) but there is
