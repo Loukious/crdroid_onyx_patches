@@ -302,9 +302,19 @@ stage_kernel() {
         url="$api/latest"
     fi
 
-    local json
-    json="$(curl -fsSL "${auth[@]+"${auth[@]}"}" -H 'Accept: application/vnd.github+json' "$url")" \
-        || { red "FATAL: cannot read $url"; return 1; }
+    local json code
+    if ! json="$(curl -fsSL "${auth[@]+"${auth[@]}"}" -H 'Accept: application/vnd.github+json' "$url")"; then
+        # Name the HTTP status, because the devspace calls this unauthenticated
+        # from a shared egress IP and a rate limit looks nothing like a missing
+        # release unless the code is printed.
+        code="$(curl -s -o /dev/null -w '%{http_code}' "${auth[@]+"${auth[@]}"}" "$url" 2>/dev/null || echo '???')"
+        red "FATAL: cannot read $url (HTTP $code)"
+        case "$code" in
+            403|429) ylw "       that is the GitHub API rate limit for unauthenticated calls; set GITHUB_TOKEN." ;;
+            404)     ylw "       no such release. Check KERNEL_RELEASE_TAG='${KERNEL_RELEASE_TAG:-}'." ;;
+        esac
+        return 1
+    fi
 
     local asset
     if ! asset="$(resolve_kernel_asset "$json")" || [ -z "$asset" ]; then
