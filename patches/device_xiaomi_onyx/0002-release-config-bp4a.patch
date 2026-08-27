@@ -64,7 +64,7 @@ index 0000000..587985b
 +name: "bp4a"
 +aconfig_value_sets: "//device/xiaomi/onyx:aconfig_value_set-onyx-bp4a"
 diff --git a/device.mk b/device.mk
-index a185e78..a621c9e 100644
+index 6d7a968..6898fc5 100644
 --- a/device.mk
 +++ b/device.mk
 @@ -3,6 +3,10 @@

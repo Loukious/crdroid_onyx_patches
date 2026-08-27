@@ -77,6 +77,7 @@ declare -A PROJECT=(
     [frameworks_base]="frameworks/base"
     [packages_apps_Settings]="packages/apps/Settings"
     [packages_apps_Updater]="packages/apps/Updater"
+    [packages_apps_crDroidSettings]="packages/apps/crDroidSettings"
     [packages_modules_Bluetooth]="packages/modules/Bluetooth"
     [packages_modules_common]="packages/modules/common"
     [vendor_lineage]="vendor/lineage"

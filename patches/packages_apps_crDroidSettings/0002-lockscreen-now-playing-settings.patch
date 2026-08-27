@@ -1,0 +1,397 @@
+diff --git a/res/values/cr_arrays.xml b/res/values/cr_arrays.xml
+index 23a47bd3..97bee395 100644
+--- a/res/values/cr_arrays.xml
++++ b/res/values/cr_arrays.xml
+@@ -937,6 +937,29 @@
+         <item>6</item>
+     </string-array>
+ 
++    <!-- Lock screen Now Playing -->
++    <string-array name="nowplaying_icon_style_entries">
++        <item>Disabled</item>
++        <item>App icon</item>
++        <item>Music note icon</item>
++    </string-array>
++    <string-array name="nowplaying_icon_style_values" translatable="false">
++        <item>0</item>
++        <item>1</item>
++        <item>2</item>
++    </string-array>
++
++    <string-array name="nowplaying_color_mode_entries" translatable="false">
++        <item>White</item>
++        <item>Accent color</item>
++        <item>Album art</item>
++    </string-array>
++    <string-array name="nowplaying_color_mode_values" translatable="false">
++        <item>0</item>
++        <item>1</item>
++        <item>2</item>
++    </string-array>
++
+     <!-- Pulse music visualizer -->
+     <string-array name="pulse_color_entries" translatable="false">
+         <item>@string/pulse_color_lavalamp</item>
+diff --git a/res/values/cr_strings.xml b/res/values/cr_strings.xml
+index da66148e..b85d3f76 100644
+--- a/res/values/cr_strings.xml
++++ b/res/values/cr_strings.xml
+@@ -1326,6 +1326,30 @@ A small donation helps keep this project alive and improving. You can dismiss th
+     <string name="ls_media_art_blur_level_title">Media art blur level</string>
+     <string name="ls_media_art_blur_level_summary">Blur intensity when blur filter is applied</string>
+ 
++    <!-- Lock screen Now Playing -->
++    <string name="nowplaying_title">Now Playing</string>
++    <string name="nowplaying_summary">Show currently playing music info on the lock screen and AOD</string>
++    <string name="nowplaying_color_mode_title">Text color mode</string>
++    <string name="nowplaying_track_text_size_title">Track title size</string>
++    <string name="nowplaying_track_text_size_summary">Size of the track title text</string>
++    <string name="nowplaying_artist_text_size_title">Artist name size</string>
++    <string name="nowplaying_artist_text_size_summary">Size of the artist or album name text</string>
++    <string name="nowplaying_display_title">Display options</string>
++    <string name="nowplaying_show_on_lockscreen_title">Show on lock screen</string>
++    <string name="nowplaying_show_on_lockscreen_summary">Display music info when the device is locked</string>
++    <string name="nowplaying_show_on_aod_title">Show on always-on display</string>
++    <string name="nowplaying_show_on_aod_summary">Display music info on ambient display</string>
++    <string name="nowplaying_icon_style_title">Icon style</string>
++    <string name="nowplaying_icon_style_summary">Choose which icon to display</string>
++    <string name="nowplaying_icon_size_title">Icon size</string>
++    <string name="nowplaying_icon_size_summary">Adjust the icon size</string>
++    <string name="nowplaying_expand_dialog">Expand dialog</string>
++    <string name="nowplaying_expand_dialog_summary">Expand the Now Playing dialog</string>
++    <string name="nowplaying_lyrics_mode_title">Lyrics mode</string>
++    <string name="nowplaying_lyrics_mode_summary">Show synced lyrics instead of track title and icon</string>
++    <string name="nowplaying_info_summary">Now Playing shows the current track and artist on the lock screen and always-on display. It appears automatically when music is playing and hides when stopped.</string>
++    <string name="nowplaying_pixel_native_footer">This device already provides Now Playing natively through Pixel\'s ambient indication. These settings are unavailable while the built-in version is active.</string>
++
+     <!-- Pulse music visualizer -->
+     <string name="pulse_settings_title">Pulse Visualizer</string>
+     <string name="pulse_settings_summary">Show a bar visualizer on the lock screen while music is playing</string>
+diff --git a/res/xml/crdroid_settings_lockscreen.xml b/res/xml/crdroid_settings_lockscreen.xml
+index df2b4cb3..430818d4 100644
+--- a/res/xml/crdroid_settings_lockscreen.xml
++++ b/res/xml/crdroid_settings_lockscreen.xml
+@@ -52,6 +52,14 @@
+             android:summary="@string/ls_media_art_summary"
+             android:fragment="com.crdroid.settings.fragments.lockscreen.MediaArtSettings" />
+ 
++        <!-- Lockscreen Now Playing -->
++        <Preference
++            android:key="nowplaying_settings"
++            android:icon="@drawable/ic_music_note"
++            android:title="@string/nowplaying_title"
++            android:summary="@string/nowplaying_summary"
++            android:fragment="com.crdroid.settings.fragments.lockscreen.NowPlayingSettings" />
++
+         <com.crdroid.settings.preferences.SystemSettingSwitchPreference
+             android:key="lockscreen_battery_info"
+             android:icon="@drawable/ic_battery_charging"
+diff --git a/res/xml/nowplaying_settings.xml b/res/xml/nowplaying_settings.xml
+new file mode 100644
+index 00000000..da2b845d
+--- /dev/null
++++ b/res/xml/nowplaying_settings.xml
+@@ -0,0 +1,117 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     Copyright (C) 2024-2026 Lunaris AOSP
++
++     Licensed under the Apache License, Version 2.0 (the "License");
++     you may not use this file except in compliance with the License.
++     You may obtain a copy of the License at
++
++          http://www.apache.org/licenses/LICENSE-2.0
++
++     Unless required by applicable law or agreed to in writing, software
++     distributed under the License is distributed on an "AS IS" BASIS,
++     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++     See the License for the specific language governing permissions and
++     limitations under the License.
++-->
++<PreferenceScreen
++    xmlns:android="http://schemas.android.com/apk/res/android"
++    xmlns:settings="http://schemas.android.com/apk/res/com.android.settings"
++    android:title="@string/nowplaying_title">
++
++    <lineageos.preference.SystemSettingMainSwitchPreference
++        android:key="nowplaying_enabled"
++        android:title="@string/nowplaying_title"
++        android:summary="@string/nowplaying_summary"
++        android:defaultValue="false" />
++
++    <com.crdroid.settings.preferences.SystemSettingListPreference
++        android:key="nowplaying_icon_style"
++        android:title="@string/nowplaying_icon_style_title"
++        android:summary="@string/nowplaying_icon_style_summary"
++        android:entries="@array/nowplaying_icon_style_entries"
++        android:entryValues="@array/nowplaying_icon_style_values"
++        android:dependency="nowplaying_enabled"
++        android:defaultValue="0" />
++
++    <com.crdroid.settings.preferences.SystemSettingSeekBarPreference
++        android:key="nowplaying_icon_size"
++        android:title="@string/nowplaying_icon_size_title"
++        android:summary="@string/nowplaying_icon_size_summary"
++        android:dependency="nowplaying_enabled"
++        android:max="40"
++        android:min="5"
++        android:defaultValue="24"
++        settings:interval="1"
++        settings:units="dp" />
++
++    <com.crdroid.settings.preferences.SystemSettingSwitchPreference
++        android:key="nowplaying_lyrics_mode"
++        android:title="@string/nowplaying_lyrics_mode_title"
++        android:summary="@string/nowplaying_lyrics_mode_summary"
++        android:dependency="nowplaying_enabled"
++        android:defaultValue="false" />
++
++    <com.crdroid.settings.preferences.SystemSettingSwitchPreference
++        android:key="nowplaying_tap_to_expand"
++        android:title="@string/nowplaying_expand_dialog"
++        android:summary="@string/nowplaying_expand_dialog_summary"
++        android:dependency="nowplaying_enabled"
++        android:defaultValue="true" />
++
++    <com.crdroid.settings.preferences.SystemSettingListPreference
++        android:key="nowplaying_color_mode"
++        android:title="@string/nowplaying_color_mode_title"
++        android:entries="@array/nowplaying_color_mode_entries"
++        android:entryValues="@array/nowplaying_color_mode_values"
++        android:defaultValue="0" />
++
++    <com.crdroid.settings.preferences.SystemSettingSeekBarPreference
++        android:key="nowplaying_track_text_size"
++        android:title="@string/nowplaying_track_text_size_title"
++        android:summary="@string/nowplaying_track_text_size_summary"
++        android:dependency="nowplaying_enabled"
++        android:max="24"
++        android:min="8"
++        android:defaultValue="14"
++        settings:interval="1"
++        settings:units="sp" />
++
++    <com.crdroid.settings.preferences.SystemSettingSeekBarPreference
++        android:key="nowplaying_artist_text_size"
++        android:title="@string/nowplaying_artist_text_size_title"
++        android:summary="@string/nowplaying_artist_text_size_summary"
++        android:dependency="nowplaying_enabled"
++        android:max="20"
++        android:min="5"
++        android:defaultValue="12"
++        settings:interval="1"
++        settings:units="sp" />
++
++    <PreferenceCategory
++        android:key="nowplaying_display_category"
++        android:title="@string/nowplaying_display_title"
++        android:dependency="nowplaying_enabled">
++
++        <com.crdroid.settings.preferences.SystemSettingSwitchPreference
++            android:key="nowplaying_show_on_lockscreen"
++            android:title="@string/nowplaying_show_on_lockscreen_title"
++            android:summary="@string/nowplaying_show_on_lockscreen_summary"
++            android:defaultValue="true" />
++
++        <com.crdroid.settings.preferences.SystemSettingSwitchPreference
++            android:key="nowplaying_show_on_aod"
++            android:title="@string/nowplaying_show_on_aod_title"
++            android:summary="@string/nowplaying_show_on_aod_summary"
++            android:defaultValue="true" />
++
++    </PreferenceCategory>
++
++    <com.android.settingslib.widget.FooterPreference
++        android:key="nowplaying_info_footer"
++        android:title="@string/nowplaying_info_summary"
++        android:icon="@drawable/ic_info"
++        android:selectable="false"
++        settings:searchable="false" />
++
++</PreferenceScreen>
+diff --git a/src/com/crdroid/settings/fragments/LockScreen.java b/src/com/crdroid/settings/fragments/LockScreen.java
+index 422699b0..1295b01a 100644
+--- a/src/com/crdroid/settings/fragments/LockScreen.java
++++ b/src/com/crdroid/settings/fragments/LockScreen.java
+@@ -38,6 +38,7 @@ import com.android.settingslib.search.SearchIndexable;
+ 
+ import com.crdroid.settings.fragments.lockscreen.PulseSettings;
+ import com.crdroid.settings.fragments.lockscreen.MediaArtSettings;
++import com.crdroid.settings.fragments.lockscreen.NowPlayingSettings;
+ import com.crdroid.settings.fragments.lockscreen.UdfpsAnimation;
+ import com.crdroid.settings.fragments.lockscreen.UdfpsIconPicker;
+ import com.crdroid.settings.utils.DeviceUtils;
+@@ -157,6 +158,7 @@ public class LockScreen extends SettingsPreferenceFragment
+                 Settings.System.LOCKSCREEN_WEATHER_HUMIDITY_INFO, 0, UserHandle.USER_CURRENT);
+         PulseSettings.reset(mContext);
+         MediaArtSettings.reset(mContext);
++        NowPlayingSettings.reset(mContext);
+         UdfpsAnimation.Companion.reset(mContext);
+         UdfpsIconPicker.Companion.reset(mContext);
+     }
+diff --git a/src/com/crdroid/settings/fragments/lockscreen/NowPlayingSettings.kt b/src/com/crdroid/settings/fragments/lockscreen/NowPlayingSettings.kt
+new file mode 100644
+index 00000000..c68d1db3
+--- /dev/null
++++ b/src/com/crdroid/settings/fragments/lockscreen/NowPlayingSettings.kt
+@@ -0,0 +1,111 @@
++/*
++ * Copyright (C) 2024-2026 Lunaris AOSP
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.crdroid.settings.fragments.lockscreen
++
++import android.content.Context
++import android.os.Bundle
++import android.os.UserHandle
++import android.provider.Settings
++
++import androidx.preference.Preference
++import androidx.preference.PreferenceGroup
++
++import com.android.internal.logging.nano.MetricsProto
++import com.android.settings.R
++import com.android.settings.SettingsPreferenceFragment
++import com.android.settings.search.BaseSearchIndexProvider
++import com.android.settingslib.search.SearchIndexable
++import com.android.settingslib.widget.FooterPreference
++
++import com.crdroid.settings.utils.PixelAmbientIndicationDetector
++
++@SearchIndexable
++class NowPlayingSettings : SettingsPreferenceFragment() {
++
++    private var infoFooterPref: FooterPreference? = null
++
++    private val isNativePixelAmbientIndication: Boolean by lazy {
++        PixelAmbientIndicationDetector.shouldUseNativeAmbientIndication(requireContext())
++    }
++
++    override fun onCreate(savedInstanceState: Bundle?) {
++        super.onCreate(savedInstanceState)
++        addPreferencesFromResource(R.xml.nowplaying_settings)
++
++        infoFooterPref = findPreference("nowplaying_info_footer")
++
++        if (isNativePixelAmbientIndication) {
++            disableAllPreferencesForNativePixel()
++        }
++    }
++
++    private fun disableAllPreferencesForNativePixel() {
++        val screen = preferenceScreen
++        for (i in 0 until screen.preferenceCount) {
++            disableRecursively(screen.getPreference(i))
++        }
++        infoFooterPref?.title = getString(R.string.nowplaying_pixel_native_footer)
++    }
++
++    private fun disableRecursively(pref: Preference) {
++        if (pref === infoFooterPref) return
++        pref.isEnabled = false
++        if (pref is PreferenceGroup) {
++            for (i in 0 until pref.preferenceCount) {
++                disableRecursively(pref.getPreference(i))
++            }
++        }
++    }
++
++    override fun getMetricsCategory(): Int {
++        return MetricsProto.MetricsEvent.CRDROID_SETTINGS
++    }
++
++    companion object {
++        const val TAG = "NowPlayingSettings"
++
++        /** Defaults must stay in sync with res/xml/nowplaying_settings.xml. */
++        @JvmStatic
++        fun reset(context: Context) {
++            val resolver = context.contentResolver
++            Settings.System.putIntForUser(resolver,
++                    Settings.System.NOWPLAYING_ENABLED, 0, UserHandle.USER_CURRENT)
++            Settings.System.putIntForUser(resolver,
++                    Settings.System.NOWPLAYING_ICON_STYLE, 0, UserHandle.USER_CURRENT)
++            Settings.System.putIntForUser(resolver,
++                    Settings.System.NOWPLAYING_ICON_SIZE, 24, UserHandle.USER_CURRENT)
++            Settings.System.putIntForUser(resolver,
++                    Settings.System.NOWPLAYING_LYRICS_MODE, 0, UserHandle.USER_CURRENT)
++            Settings.System.putIntForUser(resolver,
++                    Settings.System.NOWPLAYING_TAP_TO_EXPAND, 1, UserHandle.USER_CURRENT)
++            Settings.System.putIntForUser(resolver,
++                    Settings.System.NOWPLAYING_COLOR_MODE, 0, UserHandle.USER_CURRENT)
++            Settings.System.putIntForUser(resolver,
++                    Settings.System.NOWPLAYING_TRACK_TEXT_SIZE, 14, UserHandle.USER_CURRENT)
++            Settings.System.putIntForUser(resolver,
++                    Settings.System.NOWPLAYING_ARTIST_TEXT_SIZE, 12, UserHandle.USER_CURRENT)
++            Settings.System.putIntForUser(resolver,
++                    Settings.System.NOWPLAYING_SHOW_ON_LOCKSCREEN, 1, UserHandle.USER_CURRENT)
++            Settings.System.putIntForUser(resolver,
++                    Settings.System.NOWPLAYING_SHOW_ON_AOD, 1, UserHandle.USER_CURRENT)
++        }
++
++        /** For search */
++        @JvmField
++        val SEARCH_INDEX_DATA_PROVIDER =
++                object : BaseSearchIndexProvider(R.xml.nowplaying_settings) {}
++    }
++}
+diff --git a/src/com/crdroid/settings/utils/PixelAmbientIndicationDetector.kt b/src/com/crdroid/settings/utils/PixelAmbientIndicationDetector.kt
+new file mode 100644
+index 00000000..3ebaf20f
+--- /dev/null
++++ b/src/com/crdroid/settings/utils/PixelAmbientIndicationDetector.kt
+@@ -0,0 +1,43 @@
++/*
++ * SPDX-FileCopyrightText: Evolution X
++ * SPDX-License-Identifier: Apache-2.0
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.crdroid.settings.utils
++
++import android.content.Context
++import android.content.pm.PackageManager
++import android.os.Build
++
++/**
++ * Settings-side duplicate of com.android.systemui.nowplaying.ambient.PixelAmbientIndicationDetector.
++ * SystemUI and Settings build as separate targets, so this can't be shared via import -- keep this
++ * logic identical to the SystemUI copy if either one changes.
++ */
++object PixelAmbientIndicationDetector {
++
++    private const val AS_PACKAGE = "com.google.android.as"
++
++    fun shouldUseNativeAmbientIndication(context: Context): Boolean {
++        val isPixelBrand = Build.BRAND.equals("google", ignoreCase = true) &&
++            Build.MANUFACTURER.equals("google", ignoreCase = true)
++        if (!isPixelBrand) return false
++
++        return try {
++            context.packageManager.getApplicationInfo(AS_PACKAGE, 0).enabled
++        } catch (e: PackageManager.NameNotFoundException) {
++            false
++        }
++    }
++}

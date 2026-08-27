@@ -1,8 +1,8 @@
 diff --git a/BoardConfig.mk b/BoardConfig.mk
-index f5d4cb0..a0180ec 100644
+index d4235c2..2247d57 100644
 --- a/BoardConfig.mk
 +++ b/BoardConfig.mk
-@@ -260,3 +260,6 @@ include vendor/xiaomi/onyx/BoardConfigVendor.mk
+@@ -289,3 +289,6 @@ include vendor/xiaomi/onyx/BoardConfigVendor.mk
  
  # Vendor MiuiCamera
  -include device/xiaomi/onyx-miuicamera/BoardConfig.mk

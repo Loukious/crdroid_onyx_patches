@@ -1,8 +1,8 @@
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index 639f509915b3..81704862710c 100644
+index 639f509915b3..041c23e9ab37 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
-@@ -7412,6 +7412,14 @@ public final class Settings {
+@@ -7412,6 +7485,14 @@ public final class Settings {
           */
          public static final String GESTURE_NAVBAR_HEIGHT_MODE = "gesture_navbar_height_mode";
  

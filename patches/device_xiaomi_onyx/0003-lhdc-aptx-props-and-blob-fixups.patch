@@ -1,8 +1,8 @@
 diff --git a/extract-files.py b/extract-files.py
-index e3e437d..0b24739 100755
+index 67a785e..dbe67aa 100755
 --- a/extract-files.py
 +++ b/extract-files.py
-@@ -93,7 +93,80 @@ def blob_fixup_graphic_buffer_size(
+@@ -82,7 +82,80 @@ def blob_fixup_graphic_buffer_size(
                  f.write(b'\x00\xa6\x81\x52')  # AArch64 mov w0, #0xd30
  
  
