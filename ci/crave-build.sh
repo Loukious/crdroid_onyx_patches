@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Sync + patch + build crDroid 16.0 for onyx (POCO F7).
+# Sync + patch + build Evolution X 16 (bka) for onyx (POCO F7).
 #
 # This runs ON A CRAVE BUILD SERVER, with the working directory set to the ROM
 # source root -- never in the Devspace CLI, where `repo sync` and `make` are
@@ -21,10 +21,10 @@
 #
 set -euo pipefail
 
-MANIFEST_URL="${MANIFEST_URL:-https://github.com/crdroidandroid/android.git}"
-MANIFEST_BRANCH="${MANIFEST_BRANCH:-16.0}"
+MANIFEST_URL="${MANIFEST_URL:-https://github.com/Evolution-X/manifest.git}"
+MANIFEST_BRANCH="${MANIFEST_BRANCH:-bka}"
 LOCAL_MANIFESTS="${LOCAL_MANIFESTS:-https://github.com/Loukious/local_manifests_onyx}"
-LOCAL_MANIFESTS_BRANCH="${LOCAL_MANIFESTS_BRANCH:-crdroid-16.0}"
+LOCAL_MANIFESTS_BRANCH="${LOCAL_MANIFESTS_BRANCH:-evolution-bka}"
 DEVICE="${DEVICE:-onyx}"
 SYNC_ONLY="${SYNC_ONLY:-0}"
 
@@ -38,7 +38,7 @@ say() { printf '\n\033[1;36m>> %s\033[0m\n' "$*"; }
 # Only .repo/local_manifests is removed. Never `rm -rf *` and never touch out/
 # -- wiping the pre-synced source turns a 30 min incremental into a 4 hour
 # rebuild and makes the whole queue wait.
-say "re-pointing the workspace at crDroid $MANIFEST_BRANCH"
+say "re-pointing the workspace at Evolution X $MANIFEST_BRANCH"
 rm -rf .repo/local_manifests
 
 # --depth 1 is requested by the crave rules to cut sync time. It also makes the
@@ -87,7 +87,7 @@ say "checking patched imports resolve against this tree"
 # exactly as crDroid's own release builds do. Exporting them before sourcing is
 # dead code, and forcing them afterwards would only leak the builder identity
 # into ro.build.{user,host}. The maintainer name users actually see comes from
-# ro.crdroid.maintainer (vendor/extra/product.mk), not from the fingerprint.
+# the release builds. There is no maintainer prop under Evo (see README).
 
 say "breakfast $DEVICE userdebug"
 # The strict-shell options have to come off before envsetup, and stay off for
@@ -135,11 +135,11 @@ fi
 say "make installclean"
 make installclean || { echo "FATAL: installclean failed"; exit 1; }
 
-say "mka bacon"
-mka bacon
+say "mka evolution"
+mka evolution
 rc=$?
 if [ "$rc" -ne 0 ]; then
-    echo "FATAL: mka bacon failed (exit $rc)"
+    echo "FATAL: mka evolution failed (exit $rc)"
     exit "$rc"
 fi
 
