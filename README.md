@@ -40,9 +40,6 @@ Evolver screen and it lands in the wrong menu. There is no Java: Evo's
 `org.evolution.settings.preferences.SystemSettingListPreference` persists the
 value to `Settings.System` itself.
 
-**Google AI Wallpapers fix** — `PlayIntegritySpoofService` spoofs the integrity
-verdict for the wallpaper generator, hooked from `ActivityThread`.
-
 **LHDC A2DP codec** — the big one, spanning six projects:
 `packages/modules/Bluetooth` (the codec itself, ~22.6k lines),
 `vendor/qcom/opensource/interfaces` (the AIDL + frozen `aidl_api` snapshots),
@@ -66,8 +63,7 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0004-firmware-os3.0.302.0
                                               0005-drop-crdroid-bcr
 patches/frameworks_base/                      0001-gesture-navbar-space
-                                              0002-wallpaper-ai-spoof
-                                              0003-lhdc-audio
+                                              0002-lhdc-audio
 patches/packages_apps_Evolver/                0001-gesture-navbar-space-ui
 patches/packages_apps_Settings/               0001-gesture-navbar-space-ui
 patches/packages_apps_Updater/                0001-self-hosted-ota-url
@@ -114,15 +110,17 @@ and the Kono-Ha kernel with it. See that directory's README.
 **Firmware overlay.** `vendor/xiaomi/onyx` syncs from crDroid's upstream GitLab
 (4 GB, hosted free by them). Only the ~350 MB that differs — the OS3.0.302.0
 `radio/` images and the two LHDC byte-patched blobs — lives in
-[`proprietary_vendor_xiaomi_onyx-firmware`](https://github.com/Loukious/proprietary_vendor_xiaomi_onyx-firmware),
+[`proprietary_vendor_xiaomi_onyx-firmware`](https://gitlab.com/Loukious/proprietary_vendor_xiaomi_onyx-firmware),
 synced to `vendor/xiaomi/onyx-firmware` and copied over the top here. The two
-images above GitHub's 100 MB blob limit are stored as `split` parts and
-reassembled with a SHA-256 check.
+images above every host's 100 MB plain-blob limit (`modem.img` 137 MB,
+`modemfirmware.img` 128 MB) are Git LFS objects on GitLab — 10 GB free storage,
+no bandwidth metering — stored whole, with every file carrying a `.sha256`
+sibling that `apply.sh` verifies (which also catches an unfetched LFS pointer).
 
 Forking the 4 GB vendor repo was the obvious alternative and is a trap: its
-history holds several revisions of the 137 MB `modem.img`, so a GitHub fork
-blows the 1 GB free LFS tier and approaches the 2 GB per-push limit. The
-overlay costs ~350 MB of ordinary git objects and no metered bandwidth.
+history holds several revisions of the 137 MB `modem.img`. The overlay costs
+~350 MB and needs `repo init --git-lfs`, which Evo's own `vendor_gms` already
+requires anyway.
 
 **Kernel Image.** Fetched from the latest `konoha-kernel-gki` release —
 specifically the `KernelSU-Next` `root` asset that is *not* the

@@ -112,11 +112,9 @@ emit frameworks/base 0001-gesture-navbar-space.patch \
     core/java/android/provider/Settings.java \
     services/core/java/com/android/server/wm/DisplayPolicy.java
 
-emit frameworks/base 0002-wallpaper-ai-spoof.patch \
-    core/java/android/app/ActivityThread.java \
-    core/java/android/security/pif/PlayIntegritySpoofService.java
-
-emit frameworks/base 0003-lhdc-audio.patch \
+# The AI-Wallpapers spoof is gone: Evo's config-driven PIF can spoof any app
+# from its JSON config (Settings.Secure), so a dedicated patch is redundant.
+emit frameworks/base 0002-lhdc-audio.patch \
     media/java/android/media/AudioSystem.java \
     services/core/java/com/android/server/audio/BtHelper.java
 
