@@ -187,8 +187,25 @@ overlay_firmware() {
 # patch would be enormous -- so, like the firmware, it is an rsync overlay.
 # BoardConfig.mk builds qcom/opensource/wlan/{platform,qcacld-3.0} as external
 # kernel modules; qcacld-3.0's Kbuild reaches into ../qca-wifi-host-cmn and
-# ../fw-api, so all four dirs go over together. A repo sync reverts this;
-# apply.sh runs after every sync, so that is fine.
+# ../fw-api, so all four dirs go over together. qcacld-3.0's wrapper Makefile
+# builds the module against the konoha ABI kernel (kernel/xiaomi/konoha-abi,
+# prepared on demand by konoha-abi-prep.sh) instead of the tree kernel -- a
+# tree-kernel module fails its driver probe on the Kono-Ha GKI kernel the ROM
+# ships. A repo sync reverts this; apply.sh runs after every sync, so that is
+# fine.
+# qcacld-3.0 builds in-source against the konoha ABI kernel (see
+# qcacld-3.0/konoha-abi-prep.sh and the wrapper Makefile there), so its build
+# artifacts live next to the sources in the tree copy. Keep rsync --delete
+# from wiping them on every re-apply -- the fork carries none of these files,
+# so excluding them never masks a real source change.
+wlan_artifact_excludes=(
+    --exclude='*.o' --exclude='.*.cmd' --exclude='*.o.d'
+    --exclude='*.ko' --exclude='*.mod' --exclude='*.mod.c'
+    --exclude='*.symtypes' --exclude='*.symversions'
+    --exclude='Module.symvers' --exclude='modules.order'
+    --exclude='.konoha-abi-release'
+)
+
 overlay_wlan() {
     local src="$ROM/kernel/xiaomi/onyx-wlan"
     local dst="$ROM/kernel/xiaomi/sm8735-modules/qcom/opensource/wlan"
@@ -197,7 +214,7 @@ overlay_wlan() {
 
     local d n=0
     for d in fw-api platform qca-wifi-host-cmn qcacld-3.0; do
-        if rsync -a --delete --itemize-changes "$src/$d/" "$dst/$d/" > /tmp/.wlan-rsync.$$ 2>/dev/null; then
+        if rsync -a --delete --itemize-changes "${wlan_artifact_excludes[@]}" "$src/$d/" "$dst/$d/" > /tmp/.wlan-rsync.$$ 2>/dev/null; then
             n=$(wc -l < /tmp/.wlan-rsync.$$)
             rm -f /tmp/.wlan-rsync.$$
             if [ "$n" -gt 0 ]; then
