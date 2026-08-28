@@ -1,0 +1,21 @@
+diff --git a/configs/audio/audio_module_config_primary.xml b/configs/audio/audio_module_config_primary.xml
+index b9cbbf6..cc37637 100644
+--- a/configs/audio/audio_module_config_primary.xml
++++ b/configs/audio/audio_module_config_primary.xml
+@@ -151,13 +151,13 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
+         <devicePort tagName="fm_out" deviceType="OUT_FM" role="sink" attached="true">
+             <profile samplingRates="48000" channelLayouts="LAYOUT_MONO LAYOUT_STEREO" formatType="PCM" pcmType="INT_16_BIT" />
+         </devicePort>
+-        <devicePort tagName="bt_a2dp_out" deviceType="OUT_DEVICE" connection="bt-a2dp" role="sink" encodings="audio/x-sbc audio/mp4a.40 audio/aptx audio/vnd.qcom.aptx.hd audio/vnd.sony.ldac audio/x-celt audio/vnd.qcom.aptx.adaptive audio/vnd.qcom.aptx.twsp">
++        <devicePort tagName="bt_a2dp_out" deviceType="OUT_DEVICE" connection="bt-a2dp" role="sink" encodings="audio/x-sbc audio/mp4a.40 audio/aptx audio/vnd.qcom.aptx.hd audio/vnd.sony.ldac audio/x-celt audio/vnd.qcom.aptx.adaptive audio/vnd.qcom.aptx.twsp audio/vnd.savitech.lhdc">
+             <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_16_BIT" />
+         </devicePort>
+-        <devicePort tagName="bt_a2dp_headphones" deviceType="OUT_HEADPHONE" connection="bt-a2dp" role="sink" encodings="audio/x-sbc audio/mp4a.40 audio/aptx audio/vnd.qcom.aptx.hd audio/vnd.sony.ldac audio/x-celt audio/vnd.qcom.aptx.adaptive audio/vnd.qcom.aptx.twsp">
++        <devicePort tagName="bt_a2dp_headphones" deviceType="OUT_HEADPHONE" connection="bt-a2dp" role="sink" encodings="audio/x-sbc audio/mp4a.40 audio/aptx audio/vnd.qcom.aptx.hd audio/vnd.sony.ldac audio/x-celt audio/vnd.qcom.aptx.adaptive audio/vnd.qcom.aptx.twsp audio/vnd.savitech.lhdc">
+             <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_16_BIT" />
+         </devicePort>
+-        <devicePort tagName="bt_a2dp_speaker" deviceType="OUT_SPEAKER" connection="bt-a2dp" role="sink" encodings="audio/x-sbc audio/mp4a.40 audio/aptx audio/vnd.qcom.aptx.hd audio/vnd.sony.ldac audio/x-celt audio/vnd.qcom.aptx.adaptive audio/vnd.qcom.aptx.twsp">
++        <devicePort tagName="bt_a2dp_speaker" deviceType="OUT_SPEAKER" connection="bt-a2dp" role="sink" encodings="audio/x-sbc audio/mp4a.40 audio/aptx audio/vnd.qcom.aptx.hd audio/vnd.sony.ldac audio/x-celt audio/vnd.qcom.aptx.adaptive audio/vnd.qcom.aptx.twsp audio/vnd.savitech.lhdc">
+             <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_16_BIT" />
+         </devicePort>
+         <devicePort tagName="bt_ble_headset" deviceType="OUT_HEADSET" connection="bt-le" role="sink" encodings="audio/x-lc3 audio/vnd.qcom.aptx.adaptive.r3 audio/vnd.qcom.aptx.adaptive.r4">
