@@ -1,23 +1,13 @@
 diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
-index cc59a54..e040f0e 100644
+index e040f0e..8c88f23 100644
 --- a/app/src/main/res/values/strings.xml
 +++ b/app/src/main/res/values/strings.xml
-@@ -29,8 +29,17 @@
-     <!--
-         Optional placeholders replaced at runtime:
-           {device} - Device name
-+
-+        Pointed at this build's own OTA index, not Evolution X's. Evo does not
-+        publish onyx today (Evolution-X/OTA has no onyx.json), so the stock URL
-+        is a 404 right now -- but the day it stops being one, the Updater would
-+        offer an official Evo weekly as an update to this build and flashing it
-+        would take the whole local patch set, the LHDC codec and the Kono-Ha
-+        kernel with it. The file this points at ships as ota/onyx.json in the
-+        patch repo and is an empty response array, so the Updater cleanly
-+        reports "no updates" until a build is actually published there.
-     -->
--    <string name="updater_server_url" translatable="false">https://raw.githubusercontent.com/Evolution-X/OTA/bka/builds/{device}.json</string>
-+    <string name="updater_server_url" translatable="false">https://raw.githubusercontent.com/Loukious/crdroid_onyx_patches/evolution-bka/ota/{device}.json</string>
-     <string name="verification_failed_notification">Verification failed</string>
-     <string name="verifying_download_notification">Verifying update</string>
-     <string name="downloading_notification">Downloading</string>
+@@ -32,7 +32,7 @@
+ 
+         Pointed at this build's own OTA index, not Evolution X's. Evo does not
+         publish onyx today (Evolution-X/OTA has no onyx.json), so the stock URL
+-        is a 404 right now -- but the day it stops being one, the Updater would
++        is a 404 right now, but the day it stops being one, the Updater would
+         offer an official Evo weekly as an update to this build and flashing it
+         would take the whole local patch set, the LHDC codec and the Kono-Ha
+         kernel with it. The file this points at ships as ota/onyx.json in the
