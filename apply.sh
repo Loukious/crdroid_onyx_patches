@@ -18,6 +18,7 @@
 #   env: KERNEL_RELEASE_TAG   konoha release to pull the Image from (default: latest)
 #        SKIP_KERNEL=1        don't fetch/stage the kernel Image
 #        SKIP_FIRMWARE=1      don't overlay the firmware blobs
+#        SKIP_WLAN=1          don't overlay the wlan driver
 #        GITHUB_TOKEN         used for the release API if the repo is private
 #
 # ---------------------------------------------------------------------------
@@ -79,6 +80,7 @@ declare -A PROJECT=(
     [packages_apps_Updater]="packages/apps/Updater"
     [packages_modules_Bluetooth]="packages/modules/Bluetooth"
     [packages_modules_common]="packages/modules/common"
+    [vendor_gms]="vendor/gms"
     [vendor_lineage]="vendor/lineage"
     [vendor_qcom_opensource_interfaces]="vendor/qcom/opensource/interfaces"
     [vendor_xiaomi_onyx]="vendor/xiaomi/onyx"
@@ -175,6 +177,40 @@ overlay_firmware() {
                 ! -name 'README.md' ! -name '.gitattributes' \
                 ! -name '.lfsconfig' -print0)
     echo "   ($n file(s) copied)"
+}
+
+# ------------------------------------------------------------------ wlan driver
+# The tree's wlan driver (kernel/xiaomi/sm8735-modules/qcom/opensource/wlan) is
+# stock MiCode. The one we actually ship is the fork at kernel/xiaomi/onyx-wlan
+# (MiCode + annibale-to-onyx port + monitor mode and direct packet injection),
+# synced by the local manifest. Same repo layout, but drifted enough that a git
+# patch would be enormous -- so, like the firmware, it is an rsync overlay.
+# BoardConfig.mk builds qcom/opensource/wlan/{platform,qcacld-3.0} as external
+# kernel modules; qcacld-3.0's Kbuild reaches into ../qca-wifi-host-cmn and
+# ../fw-api, so all four dirs go over together. A repo sync reverts this;
+# apply.sh runs after every sync, so that is fine.
+overlay_wlan() {
+    local src="$ROM/kernel/xiaomi/onyx-wlan"
+    local dst="$ROM/kernel/xiaomi/sm8735-modules/qcom/opensource/wlan"
+    [ -d "$src/qcacld-3.0" ] || { red "FATAL: $src missing -- is onyx-wlan in the local manifest?"; return 1; }
+    [ -d "$dst" ] || { red "FATAL: $dst missing (sync incomplete?)"; return 1; }
+
+    local d n=0
+    for d in fw-api platform qca-wifi-host-cmn qcacld-3.0; do
+        if rsync -a --delete --itemize-changes "$src/$d/" "$dst/$d/" > /tmp/.wlan-rsync.$$ 2>/dev/null; then
+            n=$(wc -l < /tmp/.wlan-rsync.$$)
+            rm -f /tmp/.wlan-rsync.$$
+            if [ "$n" -gt 0 ]; then
+                echo "   ++ $d ($n file(s) updated)"
+            else
+                echo "   -- $d (already current)"
+            fi
+        else
+            rm -f /tmp/.wlan-rsync.$$
+            red "FATAL: rsync failed for $d"
+            return 1
+        fi
+    done
 }
 
 # ---------------------------------------------------------------- kernel Image
@@ -406,6 +442,11 @@ apply_patches
 if [ "${SKIP_FIRMWARE:-0}" != "1" ]; then
     echo "== firmware overlay"
     overlay_firmware || fail=1
+fi
+
+if [ "${SKIP_WLAN:-0}" != "1" ]; then
+    echo "== wlan driver overlay"
+    overlay_wlan || fail=1
 fi
 
 if [ "${SKIP_KERNEL:-0}" != "1" ]; then

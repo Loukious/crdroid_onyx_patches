@@ -22,6 +22,7 @@ rather than shipping a half-patched ROM.
 | `KERNEL_RELEASE_TAG` | konoha release to take the kernel Image from (default: latest) |
 | `SKIP_KERNEL=1` | don't fetch/stage the kernel Image |
 | `SKIP_FIRMWARE=1` | don't overlay the firmware blobs |
+| `SKIP_WLAN=1` | don't overlay the wlan driver fork over sm8735-modules |
 | `GITHUB_TOKEN` | used for the release API if the kernel repo is private |
 
 ## The three features
@@ -69,6 +70,7 @@ patches/packages_apps_Settings/               0001-gesture-navbar-space-ui
 patches/packages_apps_Updater/                0001-self-hosted-ota-url
 patches/packages_modules_Bluetooth/           0001-lhdc-codec
 patches/packages_modules_common/              0001-lhdc-allowed-deps
+patches/vendor_gms/                           0001-keep-aosp-dialer
 patches/vendor_lineage/                       0001-kernel-bin-override
 patches/vendor_qcom_opensource_interfaces/    0001-lhdc-aidl
 patches/vendor_xiaomi_onyx/                   0001-firmware-sha1s-os3.0.302.0
@@ -121,6 +123,27 @@ Forking the 4 GB vendor repo was the obvious alternative and is a trap: its
 history holds several revisions of the 137 MB `modem.img`. The overlay costs
 ~350 MB and needs `repo init --git-lfs`, which Evo's own `vendor_gms` already
 requires anyway.
+
+**WLAN driver overlay.** The wlan driver the ROM ships is
+[`Loukious/vendor_qcom_opensource_wlan`](https://github.com/Loukious/vendor_qcom_opensource_wlan)
+(`onyx-v-oss-monitor-direct`): MiCode's qcacld with the annibale→onyx port plus
+monitor mode and direct packet injection. It is synced standalone to
+`kernel/xiaomi/onyx-wlan` (repo cannot nest a project inside `sm8735-modules`)
+and `apply.sh` rsyncs its four driver dirs — `fw-api`, `platform`,
+`qca-wifi-host-cmn`, `qcacld-3.0` — over the `sm8735-modules` copies, which the
+build then compiles as `qca_cld3_wcn7750.ko` into `vendor_dlkm` exactly like the
+stock driver. The fork carries the sm8735-modules tree build wiring itself
+(`sun_gki_defconfig` includes, `USE_EXTERNAL_CONFIGS`, the
+`sun_gki_wcn7750` profile, `-D__ANDROID_COMMON_KERNEL__`), so the overlay needs
+no Makefile surgery on this side. `SKIP_WLAN=1` skips the overlay.
+
+**Dialer.** `vendor_gms/0001` drops GoogleDialer from `gms_full.mk`. Evo's
+GoogleDialer prebuilt carries `LOCAL_OVERRIDES_PACKAGES := Dialer`, which
+deletes the AOSP Dialer that `telephony_product.mk` adds — the "crDroid phone
+app" is that AOSP/Lineage Dialer. With GoogleDialer out of `PRODUCT_PACKAGES`
+the override never fires (kati only applies it when the overriding module is
+itself being built), so `packages/apps/Dialer` builds as the only dialer. The patch is that one line
+out of `gms_full.mk`; nothing else in vendor/gms changes.
 
 **Kernel Image.** Fetched from the latest `konoha-kernel-gki` release —
 specifically the `KernelSU-Next` `root` asset that is *not* the
