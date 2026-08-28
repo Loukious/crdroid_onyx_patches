@@ -7709,7 +7709,7 @@ index 95c8539e7f..df15aa4cb1 100644
        return A2dpOpusToHalConfig(config, codec_configuration) &&
               IsCodecOffloadingEnabled(*codec_configuration);
 diff --git a/system/bta/av/bta_av_aact.cc b/system/bta/av/bta_av_aact.cc
-index 7cf03c3a5e..3cb2892139 100644
+index a97f4b8e4f..ec8a2a76ec 100644
 --- a/system/bta/av/bta_av_aact.cc
 +++ b/system/bta/av/bta_av_aact.cc
 @@ -41,6 +41,7 @@
@@ -7720,7 +7720,7 @@ index 7cf03c3a5e..3cb2892139 100644
  #include "avdt_api.h"
  #include "avrc_api.h"
  #include "avrc_defs.h"
-@@ -121,7 +122,8 @@ constexpr char kBtmLogTag[] = "A2DP";
+@@ -122,7 +123,8 @@ constexpr char kBtmLogTag[] = "A2DP";
  #endif
  
  static void bta_av_accept_open_timer_cback(void* data);
@@ -7730,7 +7730,7 @@ index 7cf03c3a5e..3cb2892139 100644
  
  /* state machine states */
  enum {
-@@ -3046,21 +3048,70 @@ void bta_av_open_at_inc(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
+@@ -3047,17 +3049,65 @@ void bta_av_open_at_inc(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
    }
  }
  
@@ -7798,12 +7798,15 @@ index 7cf03c3a5e..3cb2892139 100644
        case VS_HCI_A2DP_OFFLOAD_STOP:
        case VS_HCI_A2DP_OFFLOAD_STOP_V2:
          log::verbose("VS_HCI_STOP_A2DP_MEDIA successful");
+@@ -3067,6 +3117,7 @@ static void offload_vendor_callback(tBTM_VSC_CMPL* param) {
+           }
+         }));
          break;
 +      case HCI_QTI_A2DP_OFFLOAD_START:
        case VS_HCI_A2DP_OFFLOAD_START:
        case VS_HCI_A2DP_OFFLOAD_START_V2:
          if (bta_av_cb.offload_start_pending_hndl) {
-@@ -3073,6 +3124,15 @@ static void offload_vendor_callback(tBTM_VSC_CMPL* param) {
+@@ -3079,6 +3130,15 @@ static void offload_vendor_callback(tBTM_VSC_CMPL* param) {
          (*bta_av_cb.p_cback)(BTA_AV_OFFLOAD_START_RSP_EVT, &value);
          break;
        default:
@@ -7819,7 +7822,7 @@ index 7cf03c3a5e..3cb2892139 100644
          break;
      }
    } else {
-@@ -3105,6 +3165,7 @@ static void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* of
+@@ -3134,6 +3194,7 @@ static void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* of
    ARRAY_TO_STREAM(p_param, offload_start->codec_info, (int8_t)sizeof(offload_start->codec_info));
    bta_av_cb.offload_start_pending_hndl = p_scb->hndl;
    bta_av_cb.offload_start_v2 = false;
@@ -7827,8 +7830,8 @@ index 7cf03c3a5e..3cb2892139 100644
    log::info(
            "codec: {:#x}, sample rate: {:#x}, bit depth: {:#x}, channel: {:#x}, "
            "bitrate: {:#x}, ACL: {:#x}, L2CAP: {:#x}, MTU: {:#x}",
-@@ -3115,6 +3176,58 @@ static void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* of
-                                                               param, offload_vendor_callback);
+@@ -3157,6 +3218,58 @@ static void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* of
+   }, param, p_param, coex_buf_count));
  }
  
 +/*
@@ -7886,7 +7889,7 @@ index 7cf03c3a5e..3cb2892139 100644
  static void bta_av_vendor_offload_start_v2(tBTA_AV_SCB* p_scb, A2dpCodecConfigExt* offload_codec) {
    log::verbose("");
  
-@@ -3159,6 +3272,7 @@ static void bta_av_vendor_offload_start_v2(tBTA_AV_SCB* p_scb, A2dpCodecConfigEx
+@@ -3201,6 +3314,7 @@ static void bta_av_vendor_offload_start_v2(tBTA_AV_SCB* p_scb, A2dpCodecConfigEx
    // Update the pending state.
    bta_av_cb.offload_start_pending_hndl = p_scb->hndl;
    bta_av_cb.offload_start_v2 = true;
@@ -7894,7 +7897,7 @@ index 7cf03c3a5e..3cb2892139 100644
  
    get_btm_client_interface().vendor.BTM_VendorSpecificCommand(HCI_CONTROLLER_A2DP, p_param - param,
                                                                param, offload_vendor_callback);
-@@ -3170,6 +3284,18 @@ void bta_av_vendor_offload_stop() {
+@@ -3212,6 +3326,18 @@ void bta_av_vendor_offload_stop() {
  
    log::verbose("");
  
@@ -7913,7 +7916,7 @@ index 7cf03c3a5e..3cb2892139 100644
    if (bta_av_cb.offload_start_v2) {
      tBTA_AV_SCB* p_scb = bta_av_hndl_to_scb(bta_av_cb.offload_start_pending_hndl);
      if (p_scb == nullptr) {
-@@ -3212,7 +3338,7 @@ void bta_av_vendor_offload_stop() {
+@@ -3254,7 +3380,7 @@ void bta_av_vendor_offload_stop() {
   ******************************************************************************/
  void bta_av_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /*p_data*/) {
    tBTA_AV bta_av_data = {};
@@ -7922,7 +7925,7 @@ index 7cf03c3a5e..3cb2892139 100644
    log::verbose("stream {}, audio channels open {}", p_scb->started ? "STARTED" : "STOPPED",
                 bta_av_cb.audio_open_cnt);
  
-@@ -3231,10 +3357,29 @@ void bta_av_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /*p_data*/) {
+@@ -3273,10 +3399,29 @@ void bta_av_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /*p_data*/) {
    A2dpCodecConfig* codec_config = bta_av_get_a2dp_current_codec();
    log::assert_that(codec_config != nullptr, "assert failed: codec_config != nullptr");
  
@@ -7953,7 +7956,7 @@ index 7cf03c3a5e..3cb2892139 100644
      bta_av_vendor_offload_start(p_scb, &offload_start);
    }
  }
-@@ -3266,7 +3411,8 @@ void bta_av_offload_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
+@@ -3308,7 +3453,8 @@ void bta_av_offload_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
    (*bta_av_cb.p_cback)(BTA_AV_OFFLOAD_START_RSP_EVT, &bta_av_data);
  }
  
@@ -7963,7 +7966,7 @@ index 7cf03c3a5e..3cb2892139 100644
    A2dpCodecConfig* CodecConfig = bta_av_get_a2dp_current_codec();
    btav_a2dp_codec_index_t codec_index = A2DP_SourceCodecIndex(p_scb->cfg.codec_info);
    uint32_t codec_type = 0;
-@@ -3289,15 +3435,30 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
+@@ -3331,15 +3477,30 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
      case BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_HD:
        codec_type = BTA_AV_CODEC_TYPE_APTXHD;
        break;
@@ -7996,7 +7999,7 @@ index 7cf03c3a5e..3cb2892139 100644
    }
    if (mtu > MAX_3MBPS_AVDTP_MTU) {
      mtu = MAX_3MBPS_AVDTP_MTU;
-@@ -3326,11 +3487,21 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
+@@ -3368,11 +3529,21 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
      case 96000:
        p_a2dp_offload->sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_96000;
        break;
@@ -8019,7 +8022,7 @@ index 7cf03c3a5e..3cb2892139 100644
    }
    switch (CodecConfig->getAudioBitsPerSample()) {
      case 16:
-@@ -3342,12 +3513,17 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
+@@ -3384,12 +3555,17 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
      case 32:
        p_a2dp_offload->bits_per_sample = BTAV_A2DP_CODEC_BITS_PER_SAMPLE_32;
        break;
@@ -8073,7 +8076,7 @@ index 1c816268e2..9c00255d33 100644
   *
   * Function         BTA_AvSetPeerSep
 diff --git a/system/bta/av/bta_av_int.h b/system/bta/av/bta_av_int.h
-index a2c2dacc47..bdf44d463b 100644
+index da01124909..8e566a4fe3 100644
 --- a/system/bta/av/bta_av_int.h
 +++ b/system/bta/av/bta_av_int.h
 @@ -117,6 +117,8 @@ enum {
@@ -8150,7 +8153,7 @@ index a2c2dacc47..bdf44d463b 100644
  
  #define VS_HCI_A2DP_OFFLOAD_START 0x01
  #define VS_HCI_A2DP_OFFLOAD_STOP 0x02
-@@ -711,6 +736,8 @@ bool bta_av_link_role_ok(tBTA_AV_SCB* p_scb, uint8_t bits);
+@@ -712,6 +737,8 @@ bool bta_av_link_role_ok(tBTA_AV_SCB* p_scb, uint8_t bits);
  void bta_av_api_disconnect(tBTA_AV_DATA* p_data);
  void bta_av_set_use_latency_mode(tBTA_AV_SCB* p_scb, bool use_latency_mode);
  void bta_av_api_set_latency(tBTA_AV_DATA* p_data);

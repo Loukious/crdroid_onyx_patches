@@ -1,36 +1,35 @@
 diff --git a/core/java/android/app/ActivityThread.java b/core/java/android/app/ActivityThread.java
-index 0c6afb47a8fe..acce83f292b5 100644
+index 3838ece63a94..4c26e32c005a 100644
 --- a/core/java/android/app/ActivityThread.java
 +++ b/core/java/android/app/ActivityThread.java
-@@ -8034,6 +8034,10 @@ public final class ActivityThread extends ClientTransactionHandler
-             pifService.spoofPhotosProps();
+@@ -8032,6 +8032,9 @@ public final class ActivityThread extends ClientTransactionHandler
+                 pifService.spoofSignature(data.processName);
+             }
          }
- 
 +        if (pifService.shouldSpoofAiWallpapers(data.appInfo.packageName)) {
 +            pifService.spoofAiWallpapersProps();
 +        }
-+
+ 
          // Initialize the default http proxy in this process.
          Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "Setup proxies");
-         try {
 diff --git a/core/java/android/security/pif/PlayIntegritySpoofService.java b/core/java/android/security/pif/PlayIntegritySpoofService.java
-index 5551d003f099..3247587884cc 100644
+index 486ee1ca7766..4d06b382e952 100644
 --- a/core/java/android/security/pif/PlayIntegritySpoofService.java
 +++ b/core/java/android/security/pif/PlayIntegritySpoofService.java
-@@ -34,6 +34,7 @@ public final class PlayIntegritySpoofService {
+@@ -31,6 +31,7 @@ public final class PlayIntegritySpoofService {
+     private static final String DROIDGUARD_PACKAGE = "com.google.android.gms.unstable";
      private static final String VENDING_PACKAGE = "com.android.vending";
      private static final String GMS_PACKAGE = "com.google.android.gms";
-     private static final String GPHOTOS_PACKAGE = "com.google.android.apps.photos";
 +    private static final String AI_WALLPAPERS_PACKAGE = "com.google.android.apps.aiwallpapers";
  
-     private static final Map<String, Object> PIXEL_XL_PROPS = Map.of(
-         "BRAND", "google",
-@@ -619,6 +620,15 @@ public final class PlayIntegritySpoofService {
-         Log.i(TAG, "Photos spoofing enabled - device appears as Pixel XL");
-     }
- 
+     private static final String ROM_SIGNATURE_DATA = "MIIFyTCCA7GgAwIBAgIVALyxxl+zDS9SL68SzOr48309eAZyMA0GCSqGSIb3DQEBCwUAMHQxCzAJ" +
+             "BgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlhMRYwFAYDVQQHEw1Nb3VudGFpbiBWaWV3MRQw" +
+@@ -323,6 +324,15 @@ public final class PlayIntegritySpoofService {
+      * this can be skipped for Play Store (com.android.vending); signature spoofing
+      * is only meaningful, and only safe, for DroidGuard's package-info checks.
+      */
 +    public boolean shouldSpoofAiWallpapers(String packageName) {
-+        return TextUtils.equals(AI_WALLPAPERS_PACKAGE, packageName);
++        return AI_WALLPAPERS_PACKAGE.equals(packageName);
 +    }
 +
 +    public void spoofAiWallpapersProps() {
@@ -38,6 +37,6 @@ index 5551d003f099..3247587884cc 100644
 +        Log.i(TAG, "AI Wallpapers spoofing enabled - Build.BRAND=google");
 +    }
 +
-     public Boolean hasSystemFeature(String name, int version) {
-         if (name == null) return null;
- 
+     public void spoofSignature(String processName) {
+         if (isVending(processName)) {
+             if (mVerboseLogs > 0) Log.d(TAG, "Signature spoofing skipped for Vending");

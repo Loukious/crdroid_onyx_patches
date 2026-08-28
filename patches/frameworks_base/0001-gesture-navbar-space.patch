@@ -1,10 +1,10 @@
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index 639f509915b3..041c23e9ab37 100644
+index 10fb22289865..6495faa9e919 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
-@@ -7412,6 +7485,14 @@ public final class Settings {
+@@ -7302,6 +7302,14 @@ public final class Settings {
           */
-         public static final String GESTURE_NAVBAR_HEIGHT_MODE = "gesture_navbar_height_mode";
+         public static final String GESTURE_NAVBAR_AUTO_HIDE = "gesture_navbar_auto_hide";
  
 +        /**
 +         * Controls the amount of space reserved for the gesture navigation bar.
@@ -15,10 +15,10 @@ index 639f509915b3..041c23e9ab37 100644
 +                "gesture_navbar_space_mode";
 +
          /**
-          * Whether allowing pocket service to register sensors and dispatch informations.
-          *   0 = disabled
+          * Whether to show seconds next to clock in status bar
+          * 0 - hide (default)
 diff --git a/services/core/java/com/android/server/wm/DisplayPolicy.java b/services/core/java/com/android/server/wm/DisplayPolicy.java
-index 2ff2e71dcefc..33cb3a53f9ee 100644
+index 3cfd3f48f700..80a070bfbab2 100644
 --- a/services/core/java/com/android/server/wm/DisplayPolicy.java
 +++ b/services/core/java/com/android/server/wm/DisplayPolicy.java
 @@ -65,6 +65,7 @@ import static android.view.WindowManagerGlobal.ADD_MULTIPLE_SINGLETON;
@@ -29,7 +29,7 @@ index 2ff2e71dcefc..33cb3a53f9ee 100644
  import static android.window.DesktopExperienceFlags.ENABLE_RESTRICT_FREEFORM_HIDDEN_SYSTEM_BARS_TO_FILLING_TASKS;
  import static android.window.DisplayAreaOrganizer.FEATURE_UNDEFINED;
  
-@@ -191,6 +192,13 @@ public class DisplayPolicy {
+@@ -188,6 +189,13 @@ public class DisplayPolicy {
  
      private static final int INSETS_OVERRIDE_INDEX_INVALID = -1;
  
@@ -43,54 +43,44 @@ index 2ff2e71dcefc..33cb3a53f9ee 100644
      // TODO(b/266197298): Remove this by a more general protocol from the insets providers.
      private static final boolean USE_CACHED_INSETS_FOR_DISPLAY_SWITCH =
              SystemProperties.getBoolean("persist.wm.debug.cached_insets_switch", true);
-@@ -260,6 +268,8 @@ public class DisplayPolicy {
+@@ -256,6 +264,8 @@ public class DisplayPolicy {
+ 
      private volatile boolean mHasStatusBar;
      private volatile boolean mHasNavigationBar;
-     private volatile boolean mTaskBarEnabled;
 +    private volatile int mGestureNavbarSpaceMode =
 +            GESTURE_NAVBAR_SPACE_DEFAULT;
      // Can the navigation bar ever move to the side?
      private volatile boolean mNavigationBarCanMove;
      private volatile boolean mNavigationBarAlwaysShowOnSideGesture;
-@@ -457,13 +467,23 @@ public class DisplayPolicy {
-             resolver.registerContentObserver(LineageSettings.System.getUriFor(
-                     LineageSettings.System.ENABLE_TASKBAR), false, this,
-                     UserHandle.USER_ALL);
-+            resolver.registerContentObserver(
-+                    Settings.System.getUriFor(
-+                            Settings.System.GESTURE_NAVBAR_SPACE_MODE),
-+                    false,
-+                    this,
-+                    UserHandle.USER_ALL);
- 
-             updateSettings();
-         }
- 
-         @Override
-         public void onChange(boolean selfChange) {
--            updateSettings();
-+            synchronized (mLock) {
-+                updateSettings();
-+                mDisplayContent.setLayoutNeeded();
-+                mService.requestTraversal();
-+            }
-         }
-     }
- 
-@@ -799,6 +819,12 @@ public class DisplayPolicy {
-         mTaskBarEnabled = LineageSettings.System.getIntForUser(resolver,
-                 LineageSettings.System.ENABLE_TASKBAR, isTablet() ? 1 : 0,
-                 UserHandle.USER_CURRENT) != 0;
+@@ -750,6 +760,27 @@ public class DisplayPolicy {
+         };
+         resolver.registerContentObserver(Settings.Secure.getUriFor(
+                 "ax_gaming_gesture_lock"), false, gestureLockObserver, UserHandle.USER_ALL);
 +
-+        mGestureNavbarSpaceMode = Settings.System.getIntForUser(
-+                resolver,
++        mGestureNavbarSpaceMode = Settings.System.getIntForUser(resolver,
 +                Settings.System.GESTURE_NAVBAR_SPACE_MODE,
-+                GESTURE_NAVBAR_SPACE_DEFAULT,
-+                UserHandle.USER_CURRENT);
++                GESTURE_NAVBAR_SPACE_DEFAULT, UserHandle.USER_CURRENT);
++        ContentObserver gestureNavbarSpaceObserver = new ContentObserver(mHandler) {
++            @Override
++            public void onChange(boolean selfChange) {
++                synchronized (mLock) {
++                    mGestureNavbarSpaceMode = Settings.System.getIntForUser(
++                            mContext.getContentResolver(),
++                            Settings.System.GESTURE_NAVBAR_SPACE_MODE,
++                            GESTURE_NAVBAR_SPACE_DEFAULT,
++                            UserHandle.USER_CURRENT);
++                    mDisplayContent.setLayoutNeeded();
++                    mService.requestTraversal();
++                }
++            }
++        };
++        resolver.registerContentObserver(Settings.System.getUriFor(
++                Settings.System.GESTURE_NAVBAR_SPACE_MODE), false,
++                gestureNavbarSpaceObserver, UserHandle.USER_ALL);
      }
-     
-     private boolean isTablet() {
-@@ -1328,8 +1354,51 @@ public class DisplayPolicy {
+ 
+     private void updateForceShowNavBarSettings() {
+@@ -1292,8 +1323,51 @@ public class DisplayPolicy {
          }
      }
  
@@ -143,7 +133,7 @@ index 2ff2e71dcefc..33cb3a53f9ee 100644
              WindowState win, int index, int overrideIndex) {
          return (displayFrames, windowState, inOutFrame) -> {
              final LayoutParams lp = win.mAttrs.forRotation(displayFrames.mRotation);
-@@ -1352,10 +1421,12 @@ public class DisplayPolicy {
+@@ -1316,10 +1390,12 @@ public class DisplayPolicy {
                      inOutFrame.set(ifp.getArbitraryRectangle());
                      break;
              }
