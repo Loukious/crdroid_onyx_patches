@@ -8868,7 +8868,7 @@ index ce0ba8bd6a..14548e4791 100644
          "btm/btm_sco_hci.cc",
          "btm/btm_sco_hfp_hal.cc",
 diff --git a/system/stack/a2dp/a2dp_codec_config.cc b/system/stack/a2dp/a2dp_codec_config.cc
-index e474de4126..9270f2a324 100644
+index e474de4126..19260546ae 100644
 --- a/system/stack/a2dp/a2dp_codec_config.cc
 +++ b/system/stack/a2dp/a2dp_codec_config.cc
 @@ -21,6 +21,7 @@
@@ -8946,7 +8946,7 @@ index e474de4126..9270f2a324 100644
  #endif
      case BTAV_A2DP_CODEC_INDEX_MAX:
      default:
-@@ -294,7 +320,60 @@ bool A2dpCodecConfig::getCodecSpecificConfig(tBT_A2DP_OFFLOAD* p_a2dp_offload) {
+@@ -294,7 +320,61 @@ bool A2dpCodecConfig::getCodecSpecificConfig(tBT_A2DP_OFFLOAD* p_a2dp_offload) {
        p_a2dp_offload->codec_info[3] = (vendor_id & 0xFF000000) >> 24;
        p_a2dp_offload->codec_info[4] = (codec_id & 0x000000FF);
        p_a2dp_offload->codec_info[5] = (codec_id & 0x0000FF00) >> 8;
@@ -8981,10 +8981,11 @@ index e474de4126..9270f2a324 100644
 +
 +        // The controller runs auto bitrate whenever codec_info[6] == 8, so the
 +        // encoded_audio_bitrate written by bta_av_offload_codec_builder must be
-+        // replaced with the ABR sentinel the controller expects. The captured
-+        // working offload start (fullmeta, crDroid) sent 9999999 with
-+        // codec_info[6] == 8; sending the stack's fixed 320000 there is
-+        // rejected by the controller with status 18 (invalid parameters).
++        // replaced with the ABR sentinel the controller expects. Every observed
++        // successful offload start (stock lib, fullmeta and bind-mount captures)
++        // sent 9999999 here — the same sentinel that terminates the stock
++        // binary's bitrate table — so match it rather than the stack's fixed
++        // 320000.
 +        if (p_a2dp_offload->codec_info[6] == 8) {
 +          p_a2dp_offload->encoded_audio_bitrate = 9999999;
 +        }
@@ -9008,7 +9009,7 @@ index e474de4126..9270f2a324 100644
          if (codec_config_.codec_specific_1 == 0) {                        // default is 0, ABR
            p_a2dp_offload->codec_info[6] = A2DP_LDAC_QUALITY_ABR_OFFLOAD;  // ABR in offload
          } else {
-@@ -695,6 +774,14 @@ bool A2dpCodecs::init() {
+@@ -695,6 +775,14 @@ bool A2dpCodecs::init() {
        log::info("OPUS codec disabled, updated priority to {}", codec_priority);
      }
  
@@ -9023,7 +9024,7 @@ index e474de4126..9270f2a324 100644
      A2dpCodecConfig* codec_config = A2dpCodecConfig::createCodec(codec_index, codec_priority);
      if (codec_config == nullptr) {
        continue;
-@@ -1277,10 +1364,18 @@ bool A2DP_CodecEquals(const uint8_t* p_codec_info_a, const uint8_t* p_codec_info
+@@ -1277,10 +1365,18 @@ bool A2DP_CodecEquals(const uint8_t* p_codec_info_a, const uint8_t* p_codec_info
        return A2DP_VendorCodecEqualsAptx(p_codec_info_a, p_codec_info_b);
      case bluetooth::a2dp::CodecId::APTX_HD:
        return A2DP_VendorCodecEqualsAptxHd(p_codec_info_a, p_codec_info_b);
@@ -9042,7 +9043,7 @@ index e474de4126..9270f2a324 100644
  #endif
      default:
        break;
-@@ -1307,10 +1402,18 @@ int A2DP_GetTrackSampleRate(const uint8_t* p_codec_info) {
+@@ -1307,10 +1403,18 @@ int A2DP_GetTrackSampleRate(const uint8_t* p_codec_info) {
        return A2DP_VendorGetTrackSampleRateAptx(p_codec_info);
      case bluetooth::a2dp::CodecId::APTX_HD:
        return A2DP_VendorGetTrackSampleRateAptxHd(p_codec_info);
@@ -9061,7 +9062,7 @@ index e474de4126..9270f2a324 100644
  #endif
      default:
        break;
-@@ -1337,10 +1440,18 @@ int A2DP_GetTrackBitsPerSample(const uint8_t* p_codec_info) {
+@@ -1337,10 +1441,18 @@ int A2DP_GetTrackBitsPerSample(const uint8_t* p_codec_info) {
        return A2DP_VendorGetTrackBitsPerSampleAptx(p_codec_info);
      case bluetooth::a2dp::CodecId::APTX_HD:
        return A2DP_VendorGetTrackBitsPerSampleAptxHd(p_codec_info);
@@ -9080,7 +9081,7 @@ index e474de4126..9270f2a324 100644
  #endif
      default:
        break;
-@@ -1367,10 +1478,18 @@ int A2DP_GetTrackChannelCount(const uint8_t* p_codec_info) {
+@@ -1367,10 +1479,18 @@ int A2DP_GetTrackChannelCount(const uint8_t* p_codec_info) {
        return A2DP_VendorGetTrackChannelCountAptx(p_codec_info);
      case bluetooth::a2dp::CodecId::APTX_HD:
        return A2DP_VendorGetTrackChannelCountAptxHd(p_codec_info);
@@ -9099,7 +9100,7 @@ index e474de4126..9270f2a324 100644
  #endif
      default:
        break;
-@@ -1418,10 +1537,18 @@ bool A2DP_GetPacketTimestamp(const uint8_t* p_codec_info, const uint8_t* p_data,
+@@ -1418,10 +1538,18 @@ bool A2DP_GetPacketTimestamp(const uint8_t* p_codec_info, const uint8_t* p_data,
        return A2DP_VendorGetPacketTimestampAptx(p_codec_info, p_data, p_timestamp);
      case bluetooth::a2dp::CodecId::APTX_HD:
        return A2DP_VendorGetPacketTimestampAptxHd(p_codec_info, p_data, p_timestamp);
@@ -9118,7 +9119,7 @@ index e474de4126..9270f2a324 100644
  #endif
      default:
        break;
-@@ -1654,6 +1781,24 @@ std::string A2DP_CodecInfoString(const uint8_t* p_codec_info) {
+@@ -1654,6 +1782,24 @@ std::string A2DP_CodecInfoString(const uint8_t* p_codec_info) {
    return std::format("Unsupported codec type: {:x}", codec_type);
  }
  
