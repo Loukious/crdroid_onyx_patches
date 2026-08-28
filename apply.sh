@@ -406,15 +406,6 @@ preflight() {
     if [ "$dirs" = 0 ]; then red "   !! no patch directories at all"; rc=1; fi
     echo "   $pats patch file(s) across $dirs project dir(s)"
 
-    # The Now Playing port is 53 files; gen-patches.sh asserts that on the way
-    # out, so assert it on the way in too.
-    local np="$HERE/patches/frameworks_base/0004-pixel-lockscreen-now-playing.patch"
-    if [ -f "$np" ]; then
-        n="$(grep -c '^diff --git ' "$np" || true)"
-        if [ "$n" = 53 ]; then grn "   ok: Now Playing port touches 53 files"
-        else red "   !! Now Playing port touches $n files, expected 53"; rc=1; fi
-    fi
-
     echo "== preflight 4/5: OTA metadata template has what createjson.sh reads"
     local ota="$HERE/ota/crDroidOTA-$DEVICE.json"
     if [ ! -f "$ota" ]; then

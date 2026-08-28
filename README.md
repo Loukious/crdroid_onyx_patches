@@ -21,7 +21,7 @@ rather than shipping a half-patched ROM.
 | `SKIP_OTA_METADATA=1` | don't overlay `vendor/crDroidOTA/<device>.json` |
 | `GITHUB_TOKEN` | used for the release API if the kernel repo is private |
 
-## The four features
+## The three features
 
 **Gesture navigation space** — an extra settable inset below the gesture pill.
 `frameworks/base` (`Settings.java`, `DisplayPolicy.java`) plus a small launcher
@@ -39,123 +39,6 @@ verdict for the wallpaper generator, hooked from `ActivityThread`.
 `frameworks/base` (`AudioSystem`, `BtHelper`), and `device/xiaomi/onyx`
 (props + the `extract-files.py` blob fixups that byte-patch the two Qualcomm
 offload libs).
-
-**Lockscreen Now Playing** — a Now Playing indicator on the lockscreen and
-AOD. Two Evolution-X stacks in one patch, because on this device only one of
-them can work:
-
-- **`c83186b`** is the Pixel-native stack
-  (`com.google.android.systemui.ambientmusic`), reverse-engineered out of CP2A
-  `SystemUIGoogle`. It is purely a display layer — recognition is done by Device
-  Personalization Services (`com.google.android.as`), which broadcasts
-  `com.google.android.ambientindication.action.AMBIENT_INDICATION_{SHOW,HIDE,EXPAND}`.
-- **The 14-commit chain ending `5748e136d`** (`1a9ae21` is the same change on
-  another branch) is Evolution-X's own non-Pixel fork
-  (`com.android.systemui.nowplaying.ambient`). It does **no audio recognition at
-  all**: it is driven entirely by `MediaSessionManager`, so it works on any
-  device.
-
-`PixelAmbientIndicationDetector` chooses between them at runtime, and it only
-picks the Pixel stack when `Build.BRAND == "google" && Build.MANUFACTURER ==
-"google"` *and* `com.google.android.as` is enabled. `onyx` is `POCO`/`Xiaomi`, so
-**the fork is what runs here and the Pixel stack stays dormant.** Both ship
-because that is how Evolution-X ships them, and because the fork's
-Pixel-hardware fallback path *is* the Pixel stack.
-
-**The Pixel stack's blocker is the DSP, and the DSP is avoidable.** A 45 s
-PAL/AGM/ACDB trace taken while ASI armed the SoundTrigger session shows the ADSP
-rejecting Google's model outright — `CustomVAInterface: SetParameter: Unsupported
-param id 2`, `graph_set_config failed -131`, `AcdbCmdGetGraphAlias Error[19]:
-Unable to find graph key vector`. `module_type="CUSTOM1"` resolves to model type
-102 -> `CustomVAInterface`, and `libcustomva_intf.so` here is a Qualcomm stub
-with no ACDB graph behind it. PAL still reports success upward, so the session
-ends up armed and inert and `recognition_history` stays empty no matter which
-model is shipped. **Do not try to fix that by regenerating the model** — nothing
-on the DSP side can work without an ACDB graph we do not have.
-
-But recognition never ran on the DSP. ASI carries its own userspace recognizer
-(`libsense.so`, `libsense_nnfp_v3.so`) and the shipped model is TFLite; the DSP
-was only the low-power microphone. Which source ASI opens is one DeviceConfig
-flag, `NowPlaying__ambient_music_use_dsp_audio_source`, which defaults to **true**
-and therefore silently strands every non-Pixel. Set false, ASI opens a plain
-16 kHz mono mic `AudioRecord` that touches neither SoundTrigger nor the DSP
-wrapper class. It is set in
-`vendor/extra/rro/SimpleDeviceConfigOverlayOnyx/res/values/config.xml`.
-
-**That is necessary but not sufficient, and the RRO comment says so.** There are
-two DSP dependencies, not one. The second is the *trigger*: `Lyyx`, the object
-every stage of the ambient pipeline consumes, has exactly one constructor call
-site in the APK, inside a factory taking a
-`SoundTrigger$RecognitionEvent` — a class ASI never constructs itself. Its only
-callers are a `SoundTriggerDetectionService` subclass and a `BroadcastReceiver`.
-So the pipeline waits on the framework to deliver a real recognition event, which
-`onyx` never does. The flag decides where audio comes from *after* that event; it
-starts nothing. Closing that gap means synthesizing the event from
-`frameworks/base` — a project, not a config change, and not attempted here.
-
-Separately, **on-demand recognition should already work**: `Lyxx;->d()` opens its
-own mic `AudioRecord` and drives `android.media.musicrecognition.RecognitionRequest`
-(`MusicRecognitionManager`) with no SoundTrigger in the path. That is the "identify
-this song" button rather than passive detection.
-
-All three findings, with the decompiled evidence, are recorded in the RRO comment
-block and in `vendor/extra/product.mk` above the four `music_detector` blobs.
-
-Note this is all orthogonal to the lockscreen indicator below: the Evolution-X
-fork shows music playing *on* the device with no recognition at all, while ASI is
-what would identify music playing *in the room*.
-
-74 files, all but one in `frameworks/base/packages/SystemUI`; the exception is
-the 12 `Settings.System.NOWPLAYING_*` constants in
-`core/java/android/provider/Settings.java`. The path list is checked into
-[`nowplaying-paths.txt`](nowplaying-paths.txt) and `gen-patches.sh` asserts its
-length, so a path silently dropping out of the patch fails loudly.
-
-The two stacks are **not** split into separate patches, deliberately. They share
-eight files (`SystemUIModule.java`, `SysUIComponent.java`,
-`ambientindication_strings.xml`, `ids.xml`, both keyguard blueprints,
-`KeyguardSectionsModule.kt`, `AxDynamicBarKeyguardChipSection.kt`), and a patch
-whose hunks are only *half* applied neither applies nor reverse-applies — which
-`apply.sh` correctly treats as a hard error. One feature, one patch.
-
-Things to re-check whenever `frameworks/base` moves under us:
-
-- `SystemUICoreStartableModule.kt` — same binding as upstream, but crDroid's
-  import block differs, so the upstream hunk's context does not match.
-- `DefaultBlueprint.kt` — Evolution-X registers the compose lockscreen element
-  through an `ElementProviderModule` dagger multibind crDroid does not have.
-  crDroid assembles providers by passing them to
-  `LockscreenElementFactoryImpl.createRemembered(vararg)` instead, so
-  `GoogleAmbientIndicationElementProvider` is added there. The
-  `AmbientIndicationArea` element key and its slot in `LockscreenSceneLayout`
-  already exist in crDroid, commented "vendor defined, not included in AOSP" —
-  the port just fills them.
-- `CentralSurfacesImpl.java` is **net-zero** across the 14-commit chain:
-  `0f9d699c2` wires `NowPlayingViewController` into `attachCustomOverlays()` and
-  `5748e136d` removes every line of it. It needs no edit, and `0f9d699c2`'s
-  `attachCustomOverlays()` refactor must not be applied.
-- Lyrics are scoped to `LyricsFetcher.java` alone (a standalone lrclib.net
-  singleton). `LyricViewController.kt` / `LyricControllerModern.kt` belong to a
-  separate Evolution-X status-bar-lyrics feature and are left out; pulling them
-  in would need `Settings.Secure.STATUS_BAR_SHOW_LYRIC`, which crDroid lacks.
-- crDroid has no `KEYGUARD_BATTERY_CHARGING_SECTION` and no
-  `evolution_dimens.xml` (the four dimens went into `cr_dimens.xml`), and has an
-  extra `KeyguardClockStyleSectionModule` in `KeyguardSectionsModule.kt`.
-
-The legacy (non-compose) keyguard blueprint path needed no hand-holding:
-crDroid already has the `@BindsOptionalOf @Named(KEYGUARD_AMBIENT_INDICATION_AREA_SECTION)`
-hook, and the upstream `SystemUIModule.java` hunk that binds
-`DefaultAmbientIndicationAreaSection` into it applies as-is.
-
-The settings UI is a separate patch against `packages/apps/crDroidSettings`,
-ported from the Evolver commits `f7631bb` + `a7d572e` + `860ff88`.
-crDroidSettings has **no build file of its own** —
-`packages/apps/Settings/Android.bp` globs `crDroidSettings/{src,res}` — so it
-lands in the Settings APK, and Kotlin `@SearchIndexable` works there.
-`org.evolution.settings.preferences.*` maps 1:1 onto
-`com.crdroid.settings.preferences.*`, and `MetricsProto.MetricsEvent.EVOLVER`
-becomes `CRDROID_SETTINGS`. A `reset()` was added (Evolver has none) and hooked
-into `LockScreen.java`'s reset menu beside `MediaArtSettings.reset`.
 
 ## Layout
 
@@ -195,10 +78,7 @@ forks, so a plain `git diff` never saw them and they were missing from the patch
 set entirely until 2026-08-27 — every crave build before that shipped the
 framework half of the feature with no way to reach the setting. `gen-patches.sh`
 now diffs those two from `$UPSTREAM_REF` (`m/16.0`) instead of from the index.
-`crDroidSettings/res/values/cr_strings.xml` is edited by both that commit and the
-uncommitted Now Playing UI, so `0001` stops its diff at `HEAD` (`HEADEND=1`) and
-`0002` starts there: disjoint endpoints, so neither patch carries the other's
-hunks. **If you add a feature by committing it locally rather than leaving it
+**If you add a feature by committing it locally rather than leaving it
 dirty, it will not be picked up unless you give its emit a `BASE`.**
 
 
@@ -289,11 +169,9 @@ build breaks:
 - the 350 MB of binaries in `vendor/xiaomi/onyx` (that's the overlay project's
   job, not a patch's)
 
-There is no longer an `unapplied/` directory. It held Evolution-X `1a9ae21` with
-a note saying the non-Pixel Now Playing indicator was neither used nor needed;
-that conclusion was wrong — the Pixel stack's display layer sits idle here
-because `PixelAmbientIndicationDetector` correctly reports a non-Pixel (see
-"Lockscreen Now Playing" above), so the whole 14-commit chain was
-ported and now ships in `0004-lockscreen-now-playing.patch`. The parked
-single-commit copy was a subset of what is applied and only invited someone to
-re-apply it, so it is gone.
+There is no longer an `unapplied/` directory, and the Lockscreen Now Playing
+port that used to live here was removed on 2026-08-28: it never produced a
+confirmed detection on `onyx`, and Evolution X ships the feature natively on
+its `bka` branch, so carrying a port is pointless. The removed work is preserved
+on the `nowplaying-archive` branch of this repo (and of `android_vendor_extra`)
+if it is ever needed again.

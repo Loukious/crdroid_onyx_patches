@@ -4,7 +4,7 @@ Filter a unified diff hunk-by-hunk.
 
 Needed because two unrelated features edit the same file:
 core/java/android/provider/Settings.java gains one constant block for the
-gesture navbar space mode and another for Now Playing. `git diff -- <file>`
+gesture navbar space mode. `git diff -- <file>`
 cannot split those, and letting both patches carry the whole file diff would
 make apply.sh's reverse-check ambiguous (a patch that is half-applied neither
 applies nor reverse-applies, so it becomes a hard error).

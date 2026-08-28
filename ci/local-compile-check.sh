@@ -12,7 +12,7 @@
 #
 # Usage:  ci/local-compile-check.sh [/path/to/rom] [soong target ...]
 #   e.g.  ci/local-compile-check.sh ~/android/crdroid SystemUI
-# Default target is SystemUI-core (the module the Now Playing port breaks first).
+# Default target is SystemUI-core (the module the SystemUI patches break first).
 #
 # NOTE: no `set -e`, no `set -u`, no `pipefail` anywhere in this script -- see
 # the block above the `source build/envsetup.sh` line for why. Every command

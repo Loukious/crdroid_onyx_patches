@@ -3,7 +3,7 @@
 # Post-apply symbol check -- catches "the port imports an API this tree does not
 # have" in ~10 seconds, instead of ~4 hours into a crave compile.
 #
-# Real case it was written for (crave build 295615): the Now Playing port came
+# Real case it was written for (crave build 295615): a SystemUI port came
 # from Evolution-X, whose plugin API has BaseLockscreenElement.ElementSource.
 # crDroid's tree predates that nested type, so SystemUI-core died at 38% with
 #   error: symbol not found ...BaseLockscreenElement$ElementSource
