@@ -144,40 +144,36 @@ overlay_firmware() {
     [ -d "$src" ] || { red "FATAL: $src missing -- is onyx-firmware in the local manifest?"; return 1; }
     [ -d "$dst" ] || { red "FATAL: $dst missing (sync incomplete?)"; return 1; }
 
-    # Reassemble the two images that were split to stay under GitHub's 100MB
-    # non-LFS blob limit, and check them against the recorded digest.
-    local first base want have
-    while IFS= read -r first; do
-        base="${first#./}"; base="${base%.part00}"
-        [ -f "$src/$base.sha256" ] || { red "FATAL: no $base.sha256"; return 1; }
-        want="$(cat "$src/$base.sha256")"
-        if [ -f "$dst/$base" ] && [ "$(sha256sum "$dst/$base" | cut -d' ' -f1)" = "$want" ]; then
-            echo "   -- $base (already current)"
-            continue
-        fi
-        mkdir -p "$dst/$(dirname "$base")"
-        cat "$src/$base".part?? > "$dst/$base" || { red "FATAL: cat failed for $base"; return 1; }
-        have="$(sha256sum "$dst/$base" | cut -d' ' -f1)"
-        if [ "$have" != "$want" ]; then
-            red "FATAL: $base reassembled to $have, expected $want"
-            return 1
-        fi
-        grn "   ++ $base (reassembled, $(stat -c%s "$dst/$base") bytes, sha256 ok)"
-    done < <(cd "$src" && find . -name '*.part00' | sort)
-
-    # Everything else is a straight copy.
-    local n=0
+    # The overlay used to split the two >100MB images into .partNN files to
+    # stay under GitHub's plain-blob limit. On GitLab they are whole LFS
+    # objects, so this is a straight copy. Every file with a .sha256 sibling
+    # is verified against it first -- which also catches an unfetched LFS
+    # pointer sneaking in as a few hundred bytes of text.
+    local f want have n=0
     while IFS= read -r -d '' f; do
         f="${f#./}"
+        if [ -f "$src/$f.sha256" ]; then
+            want="$(cat "$src/$f.sha256")"
+            have="$(sha256sum "$src/$f" | cut -d' ' -f1)"
+            if [ "$have" != "$want" ]; then
+                red "FATAL: $f hashes to $have, recorded digest is $want (bad LFS fetch?)"
+                return 1
+            fi
+        fi
         cmp -s "$src/$f" "$dst/$f" && continue
         mkdir -p "$dst/$(dirname "$f")"
         cp -f "$src/$f" "$dst/$f" || { red "FATAL: cp failed for $f"; return 1; }
-        echo "   ++ $f"
         n=$((n+1))
+        if [ -f "$src/$f.sha256" ]; then
+            grn "   ++ $f ($(stat -c%s "$src/$f") bytes, sha256 ok)"
+        else
+            echo "   ++ $f"
+        fi
     done < <(cd "$src" && find . -type f \
                 ! -path './.git/*' \
-                ! -name '*.part[0-9][0-9]' ! -name '*.sha256' \
-                ! -name 'README.md' ! -name '.gitattributes' -print0)
+                ! -name '*.sha256' \
+                ! -name 'README.md' ! -name '.gitattributes' \
+                ! -name '.lfsconfig' -print0)
     echo "   ($n file(s) copied)"
 }
 
