@@ -1,0 +1,18 @@
+diff --git a/device.mk b/device.mk
+index 6898fc5..2fae344 100644
+--- a/device.mk
++++ b/device.mk
+@@ -26,9 +26,10 @@ $(call inherit-product, packages/modules/Virtualization/apex/product_packages.mk
+ $(call soong_config_set,rfs,mpss_firmware_symlink_target,modem_firmware)
+ $(call inherit-product, hardware/qcom-caf/common/common.mk)
+ 
+-
+-# BCR
+-$(call inherit-product, vendor/bcr/bcr.mk)
++# BCR ships in Evolution X's vendor/extras (same com.chiller3.bcr app, same
++# permissions, wired by vendor/lineage/config/telephony.mk). crDroid's
++# vendor/bcr would define MODULE.TARGET.APPS.bcr a second time and the build
++# dies at base_rules.mk:320.
+ 
+ 
+ # A/B

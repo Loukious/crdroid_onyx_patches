@@ -142,6 +142,12 @@ emit device/xiaomi/onyx 0003-lhdc-aptx-props-and-blob-fixups.patch \
 
 emit device/xiaomi/onyx 0004-firmware-os3.0.302.0.patch proprietary-firmware.txt
 
+# Evo ships bcr as a prebuilt in vendor/extras (wired by its own
+# vendor/lineage/config/telephony.mk), so crDroid's vendor/bcr must not be
+# synced -- but the device tree still inherits vendor/bcr/bcr.mk, which would
+# fail on the missing project. Remove the inherit; the app still ships.
+emit device/xiaomi/onyx 0005-drop-crdroid-bcr.patch device.mk
+
 # ------------------------------------------------------------------- vendor/lineage
 emit vendor/lineage 0001-kernel-bin-override.patch build/tasks/kernel.mk
 

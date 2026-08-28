@@ -64,6 +64,7 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0002-release-config-bp4a
                                               0003-lhdc-aptx-props-and-blob-fixups
                                               0004-firmware-os3.0.302.0
+                                              0005-drop-crdroid-bcr
 patches/frameworks_base/                      0001-gesture-navbar-space
                                               0002-wallpaper-ai-spoof
                                               0003-lhdc-audio
@@ -148,7 +149,7 @@ The device tree is still crDroid's (`crdroidandroid/android_device_xiaomi_onyx`
 `vendor_evolution` ships, and `breakfast onyx` resolves to
 `lineage_onyx-bp4a-userdebug` — byte-identical to what it was under crDroid.
 
-**Patch count went 20 → 16.** Four were deleted outright, because Evolution X
+**Patch count went 20 → 17** (16 of the original 20 kept, plus one new: `0005-drop-crdroid-bcr`). Four were deleted outright, because Evolution X
 already does the thing:
 
 | Deleted | Why |
@@ -189,11 +190,17 @@ what this file said earlier. It is what turns the LHDC aconfig flags on for the
 `PRODUCT_RELEASE_CONFIG_MAPS +=` in `device.mk`. Dropping it would silently
 disable the codec.
 
-Three crDroid-side projects have to come along, because the device tree
+Two crDroid-side projects have to come along, because the device tree
 references them unconditionally and both a bare `include` and a bare
 `PRODUCT_PACKAGES` entry hard-fail when absent: `packages/apps/NotGameTurbo`
-(`BoardConfig.mk:285`), `vendor/bcr` (`device.mk:31`) and
-`packages/apps/LunarisDolby` (`device.mk:175`).
+(`BoardConfig.mk:285`) and `packages/apps/LunarisDolby` (`device.mk:175`).
+
+`vendor/bcr` is the opposite case: Evo already ships bcr as a prebuilt in
+`vendor/extras` (wired by `vendor/lineage/config/telephony.mk:40`), so crDroid's
+copy is *not* synced and `device_xiaomi_onyx/0005` removes the device tree's
+`inherit-product` of it. Without that patch the two would define
+`MODULE.TARGET.APPS.bcr` twice and the build dies at `base_rules.mk:320` —
+caught by the local compile gate on 2026-08-28, before any crave time.
 
 GApps come from Evolution X now — one variable,
 `WITH_GMS := true` in `vendor/extra`, which makes
