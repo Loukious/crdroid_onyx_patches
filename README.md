@@ -26,7 +26,15 @@ rather than shipping a half-patched ROM.
 **Gesture navigation space** — an extra settable inset below the gesture pill.
 `frameworks/base` (`Settings.java`, `DisplayPolicy.java`) plus a small launcher
 shim in `vendor/pixel/launcher` with its own privapp-permission allowlist entry
-in `vendor/extra`.
+in `vendor/extra`. The UI is split across two projects for a reason that is not
+obvious: the `ListPreference` sits in `packages/apps/Settings`
+(`res/xml/gesture_navigation_settings.xml`) but its strings and arrays sit in
+`packages/apps/Evolver`. That resolves because Evolution X compiles Evolver
+*into* the Settings APK — `Settings/Android.bp` lists `Evolver/res` in
+`resource_dirs` and passes `--extra-packages org.evolution.settings` — so an
+`@string` reference crosses the project boundary at build time. Put the strings
+in Settings' own `res/values` instead and they are simply the wrong file to
+edit; put the preference in an Evolver screen and it lands in the wrong menu.
 
 **Google AI Wallpapers fix** — `PlayIntegritySpoofService` spoofs the integrity
 verdict for the wallpaper generator, hooked from `ActivityThread`.
@@ -55,11 +63,9 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
 patches/frameworks_base/                      0001-gesture-navbar-space
                                               0002-wallpaper-ai-spoof
                                               0003-lhdc-audio
-                                              0004-lockscreen-now-playing
+patches/packages_apps_Evolver/                0001-gesture-navbar-space-ui
 patches/packages_apps_Settings/               0001-maintainer-from-prop
                                               0002-gesture-navbar-space-ui
-patches/packages_apps_crDroidSettings/        0001-gesture-navbar-space-ui
-                                              0002-lockscreen-now-playing-settings
 patches/packages_apps_Updater/                0001-self-hosted-ota-url
 patches/packages_modules_Bluetooth/           0001-lhdc-codec
 patches/packages_modules_common/              0001-lhdc-allowed-deps
@@ -71,13 +77,12 @@ patches/vendor_qcom_opensource_interfaces/    0001-lhdc-aidl
 patches/vendor_xiaomi_onyx/                   0001-firmware-sha1s-os3.0.302.0
 ```
 
-Most patches are a `git diff` of the working tree. Two are not: the
-gesture-navbar-space **UI** halves live as local *commits* on
-`loukious/feature/gesture-navbar-space` in the `Settings` and `crDroidSettings`
-forks, so a plain `git diff` never saw them and they were missing from the patch
-set entirely until 2026-08-27 — every crave build before that shipped the
-framework half of the feature with no way to reach the setting. `gen-patches.sh`
-now diffs those two from `$UPSTREAM_REF` (`m/16.0`) instead of from the index.
+Every patch is a `git diff` of the working tree. `gen-patches.sh` also supports
+diffing from a ref (`BASE`), because the gesture-navbar-space **UI** halves once
+lived as local *commits* rather than as dirty files, which made a plain
+`git diff` blind to them — every crave build before 2026-08-27 shipped the
+framework half of the feature with no way to reach the setting. Nothing needs
+`BASE` today; it is kept for the next time something gets committed locally.
 **If you add a feature by committing it locally rather than leaving it
 dirty, it will not be picked up unless you give its emit a `BASE`.**
 
@@ -155,6 +160,43 @@ specifically the `KernelSU-Next` `root` asset that is *not* the
 verified to carry the arm64 `ARM\x64` magic. See
 [`android_vendor_extra`](https://github.com/Loukious/android_vendor_extra) for
 why only the Image is swapped and the kernel is still built from source.
+
+## Evolution X migration state (2026-08-28)
+
+The ROM base is moving from crDroid 16.0 to **Evolution X `bka`** — `bka`, not
+the newer `cnb`: `bka` is Android 16 (`lineage-23.2`, `android-16.0.0_r4`) and
+matches this device tree, its `bp4a` release config, the OS3.0.302.0 blobs and
+the kernel. `cnb` is Android 17 and would be an OS jump on top of a ROM swap.
+
+Rebased and round-trip verified against real Evolution X `bka` clones:
+
+| Patch | State |
+|---|---|
+| `packages_apps_Evolver/0001-gesture-navbar-space-ui` | new — replaces the crDroidSettings patch, which died with crDroid |
+| `packages_apps_Settings/0002-gesture-navbar-space-ui` | rewritten. Evo's `SystemSettingListPreference` persists to `Settings.System` itself, so the 43 lines of Java the crDroid version carried are gone; the patch is now one XML block |
+
+Checked and still to do:
+
+- `frameworks_base/0001-gesture-navbar-space` — Evo `bka` *does* declare
+  `GESTURE_NAVBAR_LENGTH_MODE`, `GESTURE_NAVBAR_HEIGHT_MODE` and
+  `GESTURE_NAVBAR_AUTO_HIDE`, and declares nothing named `GESTURE_NAVBAR_SPACE`,
+  so the feature is genuinely ours and the `Settings.java` half should land
+  cleanly. `DisplayPolicy.java` is 7 hunks deep and needs the synced tree to
+  rebase honestly.
+- The unofficial-identity trio (`packages_apps_Settings/0001-maintainer-from-prop`,
+  `packages_apps_Updater/0001-self-hosted-ota-url`,
+  `vendor_lineage/0003-unofficial-buildtype`) targets crDroid strings and paths.
+  Evo has its own updater and its own buildtype plumbing; all three need
+  re-aiming, not just re-applying.
+- `vendor_lineage/0001` and `0002` still apply to the path `vendor/lineage`,
+  which under Evo is the `vendor_evolution` repo mounted there — same path,
+  different contents.
+- `device_xiaomi_onyx/0002-release-config-bp4a` is probably droppable: `bp4a` is
+  a standard AOSP release config and `vendor_evolution` ships no `build/release`
+  overrides of its own.
+
+Evo supplies GApps, so the PixelOS GMS manifest entries go away. Evo does **not**
+ship Pixel Launcher, so `vendor/pixel/launcher` and its patch stay.
 
 ## Deliberately excluded
 

@@ -61,8 +61,9 @@ emit() {
     # BASE makes emit() diff from a ref rather than from the index, which is the
     # only way to capture work that was *committed* locally. HEADEND=1 stops the
     # diff at HEAD so a committed feature and an uncommitted one can share a file
-    # without either patch carrying the other's hunks -- see crDroidSettings'
-    # cr_strings.xml, which the gesture-navbar UI edits.
+    # without either patch carrying the other's hunks. No patch needs either knob
+    # today -- both are kept because the moment a feature gets committed locally
+    # instead of left dirty, a plain `git diff` goes blind to it again.
     local range=()
     if [ -n "$BASE" ]; then
         git -C "$ROM/$proj" rev-parse --verify -q "$BASE" >/dev/null \
@@ -87,7 +88,7 @@ emit() {
 }
 
 PROJECTS="build/release device/xiaomi/onyx frameworks/base
-packages/apps/Settings packages/apps/Updater packages/apps/crDroidSettings
+packages/apps/Settings packages/apps/Updater packages/apps/Evolver
 packages/modules/Bluetooth packages/modules/common
 vendor/lineage vendor/pixel/launcher vendor/qcom/opensource/interfaces
 vendor/xiaomi/onyx"
@@ -170,28 +171,29 @@ CTX=""
 emit packages/apps/Settings 0001-maintainer-from-prop.patch \
     src/com/android/settings/deviceinfo/firmwareversion/BuildMaintainerPreference.kt
 
-# The UI half of gesture-navbar-space. This lives as a *local commit* on
-# loukious/feature/gesture-navbar-space rather than as a working-tree change, so
-# a plain `git diff` never saw it and it was silently missing from the patch set
-# -- which meant every crave build shipped the framework half with no way to
-# reach the setting. BASE captures it. Do not "simplify" this back to a
-# working-tree diff.
-BASE="$UPSTREAM_REF"
+# The UI half of gesture-navbar-space: one ListPreference in the gesture-nav
+# screen. Under Evolution X this is XML only -- Evo's
+# org.evolution.settings.preferences.SystemSettingListPreference persists the
+# value to Settings.System itself, so the 43 lines of Java the crDroid version
+# needed (initGestureNavbarSpacePreference + constants + listener) are gone.
+# Do not add them back; a preference class doing the write is what Evo does for
+# every other system setting, and it is one less thing to rebase.
 emit packages/apps/Settings 0002-gesture-navbar-space-ui.patch \
-    res/xml/gesture_navigation_settings.xml \
-    src/com/android/settings/gestures/GestureNavigationSettingsFragment.java
-BASE=""
+    res/xml/gesture_navigation_settings.xml
 
 emit packages/apps/Updater 0001-self-hosted-ota-url.patch \
     app/src/main/res/values/strings.xml
 
-# ----------------------------------------------------------- crDroidSettings
-# Emitted from UPSTREAM_REF..HEAD (a local commit, not a worktree change).
-BASE="$UPSTREAM_REF"; HEADEND=1
-emit packages/apps/crDroidSettings 0001-gesture-navbar-space-ui.patch \
-    res/values/cr_strings.xml \
-    src/com/crdroid/settings/fragments/Navigation.java
-BASE=""; HEADEND=0
+# ----------------------------------------------------------------- Evolver
+# Strings and arrays for the gesture-navbar-space preference. They have to live
+# here, not in packages/apps/Settings: Evo builds Evolver *into* the Settings
+# APK (Settings/Android.bp: "Evolver/res" in resource_dirs, --extra-packages
+# org.evolution.settings), which is why an @string reference from
+# res/xml/gesture_navigation_settings.xml resolves against Evolver's resources.
+# Evo splits strings and arrays across two files, so both are listed.
+emit packages/apps/Evolver 0001-gesture-navbar-space-ui.patch \
+    res/values/evolution_strings.xml \
+    res/values/evolution_arrays.xml
 
 # --------------------------------------------------------------- vendor/xiaomi/onyx
 # Only Android.mk. The 351MB of rebuilt radio/ images and the 2 byte-patched

@@ -1,0 +1,38 @@
+diff --git a/res/values/evolution_arrays.xml b/res/values/evolution_arrays.xml
+index 8287439..3001bc1 100644
+--- a/res/values/evolution_arrays.xml
++++ b/res/values/evolution_arrays.xml
+@@ -1693,4 +1693,17 @@
+         <item>0</item>
+         <item>1</item>
+     </string-array>
++
++    <!-- Gesture navigation space -->
++    <string-array name="gesture_navbar_space_entries">
++        <item>@string/gesture_navbar_space_default</item>
++        <item>@string/gesture_navbar_space_compact</item>
++        <item>@string/gesture_navbar_space_minimal</item>
++    </string-array>
++
++    <string-array name="gesture_navbar_space_values" translatable="false">
++        <item>0</item>
++        <item>1</item>
++        <item>2</item>
++    </string-array>
+ </resources>
+diff --git a/res/values/evolution_strings.xml b/res/values/evolution_strings.xml
+index ce8a2f1..dc97f5b 100644
+--- a/res/values/evolution_strings.xml
++++ b/res/values/evolution_strings.xml
+@@ -1640,4 +1640,11 @@
+     <string name="qs_show_volume_slider_only">Only volume slider</string>
+     <string name="qs_show_ringer_mode_title">Ringer mode</string>
+     <string name="qs_show_ringer_mode_summary">Show ringer mode icon with the volume slider</string>
++
++    <!-- Gesture navigation space -->
++    <string name="gesture_navbar_space_title">Gesture navigation space</string>
++    <string name="gesture_navbar_space_summary">Control the space reserved at the bottom of the screen</string>
++    <string name="gesture_navbar_space_default">Default</string>
++    <string name="gesture_navbar_space_compact">Compact</string>
++    <string name="gesture_navbar_space_minimal">Minimal</string>
+ </resources>
