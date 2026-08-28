@@ -1,37 +1,35 @@
-# OTA index
+# Runtime OTA feed
 
-`packages/apps/Updater` on these builds points here instead of at crDroid's
-official index:
+`onyx.json` is what the in-ROM Updater fetches at runtime. It is served straight
+from this repo over `raw.githubusercontent.com`, and
+`patches/packages_apps_Updater/0001-self-hosted-ota-url.patch` is what points
+the app here:
 
 ```
-https://raw.githubusercontent.com/Loukious/crdroid_onyx_patches/crdroid-16.0/ota/{device}.json
+https://raw.githubusercontent.com/Loukious/crdroid_onyx_patches/evolution-bka/ota/{device}.json
 ```
 
-(see `patches/packages_apps_Updater/0001-self-hosted-ota-url.patch`).
+## Why it exists
 
-`onyx` **has** official crDroid support. Left pointing upstream, the Updater
-would offer the official weekly as an update to an unofficial build and flash
-away the entire patch set, the PixelOS GApps and the Kono-Ha kernel. An empty
-`response` array is the safe state: the app reports "no updates" rather than
-erroring.
+Nothing here publishes builds, so the honest answer is "no updates available",
+and `{"response": []}` is exactly how Evolution X's Updater says that:
+`Utils.parseJson()` reads `obj.getJSONArray("response")` and iterates it, so an
+empty array parses cleanly and yields zero updates. A 404 or a malformed file
+would surface as an error toast instead.
 
-## Publishing a real update here
+The point is to own the URL. Evolution X does not publish onyx today --
+`Evolution-X/OTA` has no `onyx.json`, so the stock URL is a 404 as things
+stand. The day that changes, an unmodified Updater would offer an official Evo
+weekly as an update to this build, and flashing it would take the local patch
+set, the LHDC codec and the Kono-Ha kernel with it. Pointing at a file we
+control means that can never happen by accident.
 
-`vendor/lineage/build/tools/createjson.sh` already emits exactly this schema at
-`bacon` time, with the real timestamp, size, md5 and sha256 of the zip it just
-built, and it takes the maintainer / buildtype / donate fields from
-`vendor/crDroidOTA/onyx.json` — which `apply.sh` overwrites with
-[`crDroidOTA-onyx.json`](crDroidOTA-onyx.json) in this directory. So publishing
-is: `crave pull out/target/product/onyx/onyx.json`, fix the `download` field, and
-commit it over this file.
+## This is not the old crDroid metadata
 
-That metadata file is deliberately an overlay rather than a patch: upstream
-regenerates `vendor/crDroidOTA/onyx.json` on every weekly release, so a context
-patch against it breaks about once a week (and did, on 2026-08-26).
-
-The `download` field is the one thing that is *not* right out of the box —
-createjson.sh hardcodes a SourceForge path. A GitHub release asset needs the
-release tag, which createjson.sh has no way to know, and
-`releases/latest/download/...` cannot be used because the Updater's OkHttp
-client is built with `followRedirects(false)`. So it has to be rewritten in CI
-against the tag the workflow just created.
+The crDroid tree had a *build-time* file, `vendor/crDroidOTA/<device>.json`,
+that `createjson.sh` read to stamp the maintainer, donate URL and build type
+into the release. `apply.sh` used to overlay a template over it. Evolution X has
+no `vendor/crDroidOTA` and no equivalent -- `vendor_evolution/build/tools/createjson.py`
+takes the maintainer name from its own server-side data -- so that overlay, its
+template and its preflight check were all removed. What is left in this
+directory is only the runtime feed described above.

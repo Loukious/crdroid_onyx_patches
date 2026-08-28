@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Generate the crDroid onyx patch set from the working tree at $ROM.
+# Generate the Evolution X onyx patch set from the working tree at $ROM.
 #
 # Splits the local modifications into per-project, per-feature patches.
 # Untracked files are recorded with `git add -N` first so that the resulting
@@ -90,7 +90,7 @@ emit() {
 PROJECTS="build/release device/xiaomi/onyx frameworks/base
 packages/apps/Settings packages/apps/Updater packages/apps/Evolver
 packages/modules/Bluetooth packages/modules/common
-vendor/lineage vendor/pixel/launcher vendor/qcom/opensource/interfaces
+vendor/lineage vendor/qcom/opensource/interfaces
 vendor/xiaomi/onyx"
 
 cleanup() {
@@ -142,35 +142,10 @@ emit device/xiaomi/onyx 0003-lhdc-aptx-props-and-blob-fixups.patch \
 
 emit device/xiaomi/onyx 0004-firmware-os3.0.302.0.patch proprietary-firmware.txt
 
-# ------------------------------------------------------------ vendor/pixel/launcher
-emit vendor/pixel/launcher 0001-gesture-hint-controller.patch \
-    products/launcher.mk apps overlays
-
 # ------------------------------------------------------------------- vendor/lineage
-emit vendor/lineage 0001-roomservice-allow-loukious.patch build/tools/roomservice.py
+emit vendor/lineage 0001-kernel-bin-override.patch build/tasks/kernel.mk
 
-emit vendor/lineage 0002-kernel-bin-override.patch build/tasks/kernel.mk
-
-# -U1, deliberately. With the default 3 lines of context this hunk carries
-# `CR_VERSION := 12.11` as a context line, and upstream bumps that literal every
-# crDroid release -- which would rot the patch the same way the vendor/crDroidOTA
-# one did, and `--depth 1` leaves --3way no blob to recover with. The changed
-# lines cannot be moved away from it (they sit two lines below), so drop the
-# context instead: `# Internal version` and `LINEAGE_VERSION :=` are distinctive
-# enough on their own.
-CTX=1
-emit vendor/lineage 0003-unofficial-buildtype.patch config/version.mk
-CTX=""
-
-# --------------------------------------------------- unofficial build identity
-# onyx has official crDroid support, and three separate places assume that means
-# an official build. Two are corrected by a patch in their own project; the third,
-# vendor/crDroidOTA/onyx.json, is *not* patched -- upstream regenerates that file
-# every weekly release, so a patch there conflicts within days. apply.sh copies
-# ota/crDroidOTA-onyx.json over it instead.
-emit packages/apps/Settings 0001-maintainer-from-prop.patch \
-    src/com/android/settings/deviceinfo/firmwareversion/BuildMaintainerPreference.kt
-
+# ------------------------------------------------------- packages/apps/Settings
 # The UI half of gesture-navbar-space: one ListPreference in the gesture-nav
 # screen. Under Evolution X this is XML only -- Evo's
 # org.evolution.settings.preferences.SystemSettingListPreference persists the
@@ -178,7 +153,7 @@ emit packages/apps/Settings 0001-maintainer-from-prop.patch \
 # needed (initGestureNavbarSpacePreference + constants + listener) are gone.
 # Do not add them back; a preference class doing the write is what Evo does for
 # every other system setting, and it is one less thing to rebase.
-emit packages/apps/Settings 0002-gesture-navbar-space-ui.patch \
+emit packages/apps/Settings 0001-gesture-navbar-space-ui.patch \
     res/xml/gesture_navigation_settings.xml
 
 emit packages/apps/Updater 0001-self-hosted-ota-url.patch \

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Apply the crDroid onyx patch set to a synced tree, overlay the OS3.0.302.0
+# Apply the Evolution X onyx patch set to a synced tree, overlay the OS3.0.302.0
 # firmware blobs, and stage the Kono-Ha kernel Image that
 # vendor/extra/BoardConfigKernel.mk expects.
 #
@@ -18,7 +18,6 @@
 #   env: KERNEL_RELEASE_TAG   konoha release to pull the Image from (default: latest)
 #        SKIP_KERNEL=1        don't fetch/stage the kernel Image
 #        SKIP_FIRMWARE=1      don't overlay the firmware blobs
-#        SKIP_OTA_METADATA=1  don't overlay vendor/crDroidOTA/<device>.json
 #        GITHUB_TOKEN         used for the release API if the repo is private
 #
 # ---------------------------------------------------------------------------
@@ -81,7 +80,6 @@ declare -A PROJECT=(
     [packages_modules_Bluetooth]="packages/modules/Bluetooth"
     [packages_modules_common]="packages/modules/common"
     [vendor_lineage]="vendor/lineage"
-    [vendor_pixel_launcher]="vendor/pixel/launcher"
     [vendor_qcom_opensource_interfaces]="vendor/qcom/opensource/interfaces"
     [vendor_xiaomi_onyx]="vendor/xiaomi/onyx"
 )
@@ -181,30 +179,6 @@ overlay_firmware() {
                 ! -name '*.part[0-9][0-9]' ! -name '*.sha256' \
                 ! -name 'README.md' ! -name '.gitattributes' -print0)
     echo "   ($n file(s) copied)"
-}
-
-# ---------------------------------------------------------- OTA metadata overlay
-# vendor/lineage/build/tools/createjson.sh reads vendor/crDroidOTA/$DEVICE.json at
-# `bacon` time to fill the maintainer / buildtype / donate fields of the OTA json
-# it emits next to the zip. Upstream's copy names the official onyx maintainer and
-# their PayPal, so it has to be replaced -- but *not* with a patch: upstream
-# rewrites that file on every weekly release (filename, timestamp, md5, sha256,
-# size all change), so a context patch there breaks about once a week and takes the
-# whole build down with it. It did exactly that on 2026-08-26. A whole-file copy
-# cannot conflict, and createjson.sh's extract_field() is grep/sed based, so it
-# neither needs nor notices the rest of upstream's shape.
-overlay_ota_metadata() {
-    local src="$HERE/ota/crDroidOTA-$DEVICE.json"
-    local dst="$ROM/vendor/crDroidOTA/$DEVICE.json"
-    [ -f "$src" ] || { red "FATAL: $src missing"; return 1; }
-    [ -d "$ROM/vendor/crDroidOTA" ] || { red "FATAL: vendor/crDroidOTA missing (sync incomplete?)"; return 1; }
-
-    if cmp -s "$src" "$dst"; then
-        echo "   -- $DEVICE.json (already current)"
-        return 0
-    fi
-    cp -f "$src" "$dst" || { red "FATAL: cp failed for $DEVICE.json"; return 1; }
-    grn "   ++ vendor/crDroidOTA/$DEVICE.json"
 }
 
 # ---------------------------------------------------------------- kernel Image
@@ -361,10 +335,10 @@ stage_kernel() {
 preflight() {
     local rc=0
 
-    echo "== preflight 1/5: apply.sh parses"
+    echo "== preflight 1/4: apply.sh parses"
     if bash -n "${BASH_SOURCE[0]}"; then grn "   ok"; else red "   !! syntax error"; rc=1; fi
 
-    echo "== preflight 2/5: no early-exiting pipeline sits in a condition"
+    echo "== preflight 2/4: no early-exiting pipeline sits in a condition"
     # The bug that killed 295566. `grep -q`/`head` as the consumer of a pipeline
     # inside if/elif/while returns 141 under pipefail when the producer is still
     # writing. Catch a reintroduction here rather than on a build server.
@@ -379,7 +353,7 @@ preflight() {
         grn "   ok"
     fi
 
-    echo "== preflight 3/5: patch set is structurally sound"
+    echo "== preflight 3/4: patch set is structurally sound"
     local pdir key p n dirs=0 pats=0
     for pdir in "$HERE"/patches/*/; do
         [ -d "$pdir" ] || continue
@@ -406,31 +380,7 @@ preflight() {
     if [ "$dirs" = 0 ]; then red "   !! no patch directories at all"; rc=1; fi
     echo "   $pats patch file(s) across $dirs project dir(s)"
 
-    echo "== preflight 4/5: OTA metadata template has what createjson.sh reads"
-    local ota="$HERE/ota/crDroidOTA-$DEVICE.json"
-    if [ ! -f "$ota" ]; then
-        red "   !! $ota missing"; rc=1
-    else
-        # Keys createjson.sh's extract_field() pulls out. Several are legitimately
-        # blank, so presence is the contract; the four that carry the unofficial
-        # identity must also be non-empty.
-        local k v
-        for k in maintainer oem device buildtype forum gapps firmware modem \
-                 bootloader recovery paypal telegram dt common-dt kernel; do
-            if ! grep -q "\"$k\":" "$ota"; then
-                red "   !! key \"$k\" absent -- createjson.sh would emit an empty field"; rc=1
-            fi
-        done
-        for k in maintainer buildtype paypal device; do
-            v="$(sed -n "s/.*\"$k\": *\"\([^\"]*\)\".*/\1/p" "$ota")"
-            if [ -z "$v" ]; then red "   !! \"$k\" is empty"; rc=1
-            else echo "   $k = $v"; fi
-        done
-        v="$(sed -n 's/.*"buildtype": *"\([^"]*\)".*/\1/p' "$ota")"
-        [ "$v" = "Unofficial" ] || { red "   !! buildtype is '$v', expected 'Unofficial'"; rc=1; }
-    fi
-
-    echo "== preflight 5/5: kernel asset resolves AND an Image really comes out"
+    echo "== preflight 4/4: kernel asset resolves AND an Image really comes out"
     if [ "${SKIP_KERNEL:-0}" = "1" ]; then
         ylw "   skipped (SKIP_KERNEL=1)"
     else
@@ -460,11 +410,6 @@ apply_patches
 if [ "${SKIP_FIRMWARE:-0}" != "1" ]; then
     echo "== firmware overlay"
     overlay_firmware || fail=1
-fi
-
-if [ "${SKIP_OTA_METADATA:-0}" != "1" ]; then
-    echo "== OTA metadata overlay"
-    overlay_ota_metadata || fail=1
 fi
 
 if [ "${SKIP_KERNEL:-0}" != "1" ]; then
