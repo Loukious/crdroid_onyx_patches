@@ -77,8 +77,12 @@ say "applying the onyx patch set"
 # BaseLockscreenElement.ElementSource: a since-removed SystemUI port came from
 # Evolution-X, whose lockscreen plugin API has that nested type, and crDroid's
 # tree predates it. This check reports that in seconds instead.
+# HERE is the repo root (apply.sh lives there), but check-imports.sh sits in
+# ci/ next to its import-allowlist.txt. Run 33244376173 died at this line with
+# "/tmp/onyx-ci/check-imports.sh: No such file or directory" -- the script had
+# only ever been invoked directly as ci/check-imports.sh, never through HERE.
 say "checking patched imports resolve against this tree"
-"$HERE/check-imports.sh" .
+"$HERE/ci/check-imports.sh" .
 
 # ------------------------------------------------------------------ configure
 # NOTE: BUILD_USERNAME / BUILD_HOSTNAME are deliberately *not* set here.
