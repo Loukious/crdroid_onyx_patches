@@ -1,14 +1,20 @@
 diff --git a/res/xml/gesture_navigation_settings.xml b/res/xml/gesture_navigation_settings.xml
-index 913b3dcf7b4..5de92584f13 100644
+index a719030df35..5de92584f13 100644
 --- a/res/xml/gesture_navigation_settings.xml
 +++ b/res/xml/gesture_navigation_settings.xml
-@@ -61,8 +61,7 @@
-         android:summary="@string/gesture_navbar_space_summary"
-         android:entries="@array/gesture_navbar_space_entries"
-         android:entryValues="@array/gesture_navbar_space_values"
--        android:defaultValue="0"
--        android:dependency="navigation_bar_hint" />
-+        android:defaultValue="0" />
+@@ -54,6 +54,15 @@
+         android:defaultValue="false"
+         android:dependency="navigation_bar_hint" />
  
++    <!-- Gesture navigation space -->
++    <org.evolution.settings.preferences.SystemSettingListPreference
++        android:key="gesture_navbar_space_mode"
++        android:title="@string/gesture_navbar_space_title"
++        android:summary="@string/gesture_navbar_space_summary"
++        android:entries="@array/gesture_navbar_space_entries"
++        android:entryValues="@array/gesture_navbar_space_values"
++        android:defaultValue="0" />
++
      <com.android.settingslib.widget.SliderPreference
          android:key="gesture_back_height"
+         android:title="@string/back_height_title"
