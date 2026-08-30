@@ -133,6 +133,24 @@ if [ "$SYNC_ONLY" = "1" ]; then
     exit 0
 fi
 
+# ------------------------------------------------------------------ konoha ABI
+# qcacld-3.0 builds against the Kono-Ha kernel ABI, prepared on demand by
+# konoha-abi-prep.sh. mka invokes it from inside a build action, where soong's
+# hermetic PATH replaces curl with a stub that refuses to run ("curl is not
+# allowed to be used", Changes.md#PATH_Tools) -- build 33259303359 died at 99%
+# on exactly that. Run the whole prep HERE, in the recipe shell where curl and
+# git work normally; the stamp file it writes then makes the in-build
+# invocation a no-op. clang comes from the tree explicitly: the script's
+# /usr/lib/llvm-* fallback does not exist on the build servers. This is still
+# a crave run on the build server, not a Devspace build -- the rules only
+# forbid make/mka in the Devspace CLI.
+say "preparing the Kono-Ha kernel-ABI tree (before mka)"
+prep="kernel/xiaomi/sm8735-modules/qcom/opensource/wlan/qcacld-3.0/konoha-abi-prep.sh"
+[ -f "$prep" ] || { echo "FATAL: $prep missing (wlan overlay did not land?)"; exit 1; }
+clang_bin="$(ls -d prebuilts/clang/host/linux-x86/clang-*/bin 2>/dev/null | sort -V | tail -1)"
+[ -n "$clang_bin" ] || { echo "FATAL: no prebuilts/clang/host/linux-x86/clang-* found"; exit 1; }
+CLANG_PATH="$PWD/$clang_bin" bash "$prep" || { echo "FATAL: konoha-abi prep failed"; exit 1; }
+
 # ---------------------------------------------------------------------- build
 # installclean, NOT `make clean` / `rm -rf out`: it drops the installed image
 # staging without throwing away the object cache the queue depends on.
