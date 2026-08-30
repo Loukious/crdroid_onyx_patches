@@ -1,0 +1,24 @@
+diff --git a/sepolicy/vendor/location.te b/sepolicy/vendor/location.te
+new file mode 100644
+index 0000000..d2dc034
+--- /dev/null
++++ b/sepolicy/vendor/location.te
+@@ -0,0 +1,18 @@
++# On SM8750 (sun), device/qcom/sepolicy_vndr/sm8750 is missing the domain
++# transitions that sm8550/sm8650 carry in location_xtra_daemon.te and
++# location_lowi_server.te. Without them loc_launcher's exec of the two
++# daemons is denied (execute_no_trans) at every boot, so aGPS assistance
++# downloads and lowi WiFi positioning never run.
++domain_auto_trans(vendor_location, vendor_location_xtra_daemon_exec, vendor_location_xtra_daemon)
++allow vendor_location_xtra_daemon vendor_location:fd use;
++
++domain_auto_trans(vendor_location, vendor_location_lowi_server_exec, vendor_location_lowi_server)
++allow vendor_location_lowi_server vendor_location:fd use;
++
++# Camera power hints go through the QSPMHAL service; the vendor camera
++# binary calls it, but sm8750/qva never makes hal_camera_default a client.
++hal_client_domain(hal_camera_default, vendor_hal_qspmhal)
++
++# Camera HAL PSI monitoring (/proc/pressure/{cpu,io}).
++allow hal_camera_default proc_pressure_cpu:file { getattr open read };
++allow hal_camera_default proc_pressure_io:file { getattr open read };
