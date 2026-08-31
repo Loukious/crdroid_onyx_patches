@@ -1,0 +1,25 @@
+Evolution X 16.0 — POCO F7 (onyx) — unofficial builds by Loukious
+https://github.com/Loukious/crave_aosp_builder/discussions
+
+2026-08-31 (11.10)
+- Fix LHDC A2DP offload start/suspend loop: the AVDT codec-info field was
+  capped at 32 bytes on the wire (the 45-byte internal size leaked onto the
+  HCI command and the controller rejected the stream start), and the ABR
+  offload command now sends the 9999999 sentinel bitrate.
+- Fix camera video mode: the mi media c2 "vendor0_software" IComponentStore
+  service is now labeled in SELinux service_contexts, so it can register at
+  boot (video recording hung waiting for the codec).
+- Fix xtra-daemon and lowi-server never starting (aGPS assistance and WiFi
+  positioning were silently dead): sm8750 sepolicy lacked the loc_launcher
+  domain transitions that sm8550/sm8650 carry.
+- Camera power hints now reach the QSPMHAL service; camera HAL PSI
+  monitoring (/proc/pressure) allowed.
+- Self-hosted OTA updates: the Updater now pulls from this project's own
+  feed, with downloads hosted on SourceForge.
+
+2026-08-28 (11.10, first local build)
+- Initial Evolution X bka build for onyx.
+- Kono-Ha kernel with KernelSU Next and NetHunter support.
+- LHDC A2DP codec (including V5) and aptX-Adaptive props.
+- Gesture navbar space setting, AI Wallpapers prop spoof.
+- OS3.0.302.0 firmware blobs.
