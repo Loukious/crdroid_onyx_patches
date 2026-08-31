@@ -1,0 +1,433 @@
+diff --git a/app/src/main/java/org/evolution/updater/controller/UpdaterController.java b/app/src/main/java/org/evolution/updater/controller/UpdaterController.java
+index 4f5a12d..d8e1ed8 100644
+--- a/app/src/main/java/org/evolution/updater/controller/UpdaterController.java
++++ b/app/src/main/java/org/evolution/updater/controller/UpdaterController.java
+@@ -27,6 +27,7 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+ 
+ import org.evolution.updater.UpdatesDbHelper;
+ import org.evolution.updater.download.DownloadClient;
++import org.evolution.updater.download.FileDitchResolver;
+ import org.evolution.updater.misc.Utils;
+ import org.evolution.updater.model.Update;
+ import org.evolution.updater.model.UpdateInfo;
+@@ -372,26 +373,73 @@ public class UpdaterController {
+             Log.d(TAG, "Changing name with " + destination.getName());
+         }
+         update.setFile(destination);
+-        DownloadClient downloadClient;
+-        try {
+-            downloadClient = new DownloadClient.Builder()
+-                    .setUrl(update.getDownloadUrl())
+-                    .setDestination(update.getFile())
+-                    .setDownloadCallback(getDownloadCallback(downloadId))
+-                    .setProgressListener(getProgressListener(downloadId))
+-                    .setUseDuplicateLinks(true)
+-                    .build();
+-        } catch (IOException exception) {
+-            Log.e(TAG, "Could not build download client");
+-            update.setStatus(UpdateStatus.PAUSED_ERROR);
+-            notifyUpdateChange(downloadId);
+-            return;
+-        }
+-        addDownloadClient(entry, downloadClient);
+         update.setStatus(UpdateStatus.STARTING);
+         notifyUpdateChange(downloadId);
+-        downloadClient.start();
+         mWakeLock.acquire();
++        beginDownloadClient(entry, downloadId, false);
++    }
++
++    /**
++     * Builds the DownloadClient for a download start or resume. Runs on a
++     * worker thread because FileDitch landing pages must be resolved to a
++     * short-lived direct URL first, which runs a WebView on the main thread
++     * and can take a few seconds.
++     */
++    private void beginDownloadClient(final DownloadEntry entry, final String downloadId,
++            final boolean resume) {
++        final Update update = entry.mUpdate;
++        new Thread(() -> {
++            String url = update.getDownloadUrl();
++            if (FileDitchResolver.isFileDitchUrl(url)) {
++                Log.d(TAG, "FileDitch link, solving challenge for direct URL");
++                String direct = FileDitchResolver.resolve(mContext, url);
++                if (direct != null) {
++                    url = direct;
++                } else {
++                    String fallback = update.getDownloadUrlSf();
++                    if (fallback != null && !fallback.isEmpty()) {
++                        Log.d(TAG, "Falling back to SourceForge mirror");
++                        url = fallback;
++                    } else {
++                        Log.e(TAG, "Could not resolve FileDitch link and no mirror to fall back to");
++                        downloadFailed(downloadId);
++                        return;
++                    }
++                }
++            }
++            DownloadClient downloadClient;
++            try {
++                downloadClient = new DownloadClient.Builder()
++                        .setUrl(url)
++                        .setDestination(update.getFile())
++                        .setDownloadCallback(getDownloadCallback(downloadId))
++                        .setProgressListener(getProgressListener(downloadId))
++                        .setUseDuplicateLinks(true)
++                        .build();
++            } catch (IOException exception) {
++                Log.e(TAG, "Could not build download client");
++                downloadFailed(downloadId);
++                return;
++            }
++            addDownloadClient(entry, downloadClient);
++            notifyUpdateChange(downloadId);
++            if (resume) {
++                downloadClient.resume();
++            } else {
++                downloadClient.start();
++            }
++        }, "FileDitchResolve").start();
++    }
++
++    private void downloadFailed(String downloadId) {
++        DownloadEntry entry = mDownloads.get(downloadId);
++        if (entry != null) {
++            entry.mUpdate.setStatus(UpdateStatus.PAUSED_ERROR);
++            notifyUpdateChange(downloadId);
++        }
++        if (mWakeLock.isHeld()) {
++            mWakeLock.release();
++        }
+     }
+ 
+     @SuppressLint("WakelockTimeout")
+@@ -419,26 +467,10 @@ public class UpdaterController {
+             verifyUpdateAsync(downloadId);
+             notifyUpdateChange(downloadId);
+         } else {
+-            DownloadClient downloadClient;
+-            try {
+-                downloadClient = new DownloadClient.Builder()
+-                        .setUrl(update.getDownloadUrl())
+-                        .setDestination(update.getFile())
+-                        .setDownloadCallback(getDownloadCallback(downloadId))
+-                        .setProgressListener(getProgressListener(downloadId))
+-                        .setUseDuplicateLinks(true)
+-                        .build();
+-            } catch (IOException exception) {
+-                Log.e(TAG, "Could not build download client");
+-                update.setStatus(UpdateStatus.PAUSED_ERROR);
+-                notifyUpdateChange(downloadId);
+-                return;
+-            }
+-            addDownloadClient(entry, downloadClient);
+             update.setStatus(UpdateStatus.STARTING);
+             notifyUpdateChange(downloadId);
+-            downloadClient.resume();
+             mWakeLock.acquire();
++            beginDownloadClient(entry, downloadId, true);
+         }
+     }
+ 
+diff --git a/app/src/main/java/org/evolution/updater/download/FileDitchResolver.java b/app/src/main/java/org/evolution/updater/download/FileDitchResolver.java
+new file mode 100644
+index 0000000..1c4c0a2
+--- /dev/null
++++ b/app/src/main/java/org/evolution/updater/download/FileDitchResolver.java
+@@ -0,0 +1,229 @@
++/*
++ * Copyright (C) 2026 The Evolution X Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.evolution.updater.download;
++
++import android.content.Context;
++import android.net.Uri;
++import android.os.Handler;
++import android.os.Looper;
++import android.util.Log;
++import android.webkit.WebSettings;
++import android.webkit.WebView;
++
++import org.json.JSONTokener;
++
++import java.util.HashMap;
++import java.util.Map;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicReference;
++
++/**
++ * Resolves FileDitch landing pages to their short-lived direct download URL.
++ *
++ * The landing page runs a proof-of-work challenge before it hands out a signed
++ * direct link (which expires after a few minutes, so the link can only be
++ * minted on the client, right before the download starts). The challenge is
++ * solved by the page's own obfuscated JavaScript executing a WASM hashcash
++ * search, gated on a browser fingerprint (canvas, WebGL renderer, plugins...)
++ * that the server cannot verify but does score.
++ *
++ * Rather than reimplementing that moving target in Java — the WASM constants
++ * rotate per session — we load the landing page in a headless WebView and let
++ * the page solve its own challenge with a genuine Chromium fingerprint. The
++ * form POST happens inside the WebView too; the response page then plants the
++ * direct link in an anchor href, which we scrape.
++ *
++ * Blocks the calling thread (up to RESOLVE_TIMEOUT_MS); must NOT be called
++ * from the main thread, which the WebView itself needs.
++ */
++public class FileDitchResolver {
++    private static final String TAG = "FileDitchResolver";
++
++    private static final long RESOLVE_TIMEOUT_MS = 90_000;
++    private static final long POLL_INTERVAL_MS = 700;
++    // The signed links live ~5 minutes; assume less and re-solve when close.
++    private static final long DEFAULT_LINK_TTL_MS = 4 * 60 * 1000;
++    private static final long LINK_SAFETY_MARGIN_MS = 60_000;
++
++    // JS scraped on every poll: prefer an anchor whose href carries the md5
++    // signature; fall back to any md5= URL in the page source, in case a page
++    // variant plants the link somewhere else.
++    private static final String SCRAPE_JS =
++            "(function(){" +
++            "var as = document.querySelectorAll('a[href*=\"md5=\"]');" +
++            "for (var i = 0; i < as.length; i++) { return as[i].href; }" +
++            "var m = document.body ? document.body.innerHTML.match(" +
++            "/https?:\\/\\/[^\\\"'\\\\s]+md5=[^\\\"'&\\\\s]+/) : null;" +
++            "return m ? m[0] : null;" +
++            "})()";
++
++    private static class CachedLink {
++        final String url;
++        final long expiresAt;
++
++        CachedLink(String url, long expiresAt) {
++            this.url = url;
++            this.expiresAt = expiresAt;
++        }
++    }
++
++    private static final Map<String, CachedLink> sCache = new HashMap<>();
++
++    public static boolean isFileDitchUrl(String url) {
++        if (url == null) {
++            return false;
++        }
++        Uri uri = Uri.parse(url);
++        String host = uri.getHost();
++        if (host == null) {
++            return false;
++        }
++        return host.equals("fileditchfiles.st") || host.equals("theditch.st")
++                || host.equals("new.fileditch.com") || host.endsWith(".freakingfileditch.st");
++    }
++
++    /**
++     * Returns a fresh direct URL for the landing page, or null if the
++     * challenge could not be solved in time. Tries twice with a fresh
++     * session: the server scores the browser fingerprint, so one attempt
++     * can fail transiently.
++     */
++    public static String resolve(Context context, String landingUrl) {
++        if (Looper.myLooper() == Looper.getMainLooper()) {
++            throw new IllegalStateException("resolve() must not run on the main thread");
++        }
++        synchronized (sCache) {
++            CachedLink cached = sCache.get(landingUrl);
++            if (cached != null
++                    && System.currentTimeMillis() < cached.expiresAt - LINK_SAFETY_MARGIN_MS) {
++                Log.d(TAG, "Reusing cached direct link");
++                return cached.url;
++            }
++        }
++
++        Log.d(TAG, "Solving FileDitch challenge for " + landingUrl);
++        for (int attempt = 0; attempt < 2; attempt++) {
++            String url = resolveOnce(context, landingUrl);
++            if (url != null) {
++                synchronized (sCache) {
++                    sCache.put(landingUrl, new CachedLink(url, linkExpiry(url)));
++                }
++                Log.d(TAG, "Resolved direct link: " + url);
++                return url;
++            }
++            Log.w(TAG, "FileDitch attempt " + (attempt + 1) + " failed"
++                    + (attempt == 0 ? ", retrying with a fresh session" : ""));
++        }
++        return null;
++    }
++
++    private static String resolveOnce(Context context, String landingUrl) {
++        final CountDownLatch latch = new CountDownLatch(1);
++        final AtomicReference<String> result = new AtomicReference<>(null);
++        final Handler main = new Handler(Looper.getMainLooper());
++        final long deadline = System.currentTimeMillis() + RESOLVE_TIMEOUT_MS;
++
++        main.post(() -> {
++            final WebView webView;
++            try {
++                webView = new WebView(context);
++            } catch (Exception e) {
++                Log.e(TAG, "Could not create WebView", e);
++                latch.countDown();
++                return;
++            }
++            WebSettings settings = webView.getSettings();
++            settings.setJavaScriptEnabled(true);
++            settings.setDomStorageEnabled(true);
++            // The page never needs to open windows or plugins; keep the
++            // surface minimal. It does need its own navigation for the
++            // form POST after the challenge is solved.
++            final Runnable[] poll = new Runnable[1];
++            final boolean[] done = new boolean[1];
++            poll[0] = () -> {
++                if (done[0]) {
++                    return;
++                }
++                if (System.currentTimeMillis() > deadline) {
++                    finish(webView, done, poll, latch, result, null, main);
++                    return;
++                }
++                webView.evaluateJavascript(SCRAPE_JS, value -> {
++                    if (done[0]) {
++                        return;
++                    }
++                    String url = parseJsString(value);
++                    if (url != null) {
++                        finish(webView, done, poll, latch, result, url, main);
++                    } else if (!main.postDelayed(poll[0], POLL_INTERVAL_MS)) {
++                        finish(webView, done, poll, latch, result, null, main);
++                    }
++                });
++            };
++            main.postDelayed(poll[0], POLL_INTERVAL_MS);
++            webView.loadUrl(landingUrl);
++        });
++
++        try {
++            if (!latch.await(RESOLVE_TIMEOUT_MS + 5_000, TimeUnit.MILLISECONDS)) {
++                Log.e(TAG, "Timed out solving FileDitch challenge");
++                return null;
++            }
++        } catch (InterruptedException e) {
++            Thread.currentThread().interrupt();
++            return null;
++        }
++
++        return result.get();
++    }
++
++    private static void finish(WebView webView, boolean[] done, Runnable[] poll,
++            CountDownLatch latch, AtomicReference<String> result, String url, Handler main) {
++        done[0] = true;
++        main.removeCallbacks(poll[0]);
++        result.set(url);
++        try {
++            webView.stopLoading();
++            webView.destroy();
++        } catch (Exception ignored) {
++        }
++        latch.countDown();
++    }
++
++    private static String parseJsString(String jsResult) {
++        if (jsResult == null || "null".equals(jsResult) || "undefined".equals(jsResult)) {
++            return null;
++        }
++        try {
++            Object value = new JSONTokener(jsResult).nextValue();
++            return value instanceof String ? (String) value : null;
++        } catch (Exception e) {
++            return null;
++        }
++    }
++
++    private static long linkExpiry(String url) {
++        try {
++            String expires = Uri.parse(url).getQueryParameter("expires");
++            if (expires != null) {
++                return Long.parseLong(expires) * 1000L;
++            }
++        } catch (Exception ignored) {
++        }
++        return System.currentTimeMillis() + DEFAULT_LINK_TTL_MS;
++    }
++}
+diff --git a/app/src/main/java/org/evolution/updater/misc/Utils.java b/app/src/main/java/org/evolution/updater/misc/Utils.java
+index 415993c..d9f1bae 100644
+--- a/app/src/main/java/org/evolution/updater/misc/Utils.java
++++ b/app/src/main/java/org/evolution/updater/misc/Utils.java
+@@ -84,6 +84,9 @@ public class Utils {
+         update.setDownloadId(object.getString("md5"));
+         update.setFileSize(object.getLong("size"));
+         update.setDownloadUrl(object.getString("download"));
++        if (object.has("download_sf")) {
++            update.setDownloadUrlSf(object.getString("download_sf"));
++        }
+         update.setVersion(object.getString("version"));
+         mMaintainer = object.getString("maintainer");
+         mForum = object.getString("forum");
+diff --git a/app/src/main/java/org/evolution/updater/model/UpdateBase.java b/app/src/main/java/org/evolution/updater/model/UpdateBase.java
+index 02360d8..9aff806 100644
+--- a/app/src/main/java/org/evolution/updater/model/UpdateBase.java
++++ b/app/src/main/java/org/evolution/updater/model/UpdateBase.java
+@@ -19,6 +19,7 @@ public class UpdateBase implements UpdateBaseInfo {
+ 
+     private String mName;
+     private String mDownloadUrl;
++    private String mDownloadUrlSf;
+     private String mDownloadId;
+     private long mTimestamp;
+     private String mType;
+@@ -31,6 +32,7 @@ public class UpdateBase implements UpdateBaseInfo {
+     public UpdateBase(UpdateBaseInfo update) {
+         mName = update.getName();
+         mDownloadUrl = update.getDownloadUrl();
++        mDownloadUrlSf = update.getDownloadUrlSf();
+         mDownloadId = update.getDownloadId();
+         mTimestamp = update.getTimestamp();
+         mType = update.getType();
+@@ -92,6 +94,15 @@ public class UpdateBase implements UpdateBaseInfo {
+         mDownloadUrl = downloadUrl;
+     }
+ 
++    @Override
++    public String getDownloadUrlSf() {
++        return mDownloadUrlSf;
++    }
++
++    public void setDownloadUrlSf(String downloadUrlSf) {
++        mDownloadUrlSf = downloadUrlSf;
++    }
++
+     @Override
+     public long getFileSize() {
+         return mFileSize;
+diff --git a/app/src/main/java/org/evolution/updater/model/UpdateBaseInfo.java b/app/src/main/java/org/evolution/updater/model/UpdateBaseInfo.java
+index fc090b8..da50736 100644
+--- a/app/src/main/java/org/evolution/updater/model/UpdateBaseInfo.java
++++ b/app/src/main/java/org/evolution/updater/model/UpdateBaseInfo.java
+@@ -28,5 +28,12 @@ public interface UpdateBaseInfo {
+ 
+     String getDownloadUrl();
+ 
++    /**
++     * Secondary mirror (e.g. SourceForge) used when the primary download URL
++     * is a FileDitch landing page whose challenge cannot be solved. Null when
++     * the feed entry carries no "download_sf" field.
++     */
++    String getDownloadUrlSf();
++
+     long getFileSize();
+ }
