@@ -35,7 +35,7 @@ fail() { echo "VERIFY-FAIL: $*"; FAILED=1; }
 FAILED=0
 
 # Count *.ko entries in a (possibly concatenated) newc cpio. Used for both the
-# loose image and the one inside the target-files zip.
+# loose image and the one reconstructed from the OTA payload.
 count_modules() {
     python3 - "$1" <<'PYEOF'
 import sys
@@ -101,52 +101,62 @@ echo "vendor_dlkm.img: $vd bytes; system_dlkm.img: $sd bytes"
 [ "$sd" -ge "$MIN_SDLKM_BYTES" ] || fail "system_dlkm.img is only $sd bytes (expected >= $MIN_SDLKM_BYTES) -- system_dlkm modules are missing"
 
 # ---------------------------------------------------------------- what ships
-# The OTA payload is generated from IMAGES/* inside the target-files zip, and
-# add_img_to_target_files REBUILDS vendor_boot from its own staging tree
-# (.../lineage_onyx-target_files/VENDOR_BOOT/RAMDISK) via mkbootfs -- it does
-# NOT copy the loose out/target/product/onyx/vendor_boot.img checked above.
-# In crave job 296582 (2026-08-31, run 17) the loose image was good (385 .ko,
-# repacked from a vendor_ramdisk staging that still held the previous job's
-# late-installed modules) while the target-files VENDOR_BOOT/RAMDISK tree was
-# stale from broken job 296544 (0 .ko): the gate above passed and the
-# published OTA bootlooped. So the images that actually ship are the ones that
-# must be verified.
-TF_ZIP="$PRODUCT_OUT/obj/PACKAGING/target_files_intermediates/lineage_onyx-target_files.zip"
-if [ ! -f "$TF_ZIP" ]; then
-    fail "no target_files zip at $TF_ZIP -- cannot verify what ships"
+# The OTA payload's partition images are NOT the loose out/.../*.img files
+# checked above: add_img_to_target_files REBUILDS vendor_boot from its own
+# staging tree (.../lineage_onyx-target_files/VENDOR_BOOT/RAMDISK), which is
+# snapshotted from out/.../vendor_ramdisk/ at whatever moment ninja schedules
+# the target-files edge. In crave job 296582 (2026-08-31, run 17) that edge
+# started nine seconds after the kernel's module INSTALL and before the
+# modules were distributed into vendor_ramdisk/: the staged tree was
+# module-less, the payload shipped 0 .ko, the phone bootlooped -- while the
+# loose vendor_boot.img, packed later from the by-then-populated staging,
+# passed the gate above. The only artifact that cannot lie is the shipped
+# OTA zip itself, so the gate below reconstructs the vendor_boot partition
+# out of its payload.bin (verify-payload.py, self-checked against the hash
+# delta_generator recorded in the manifest) and counts the modules in
+# EXACTLY the bytes the phone's update_engine would write.
+#
+# This replaces an earlier check on the target-files zip at
+# obj/PACKAGING/target_files_intermediates/: that zip is staged transiently
+# (out/soong/.temp/target_filesXXXX) in some flows, so the check failed
+# spuriously on the 2026-08-31 local build.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OTA_ZIP="$(ls -t "$PRODUCT_OUT"/EvolutionX-*.zip 2>/dev/null | head -1)"
+if [ -z "$OTA_ZIP" ]; then
+    fail "no EvolutionX-*.zip in $PRODUCT_OUT -- cannot verify what ships"
+elif ! python3 "$HERE/verify-payload.py" "$OTA_ZIP" "$TMP" >"$TMP/payload.log" 2>&1; then
+    cat "$TMP/payload.log"
+    fail "could not extract/verify the OTA payload from $(basename "$OTA_ZIP")"
 else
-    # Stage IMAGES/vendor_boot.img to a file: unpack_bootimg needs a seekable
-    # boot_img and cannot reliably read /dev/stdin.
-    unzip -p "$TF_ZIP" IMAGES/vendor_boot.img >"$TMP/tf_vendor_boot.img" 2>/dev/null \
-        || fail "target_files zip has no IMAGES/vendor_boot.img"
-    if [ -s "$TMP/tf_vendor_boot.img" ]; then
-        if "$HOST/unpack_bootimg" --boot_img "$TMP/tf_vendor_boot.img" \
-               --out "$TMP/tf" >"$TMP/tf-unpack.log" 2>&1; then
-            TF_RAMDISK="$(ls "$TMP/tf"/vendor_ramdisk* 2>/dev/null | head -1)"
+    cat "$TMP/payload.log"
+    # shellcheck disable=SC1091
+    [ -f "$TMP/payload_info" ] && . "$TMP/payload_info"
+    [ "${VENDOR_DLKM_SIZE:-0}" -ge "$MIN_VDLKM_BYTES" ] \
+        || fail "OTA payload vendor_dlkm is only ${VENDOR_DLKM_SIZE:-0} bytes (expected >= $MIN_VDLKM_BYTES) -- the phone would receive a module-less vendor_dlkm"
+
+    # Unpack the payload's vendor_boot and count .ko in its ramdisk.
+    if "$HOST/unpack_bootimg" --boot_img "$VENDOR_BOOT_IMG" --out "$TMP/pvb" >"$TMP/pvb.log" 2>&1; then
+        PVB_RAMDISK="$(ls "$TMP/pvb"/vendor_ramdisk* 2>/dev/null | head -1)"
+    else
+        PVB_RAMDISK=""
+    fi
+    if [ -z "$PVB_RAMDISK" ]; then
+        fail "could not unpack the payload's vendor_boot.img (see $TMP/pvb.log)"
+    else
+        if "$HOST/lz4" -d "$PVB_RAMDISK" "$PVB_RAMDISK.cpio" >/dev/null 2>&1; then
+            PVB_CPIOS="$PVB_RAMDISK.cpio"
         else
-            TF_RAMDISK=""
+            PVB_CPIOS="$PVB_RAMDISK"
         fi
-        if [ -z "$TF_RAMDISK" ]; then
-            fail "could not unpack IMAGES/vendor_boot.img from the target_files zip (see $TMP/tf-unpack.log)"
+        PVBC="$(count_modules "$PVB_CPIOS")" || PVBC=""
+        if [ -z "$PVBC" ]; then
+            fail "could not parse the payload vendor ramdisk cpio to count modules"
         else
-            if "$HOST/lz4" -d "$TF_RAMDISK" "$TF_RAMDISK.cpio" >/dev/null 2>&1; then
-                TF_CPIOS="$TF_RAMDISK.cpio"
-            else
-                TF_CPIOS="$TF_RAMDISK"
-            fi
-            TFC="$(count_modules "$TF_CPIOS")" || TFC=""
-            if [ -z "$TFC" ]; then
-                fail "could not parse the target_files vendor ramdisk cpio to count modules"
-            else
-                echo "target_files IMAGES/vendor_boot.img: $TFC .ko files"
-                [ "$TFC" -ge "$MIN_BOOT_MODULES" ] \
-                    || fail "target_files vendor_boot has only $TFC .ko (expected >= $MIN_BOOT_MODULES) -- the OTA payload would ship without vendor modules even though the loose image is good; delete obj/PACKAGING/target_files_intermediates/lineage_onyx-target_files and rebuild"
-            fi
+            echo "OTA payload vendor_boot ramdisk: $PVBC .ko files"
+            [ "$PVBC" -ge "$MIN_BOOT_MODULES" ] \
+                || fail "OTA payload vendor_boot has only $PVBC .ko (expected >= $MIN_BOOT_MODULES) -- the phone would receive a module-less vendor_boot; this zip must NOT be published or flashed"
         fi
     fi
-    TFVD="$(unzip -p "$TF_ZIP" IMAGES/vendor_dlkm.img 2>/dev/null | wc -c)"
-    [ "$TFVD" -ge "$MIN_VDLKM_BYTES" ] \
-        || fail "target_files IMAGES/vendor_dlkm.img is only $TFVD bytes -- the OTA payload would ship a module-less vendor_dlkm"
 fi
 
 # ------------------------------------------------------------------ staleness
@@ -173,5 +183,5 @@ if [ "$FAILED" = 1 ]; then
     echo "verify-images: REFUSING this build. Do not publish or flash it."
     exit 1
 fi
-echo "verify-images: vendor_boot and dlkm images contain the kernel modules."
+echo "verify-images: loose images, and the OTA payload itself, all contain the kernel modules."
 exit 0

@@ -223,9 +223,9 @@ fi
 
 # The failure above is invisible to the build system -- mka exits 0 with the
 # modules missing -- so gate the artifacts on what actually got packed,
-# INCLUDING the images inside the target-files zip (what the payload is
-# generated from). This must run before the workflow's pull/publish steps
-# ever see a zip.
+# INCLUDING the images inside the shipped OTA zip's payload.bin (what the
+# phone's update_engine would write; see ci/verify-payload.py). This must run
+# before the workflow's pull/publish steps ever see a zip.
 say "verifying the packed images"
 if ! "$HERE/ci/verify-images.sh" "$PWD"; then
     say "verification failed -- repacking once from the now-populated staging"
