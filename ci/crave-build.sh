@@ -157,6 +157,34 @@ CLANG_PATH="$PWD/$clang_bin" bash "$prep" || { echo "FATAL: konoha-abi prep fail
 say "make installclean"
 make installclean || { echo "FATAL: installclean failed"; exit 1; }
 
+# Postmortem of crave build 296544 (the 2026-08-31 OTA that bootlooped and
+# Virtual-A/B-rolled-back): on a resumed out/ ninja can consider the kernel
+# Image edge clean -- the kernel make finds everything up to date and does not
+# rewrite the Image, so its mtime never advances ("ninja: Missing restat?"
+# in that job's log) -- while installclean has wiped the module staging dirs.
+# The vendor_boot / vendor_dlkm packing edges depend on the Image *file*, see
+# it as clean, and pack from the module-less staging long before the kernel
+# recipe (Image edge, dirty via .config) gets around to reinstalling the 574
+# modules and appending them to the file lists. The result passed mka with
+# exit 0 and shipped a vendor_boot ramdisk with 0 .ko files (33 cpio entries
+# vs 422 on the known-good build) and a ~340 KB vendor_dlkm.img (32 MB good).
+#
+# Deleting .config and the Image makes the kernel edge dirty from graph load,
+# so every packing edge that depends on it waits for module install first;
+# deleting the packed outputs means restat cannot resurrect a stale pack.
+# Cost: one kernel relink on an incremental build, nothing on a clean one.
+PRODUCT_OUT="out/target/product/$DEVICE"
+KERNEL_OBJ="$PRODUCT_OUT/obj/KERNEL_OBJ"
+say "scrubbing stale kernel/packing state from the previous run"
+rm -f "$KERNEL_OBJ/.config" \
+      "$KERNEL_OBJ/arch/arm64/boot/Image" \
+      "$PRODUCT_OUT/obj/PACKAGING/vendor_boot_intermediates/vendor_ramdisk.cpio" \
+      "$PRODUCT_OUT/obj/PACKAGING/vendor_boot_intermediates/vendor_ramdisk.cpio.lz4" \
+      "$PRODUCT_OUT/vendor_boot.img" \
+      "$PRODUCT_OUT/vendor_ramdisk.img" \
+      "$PRODUCT_OUT/vendor_dlkm.img" \
+      "$PRODUCT_OUT/system_dlkm.img"
+
 say "mka evolution"
 mka evolution
 rc=$?
@@ -164,6 +192,15 @@ if [ "$rc" -ne 0 ]; then
     echo "FATAL: mka evolution failed (exit $rc)"
     exit "$rc"
 fi
+
+# The failure above is invisible to the build system -- mka exits 0 with the
+# modules missing -- so gate the artifacts on what actually got packed. This
+# must run before the workflow's pull/publish steps ever see a zip.
+say "verifying the packed images"
+"$HERE/ci/verify-images.sh" "$PWD" || {
+    echo "FATAL: image verification failed -- refusing to ship this build"
+    exit 1
+}
 
 say "artifacts"
 ls -lh "out/target/product/$DEVICE"/*.zip 2>/dev/null || true
