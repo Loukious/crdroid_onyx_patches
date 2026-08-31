@@ -173,17 +173,45 @@ make installclean || { echo "FATAL: installclean failed"; exit 1; }
 # so every packing edge that depends on it waits for module install first;
 # deleting the packed outputs means restat cannot resurrect a stale pack.
 # Cost: one kernel relink on an incremental build, nothing on a clean one.
+#
+# Postmortem of job 296582 (the 2026-08-31 run-17 OTA that STILL bootlooped
+# with this scrub in place): the OTA payload's vendor_boot is not the loose
+# out/.../vendor_boot.img at all -- add_img_to_target_files REBUILDS it via
+# mkbootfs from its own staging tree, .../lineage_onyx-target_files/
+# VENDOR_BOOT/RAMDISK, which is snapshotted from out/.../vendor_ramdisk/ at
+# whatever moment ninja schedules the target-files edge. In that job the edge
+# started at 13:51:28, nine seconds after the kernel's module INSTALL
+# (13:51:19) and before the modules had been distributed into vendor_ramdisk/
+# -- so the staged tree was module-less, the payload shipped 0 .ko, and the
+# phone bootlooped, while the loose vendor_boot.img (packed later, at
+# 13:55:36, from the by-then-populated staging) passed the verify gate. Two
+# consequences:
+#   1. the scrub also deletes the target-files staging tree AND zip AND the
+#      old OTA zips, so no output from a previous job can survive into this
+#      one, and
+#   2. the race itself is scheduler luck that no scrub can prevent, so when
+#      the (now zip-aware) verify gate fails, we scrub and build ONE more
+#      pass: by then vendor_ramdisk/ is fully populated, so the re-staged
+#      tree and the repacked images both contain the modules.
 PRODUCT_OUT="out/target/product/$DEVICE"
 KERNEL_OBJ="$PRODUCT_OUT/obj/KERNEL_OBJ"
-say "scrubbing stale kernel/packing state from the previous run"
-rm -f "$KERNEL_OBJ/.config" \
-      "$KERNEL_OBJ/arch/arm64/boot/Image" \
-      "$PRODUCT_OUT/obj/PACKAGING/vendor_boot_intermediates/vendor_ramdisk.cpio" \
-      "$PRODUCT_OUT/obj/PACKAGING/vendor_boot_intermediates/vendor_ramdisk.cpio.lz4" \
-      "$PRODUCT_OUT/vendor_boot.img" \
-      "$PRODUCT_OUT/vendor_ramdisk.img" \
-      "$PRODUCT_OUT/vendor_dlkm.img" \
-      "$PRODUCT_OUT/system_dlkm.img"
+
+scrub() {
+    say "scrubbing stale kernel/packing state from the previous run"
+    rm -f "$KERNEL_OBJ/.config" \
+          "$KERNEL_OBJ/arch/arm64/boot/Image" \
+          "$PRODUCT_OUT/obj/PACKAGING/vendor_boot_intermediates/vendor_ramdisk.cpio" \
+          "$PRODUCT_OUT/obj/PACKAGING/vendor_boot_intermediates/vendor_ramdisk.cpio.lz4" \
+          "$PRODUCT_OUT/vendor_boot.img" \
+          "$PRODUCT_OUT/vendor_ramdisk.img" \
+          "$PRODUCT_OUT/vendor_dlkm.img" \
+          "$PRODUCT_OUT/system_dlkm.img" \
+          "$PRODUCT_OUT/obj/PACKAGING/target_files_intermediates"/lineage_onyx-target_files.zip \
+          "$PRODUCT_OUT"/EvolutionX-*.zip
+    rm -rf "$PRODUCT_OUT/obj/PACKAGING/target_files_intermediates"/lineage_onyx-target_files
+}
+
+scrub
 
 say "mka evolution"
 mka evolution
@@ -194,13 +222,27 @@ if [ "$rc" -ne 0 ]; then
 fi
 
 # The failure above is invisible to the build system -- mka exits 0 with the
-# modules missing -- so gate the artifacts on what actually got packed. This
-# must run before the workflow's pull/publish steps ever see a zip.
+# modules missing -- so gate the artifacts on what actually got packed,
+# INCLUDING the images inside the target-files zip (what the payload is
+# generated from). This must run before the workflow's pull/publish steps
+# ever see a zip.
 say "verifying the packed images"
-"$HERE/ci/verify-images.sh" "$PWD" || {
-    echo "FATAL: image verification failed -- refusing to ship this build"
-    exit 1
-}
+if ! "$HERE/ci/verify-images.sh" "$PWD"; then
+    say "verification failed -- repacking once from the now-populated staging"
+    scrub
+    say "mka evolution (second pass)"
+    mka evolution
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo "FATAL: second-pass mka evolution failed (exit $rc)"
+        exit "$rc"
+    fi
+    say "verifying the packed images (second pass)"
+    "$HERE/ci/verify-images.sh" "$PWD" || {
+        echo "FATAL: image verification failed twice -- refusing to ship this build"
+        exit 1
+    }
+fi
 
 say "artifacts"
 ls -lh "out/target/product/$DEVICE"/*.zip 2>/dev/null || true

@@ -34,6 +34,29 @@ MIN_SDLKM_BYTES=$((3 * 1024 * 1024))
 fail() { echo "VERIFY-FAIL: $*"; FAILED=1; }
 FAILED=0
 
+# Count *.ko entries in a (possibly concatenated) newc cpio. Used for both the
+# loose image and the one inside the target-files zip.
+count_modules() {
+    python3 - "$1" <<'PYEOF'
+import sys
+data = open(sys.argv[1], 'rb').read()
+off, names = 0, 0
+while off + 110 <= len(data):
+    if data[off:off+6] not in (b'070701', b'070702'):
+        break
+    fs = int(data[off+54:off+62], 16)   # filesize
+    ns = int(data[off+94:off+102], 16)  # namesize
+    name = data[off+110:off+110+ns-1]
+    if name.endswith(b'.ko'):
+        names += 1
+    off += 110 + ns
+    off = (off + 3) & ~3
+    off += fs
+    off = (off + 3) & ~3
+print(names)
+PYEOF
+}
+
 for f in vendor_boot.img vendor_dlkm.img system_dlkm.img; do
     [ -f "$PRODUCT_OUT/$f" ] || fail "$PRODUCT_OUT/$f does not exist"
 done
@@ -60,26 +83,7 @@ else
     CPIOS="$RAMDISK"
 fi
 
-COUNT="$(python3 - "$CPIOS" <<'PYEOF'
-import sys
-# Count *.ko entries in a (possibly concatenated) newc cpio.
-data = open(sys.argv[1], 'rb').read()
-off, names = 0, 0
-while off + 110 <= len(data):
-    if data[off:off+6] not in (b'070701', b'070702'):
-        break
-    fs = int(data[off+54:off+62], 16)   # filesize
-    ns = int(data[off+94:off+102], 16)  # namesize
-    name = data[off+110:off+110+ns-1]
-    if name.endswith(b'.ko'):
-        names += 1
-    off += 110 + ns
-    off = (off + 3) & ~3
-    off += fs
-    off = (off + 3) & ~3
-print(names)
-PYEOF
-)" || COUNT=""
+COUNT="$(count_modules "$CPIOS")" || COUNT=""
 
 if [ -z "$COUNT" ]; then
     fail "could not parse the vendor ramdisk cpio to count modules"
@@ -95,6 +99,55 @@ sd=$(stat -c %s "$PRODUCT_OUT/system_dlkm.img")
 echo "vendor_dlkm.img: $vd bytes; system_dlkm.img: $sd bytes"
 [ "$vd" -ge "$MIN_VDLKM_BYTES" ] || fail "vendor_dlkm.img is only $vd bytes (expected >= $MIN_VDLKM_BYTES) -- vendor_dlkm modules are missing"
 [ "$sd" -ge "$MIN_SDLKM_BYTES" ] || fail "system_dlkm.img is only $sd bytes (expected >= $MIN_SDLKM_BYTES) -- system_dlkm modules are missing"
+
+# ---------------------------------------------------------------- what ships
+# The OTA payload is generated from IMAGES/* inside the target-files zip, and
+# add_img_to_target_files REBUILDS vendor_boot from its own staging tree
+# (.../lineage_onyx-target_files/VENDOR_BOOT/RAMDISK) via mkbootfs -- it does
+# NOT copy the loose out/target/product/onyx/vendor_boot.img checked above.
+# In crave job 296582 (2026-08-31, run 17) the loose image was good (385 .ko,
+# repacked from a vendor_ramdisk staging that still held the previous job's
+# late-installed modules) while the target-files VENDOR_BOOT/RAMDISK tree was
+# stale from broken job 296544 (0 .ko): the gate above passed and the
+# published OTA bootlooped. So the images that actually ship are the ones that
+# must be verified.
+TF_ZIP="$PRODUCT_OUT/obj/PACKAGING/target_files_intermediates/lineage_onyx-target_files.zip"
+if [ ! -f "$TF_ZIP" ]; then
+    fail "no target_files zip at $TF_ZIP -- cannot verify what ships"
+else
+    # Stage IMAGES/vendor_boot.img to a file: unpack_bootimg needs a seekable
+    # boot_img and cannot reliably read /dev/stdin.
+    unzip -p "$TF_ZIP" IMAGES/vendor_boot.img >"$TMP/tf_vendor_boot.img" 2>/dev/null \
+        || fail "target_files zip has no IMAGES/vendor_boot.img"
+    if [ -s "$TMP/tf_vendor_boot.img" ]; then
+        if "$HOST/unpack_bootimg" --boot_img "$TMP/tf_vendor_boot.img" \
+               --out "$TMP/tf" >"$TMP/tf-unpack.log" 2>&1; then
+            TF_RAMDISK="$(ls "$TMP/tf"/vendor_ramdisk* 2>/dev/null | head -1)"
+        else
+            TF_RAMDISK=""
+        fi
+        if [ -z "$TF_RAMDISK" ]; then
+            fail "could not unpack IMAGES/vendor_boot.img from the target_files zip (see $TMP/tf-unpack.log)"
+        else
+            if "$HOST/lz4" -d "$TF_RAMDISK" "$TF_RAMDISK.cpio" >/dev/null 2>&1; then
+                TF_CPIOS="$TF_RAMDISK.cpio"
+            else
+                TF_CPIOS="$TF_RAMDISK"
+            fi
+            TFC="$(count_modules "$TF_CPIOS")" || TFC=""
+            if [ -z "$TFC" ]; then
+                fail "could not parse the target_files vendor ramdisk cpio to count modules"
+            else
+                echo "target_files IMAGES/vendor_boot.img: $TFC .ko files"
+                [ "$TFC" -ge "$MIN_BOOT_MODULES" ] \
+                    || fail "target_files vendor_boot has only $TFC .ko (expected >= $MIN_BOOT_MODULES) -- the OTA payload would ship without vendor modules even though the loose image is good; delete obj/PACKAGING/target_files_intermediates/lineage_onyx-target_files and rebuild"
+            fi
+        fi
+    fi
+    TFVD="$(unzip -p "$TF_ZIP" IMAGES/vendor_dlkm.img 2>/dev/null | wc -c)"
+    [ "$TFVD" -ge "$MIN_VDLKM_BYTES" ] \
+        || fail "target_files IMAGES/vendor_dlkm.img is only $TFVD bytes -- the OTA payload would ship a module-less vendor_dlkm"
+fi
 
 # ------------------------------------------------------------------ staleness
 # Nothing staged into the module dirs may be newer than the image that is
