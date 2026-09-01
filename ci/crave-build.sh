@@ -70,13 +70,50 @@ git clone --depth 1 -b "$LOCAL_MANIFESTS_BRANCH" "$LOCAL_MANIFESTS" .repo/local_
 # crave's resync.sh is what the docs ask for instead of a bare `repo sync`: it
 # resolves the conflicts that come from uncommitted changes and from a
 # workspace that was last synced against a different ROM.
+#
+# But neither resync.sh nor the forall reset above can clear a project that no
+# manifest lists anymore: the reset runs under whatever manifest .repo points
+# at NOW, so once a failed run has already re-pointed to this branch, the next
+# run's reset never touches the old ROM's leftovers (296901: reset ran, sync
+# still refused to remove arm-linux-androideabi-4.9). resync.sh recovers only
+# ONE such project per invocation -- it deleted arm-...-4.9, re-synced, and
+# died on aarch64-...-4.9. So: on sync failure, collect every
+# "Cannot remove project: uncommitted changes" path, rm -rf the lot (pure
+# prebuilt leftovers of the old ROM -- apply.sh re-creates anything that
+# matters on the new tree), and sync again. Bounded rounds, then hard fail.
+sync_once() {
+    if   [ -x /usr/bin/resync ];      then /usr/bin/resync
+    elif [ -x /opt/crave/resync.sh ]; then /opt/crave/resync.sh
+    else
+        echo "note: no resync script on this node, falling back to repo sync"
+        repo sync -c --force-sync --no-clone-bundle --no-tags -j"$(nproc)"
+    fi
+}
+sync_pruned() {
+    local round=1 out victims
+    while :; do
+        out="$(mktemp)"
+        sync_once >"$out" 2>&1
+        local rc=$?
+        cat "$out"
+        [ "$rc" -eq 0 ] && { rm -f "$out"; return 0; }
+        victims="$(grep -oE 'error: [^:]+: Cannot remove project: uncommitted changes' \
+                   "$out" | sed 's/^error: //; s/: Cannot remove.*//' | sort -u)"
+        rm -f "$out"
+        if [ -z "$victims" ]; then
+            echo "FATAL: repo sync failed with nothing left to prune"
+            return 1
+        fi
+        say "sync round $round refused to drop dirty orphaned projects -- removing them:"
+        echo "$victims"
+        # paths under the workspace; repo itself names them, no spaces in any
+        echo "$victims" | xargs -r rm -rf
+        round=$((round + 1))
+        [ "$round" -le 6 ] || { echo "FATAL: still failing to sync after pruning"; return 1; }
+    done
+}
 say "syncing"
-if   [ -x /usr/bin/resync ];      then /usr/bin/resync
-elif [ -x /opt/crave/resync.sh ]; then /opt/crave/resync.sh
-else
-    echo "note: no resync script on this node, falling back to repo sync"
-    repo sync -c --force-sync --no-clone-bundle --no-tags -j"$(nproc)"
-fi
+sync_pruned || exit 1
 
 # -------------------------------------------------------------------- patches
 # Patch set + OS3.0.302.0 firmware overlay + the Kono-Ha kernel Image.
