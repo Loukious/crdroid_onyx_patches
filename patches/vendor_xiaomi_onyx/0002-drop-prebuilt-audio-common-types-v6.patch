@@ -1,0 +1,48 @@
+diff --git a/Android.bp b/Android.bp
+index 23df0ee..2c65f14 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -71,31 +71,6 @@ cc_prebuilt_library_shared {
+     soc_specific: true,
+ }
+ 
+-cc_prebuilt_library_shared {
+-    name: "android.media.audio.common.types-V6-ndk",
+-    owner: "xiaomi",
+-    strip: {
+-        none: true,
+-    },
+-    target: {
+-        android_arm64: {
+-            srcs: [
+-                "proprietary/vendor/lib64/android.media.audio.common.types-V6-ndk.so",
+-            ],
+-            shared_libs: [
+-                "libbinder_ndk",
+-                "libc++",
+-                "libc",
+-                "libm",
+-                "libdl",
+-            ],
+-        },
+-    },
+-    compile_multilib: "64",
+-    prefer: true,
+-    soc_specific: true,
+-}
+-
+ cc_prebuilt_library_shared {
+     name: "btaudio_offload_if",
+     owner: "xiaomi",
+diff --git a/onyx-vendor.mk b/onyx-vendor.mk
+index f505efa..5ab36a5 100644
+--- a/onyx-vendor.mk
++++ b/onyx-vendor.mk
+@@ -1937,7 +1937,6 @@ PRODUCT_COPY_FILES += \
+ PRODUCT_PACKAGES += \
+     vendor.qti.diaghal-V1-ndk \
+     android.hardware.bluetooth.audio-impl_prebuilt \
+-    android.media.audio.common.types-V6-ndk \
+     btaudio_offload_if \
+     com.mi.node.fd \
+     com.mi.node.miaihighlight \
