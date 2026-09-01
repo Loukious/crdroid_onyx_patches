@@ -1,10 +1,10 @@
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index 10fb22289865..6495faa9e919 100644
+index 1d4ce26e7739..37d447c7c4a5 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
-@@ -7302,6 +7302,14 @@ public final class Settings {
+@@ -7039,6 +7039,14 @@ public final class Settings {
           */
-         public static final String GESTURE_NAVBAR_AUTO_HIDE = "gesture_navbar_auto_hide";
+         public static final String QS_BRIGHTNESS_SLIDER_HAPTIC = "qs_brightness_slider_haptic";
  
 +        /**
 +         * Controls the amount of space reserved for the gesture navigation bar.
@@ -18,18 +18,18 @@ index 10fb22289865..6495faa9e919 100644
           * Whether to show seconds next to clock in status bar
           * 0 - hide (default)
 diff --git a/services/core/java/com/android/server/wm/DisplayPolicy.java b/services/core/java/com/android/server/wm/DisplayPolicy.java
-index 3cfd3f48f700..80a070bfbab2 100644
+index e6b60a1539b2..88568d9139cb 100644
 --- a/services/core/java/com/android/server/wm/DisplayPolicy.java
 +++ b/services/core/java/com/android/server/wm/DisplayPolicy.java
-@@ -65,6 +65,7 @@ import static android.view.WindowManagerGlobal.ADD_MULTIPLE_SINGLETON;
+@@ -88,6 +88,7 @@ import static android.view.WindowManagerGlobal.ADD_MULTIPLE_SINGLETON;
  import static android.view.WindowManagerGlobal.ADD_OKAY;
  import static android.view.WindowManagerPolicyConstants.ACTION_HDMI_PLUGGED;
  import static android.view.WindowManagerPolicyConstants.EXTRA_HDMI_PLUGGED_STATE;
 +import static android.view.WindowManagerPolicyConstants.NAV_BAR_MODE_GESTURAL;
- import static android.window.DesktopExperienceFlags.ENABLE_RESTRICT_FREEFORM_HIDDEN_SYSTEM_BARS_TO_FILLING_TASKS;
  import static android.window.DisplayAreaOrganizer.FEATURE_UNDEFINED;
  
-@@ -188,6 +189,13 @@ public class DisplayPolicy {
+ import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_ANIM;
+@@ -209,6 +210,14 @@ public class DisplayPolicy {
  
      private static final int INSETS_OVERRIDE_INDEX_INVALID = -1;
  
@@ -40,10 +40,11 @@ index 3cfd3f48f700..80a070bfbab2 100644
 +    // Compact uses 50% of the provider's original inset.
 +    private static final float GESTURE_NAVBAR_COMPACT_SCALE = 0.50f;
 +
++
      // TODO(b/266197298): Remove this by a more general protocol from the insets providers.
      private static final boolean USE_CACHED_INSETS_FOR_DISPLAY_SWITCH =
              SystemProperties.getBoolean("persist.wm.debug.cached_insets_switch", true);
-@@ -256,6 +264,8 @@ public class DisplayPolicy {
+@@ -277,6 +286,8 @@ public class DisplayPolicy {
  
      private volatile boolean mHasStatusBar;
      private volatile boolean mHasNavigationBar;
@@ -52,7 +53,7 @@ index 3cfd3f48f700..80a070bfbab2 100644
      // Can the navigation bar ever move to the side?
      private volatile boolean mNavigationBarCanMove;
      private volatile boolean mNavigationBarAlwaysShowOnSideGesture;
-@@ -750,6 +760,27 @@ public class DisplayPolicy {
+@@ -770,6 +781,27 @@ public class DisplayPolicy {
          };
          resolver.registerContentObserver(Settings.Secure.getUriFor(
                  "ax_gaming_gesture_lock"), false, gestureLockObserver, UserHandle.USER_ALL);
@@ -80,7 +81,7 @@ index 3cfd3f48f700..80a070bfbab2 100644
      }
  
      private void updateForceShowNavBarSettings() {
-@@ -1292,8 +1323,51 @@ public class DisplayPolicy {
+@@ -1318,6 +1350,49 @@ public class DisplayPolicy {
          }
      }
  
@@ -128,12 +129,9 @@ index 3cfd3f48f700..80a070bfbab2 100644
 +    }
 +
      @NonNull
--    private static TriFunction<DisplayFrames, WindowState, Rect, Integer> getFrameProvider(
-+    private TriFunction<DisplayFrames, WindowState, Rect, Integer> getFrameProvider(
+     private static TriFunction<DisplayFrames, WindowState, Rect, Integer> getFrameProvider(
              WindowState win, int index, int overrideIndex) {
-         return (displayFrames, windowState, inOutFrame) -> {
-             final LayoutParams lp = win.mAttrs.forRotation(displayFrames.mRotation);
-@@ -1316,10 +1390,12 @@ public class DisplayPolicy {
+@@ -1342,10 +1417,12 @@ public class DisplayPolicy {
                      inOutFrame.set(ifp.getArbitraryRectangle());
                      break;
              }

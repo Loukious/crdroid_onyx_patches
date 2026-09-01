@@ -1,12 +1,12 @@
 diff --git a/gms_full.mk b/gms_full.mk
-index b9f5107..906518d 100644
+index c876705..d501507 100644
 --- a/gms_full.mk
 +++ b/gms_full.mk
-@@ -117,7 +117,6 @@ PRODUCT_PACKAGES += \
-     FamilySpacePrebuilt-v484 \
+@@ -120,7 +120,6 @@ PRODUCT_PACKAGES += \
+     FamilySpacePrebuilt-v2026 \
      FilesPrebuilt \
      GeminiShell_227 \
 -    GoogleDialer \
-     GoogleRestorePrebuilt-v908838 \
+     GoogleRestorePrebuilt-v1054408 \
      KidsSupervisionStub \
-     MaestroPrebuilt \
+     OdadPrebuilt \

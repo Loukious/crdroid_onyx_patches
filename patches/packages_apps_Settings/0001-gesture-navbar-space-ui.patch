@@ -1,10 +1,10 @@
 diff --git a/res/xml/gesture_navigation_settings.xml b/res/xml/gesture_navigation_settings.xml
-index a719030df35..5de92584f13 100644
+index 22980c8cbba..d373f9f3a6e 100644
 --- a/res/xml/gesture_navigation_settings.xml
 +++ b/res/xml/gesture_navigation_settings.xml
-@@ -54,6 +54,15 @@
-         android:defaultValue="false"
-         android:dependency="navigation_bar_hint" />
+@@ -47,6 +47,15 @@
+         android:summary="@string/show_ime_space_summary"
+         android:defaultValue="true" />
  
 +    <!-- Gesture navigation space -->
 +    <org.evolution.settings.preferences.SystemSettingListPreference
