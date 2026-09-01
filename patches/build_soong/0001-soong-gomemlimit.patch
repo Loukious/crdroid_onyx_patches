@@ -1,0 +1,18 @@
+diff --git a/ui/build/soong.go b/ui/build/soong.go
+index 4521b4abe..5e6480ebe 100644
+--- a/ui/build/soong.go
++++ b/ui/build/soong.go
+@@ -231,6 +231,13 @@ func (pb PrimaryBuilderFactory) primaryBuilderInvocation(config Config) bootstra
+ 		invocationEnv["GODEBUG"] = "asyncpreemptoff=1"
+ 	}
+ 
++	// Soong analysis is a single-process memory hog; on memory-constrained
++	// hosts allow capping the Go heap so it swaps and crawls instead of
++	// OOM-killing the machine. GOMEMLIMIT=0 disables the soft limit.
++	if v := os.Getenv("SOONG_GOMEMLIMIT"); v != "" {
++		invocationEnv["GOMEMLIMIT"] = v
++	}
++
+ 	var allArgs []string
+ 	allArgs = append(allArgs, pb.specificArgs...)
+ 

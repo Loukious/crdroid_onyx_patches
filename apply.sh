@@ -73,6 +73,7 @@ ylw()  { printf '\033[33m%s\033[0m\n' "$*"; }
 # project whose path component contains an underscore can't silently break.
 declare -A PROJECT=(
     [build_release]="build/release"
+    [build_soong]="build/soong"
     [device_xiaomi_onyx]="device/xiaomi/onyx"
     [frameworks_base]="frameworks/base"
     [packages_apps_Evolver]="packages/apps/Evolver"
