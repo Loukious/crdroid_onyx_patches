@@ -18,7 +18,7 @@ index 1d4ce26e7739..37d447c7c4a5 100644
           * Whether to show seconds next to clock in status bar
           * 0 - hide (default)
 diff --git a/services/core/java/com/android/server/wm/DisplayPolicy.java b/services/core/java/com/android/server/wm/DisplayPolicy.java
-index e6b60a1539b2..88568d9139cb 100644
+index e6b60a1539b2..1ff5d750df17 100644
 --- a/services/core/java/com/android/server/wm/DisplayPolicy.java
 +++ b/services/core/java/com/android/server/wm/DisplayPolicy.java
 @@ -88,6 +88,7 @@ import static android.view.WindowManagerGlobal.ADD_MULTIPLE_SINGLETON;
@@ -131,7 +131,7 @@ index e6b60a1539b2..88568d9139cb 100644
      @NonNull
      private static TriFunction<DisplayFrames, WindowState, Rect, Integer> getFrameProvider(
              WindowState win, int index, int overrideIndex) {
-@@ -1342,10 +1417,12 @@ public class DisplayPolicy {
+@@ -1342,10 +1417,13 @@ public class DisplayPolicy {
                      inOutFrame.set(ifp.getArbitraryRectangle());
                      break;
              }
@@ -140,7 +140,8 @@ index e6b60a1539b2..88568d9139cb 100644
                      ? ifp.getInsetsSize()
                      : ifp.getInsetsSizeOverrides()[overrideIndex].getInsetsSize();
  
-+            insetsSize = adjustGestureNavbarInsets(ifp, insetsSize);
++            insetsSize = windowState.getDisplayContent().getDisplayPolicy()
++                    .adjustGestureNavbarInsets(ifp, insetsSize);
 +
              if (ifp.getMinimalInsetsSizeInDisplayCutoutSafe() != null) {
                  sTmpRect2.set(inOutFrame);
