@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 #
-# Sync + patch + build Evolution X 16 (bka) for onyx (POCO F7).
+# Sync + patch + build Evolution X for onyx (POCO F7).
+#
+# Branch evolution-cnb of this repo = EXPERIMENTAL Android 17 (Evolution X
+# 'cnb') on top of the unchanged 16.0 device-side stack, because no onyx
+# device tree exists at 17.0 yet. The A16 recipe lives on the evolution-bka
+# branch; keep both in mind when porting fixes between them.
 #
 # This runs ON A CRAVE BUILD SERVER, with the working directory set to the ROM
 # source root -- never in the Devspace CLI, where `repo sync` and `make` are
@@ -22,9 +27,9 @@
 set -euo pipefail
 
 MANIFEST_URL="${MANIFEST_URL:-https://github.com/Evolution-X/manifest.git}"
-MANIFEST_BRANCH="${MANIFEST_BRANCH:-bka}"
+MANIFEST_BRANCH="${MANIFEST_BRANCH:-cnb}"
 LOCAL_MANIFESTS="${LOCAL_MANIFESTS:-https://github.com/Loukious/local_manifests_onyx}"
-LOCAL_MANIFESTS_BRANCH="${LOCAL_MANIFESTS_BRANCH:-evolution-bka}"
+LOCAL_MANIFESTS_BRANCH="${LOCAL_MANIFESTS_BRANCH:-evolution-cnb}"
 DEVICE="${DEVICE:-onyx}"
 SYNC_ONLY="${SYNC_ONLY:-0}"
 
