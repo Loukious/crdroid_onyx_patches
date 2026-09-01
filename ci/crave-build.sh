@@ -44,6 +44,17 @@ say() { printf '\n\033[1;36m>> %s\033[0m\n' "$*"; }
 # -- wiping the pre-synced source turns a 30 min incremental into a 4 hour
 # rebuild and makes the whole queue wait.
 say "re-pointing the workspace at Evolution X $MANIFEST_BRANCH"
+
+# Switching ROMs/branches makes repo DELETE every project the new manifest
+# doesn't carry, and repo refuses to remove a project that still has local
+# changes -- build 296809 died exactly there (arm-linux-androideabi-4.9,
+# leftover crDroid-16 state, after resync.sh had already nuked nine patched
+# repos to work around the same thing). Reset everything under the OLD
+# manifest first, while it still lists these projects, so the sync can move
+# or drop them freely. Nothing is lost: apply.sh re-creates every local
+# change on the new tree.
+repo forall -j8 -c 'git reset --hard && git clean -fd' >/dev/null 2>&1 || true
+
 rm -rf .repo/local_manifests
 
 # --depth 1 is requested by the crave rules to cut sync time. It also makes the
