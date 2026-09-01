@@ -76,6 +76,7 @@ declare -A PROJECT=(
     [build_soong]="build/soong"
     [device_xiaomi_onyx]="device/xiaomi/onyx"
     [frameworks_base]="frameworks/base"
+    [hardware_qcom-caf_sm8750_audio_primary-hal]="hardware/qcom-caf/sm8750/audio/primary-hal"
     [packages_apps_Evolver]="packages/apps/Evolver"
     [packages_apps_Settings]="packages/apps/Settings"
     [packages_apps_Updater]="packages/apps/Updater"

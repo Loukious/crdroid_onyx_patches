@@ -1,0 +1,34 @@
+diff --git a/hal/core/utils/include/qti-audio-core/Utils.h b/hal/core/utils/include/qti-audio-core/Utils.h
+index d0ee641d5..35ad1b1df 100644
+--- a/hal/core/utils/include/qti-audio-core/Utils.h
++++ b/hal/core/utils/include/qti-audio-core/Utils.h
+@@ -346,6 +346,12 @@ constexpr size_t getChannelCount(
+             return __builtin_popcount(layout.get<Tag::layoutMask>() & mask);
+         case Tag::voiceMask:
+             return __builtin_popcount(layout.get<Tag::voiceMask>() & mask);
++        case Tag::acnMask:
++            // audio.common V5 (A17) added the ambisonics ACN mask; the low
++            // 8 bits hold the active ACN channel set.
++            return __builtin_popcount(layout.get<Tag::acnMask>() & mask &
++                    ::aidl::android::media::audio::common::AudioChannelLayout::
++                            ACN_CHANNEL_COUNT_BIT_MASK);
+     }
+     return 0;
+ }
+diff --git a/hal/effects/include/effect-impl/EffectTypes.h b/hal/effects/include/effect-impl/EffectTypes.h
+index d756350bd..dc7909712 100644
+--- a/hal/effects/include/effect-impl/EffectTypes.h
++++ b/hal/effects/include/effect-impl/EffectTypes.h
+@@ -172,6 +172,12 @@ constexpr size_t getChannelCount(
+             return __builtin_popcount(layout.get<Tag::layoutMask>() & mask);
+         case Tag::voiceMask:
+             return __builtin_popcount(layout.get<Tag::voiceMask>() & mask);
++        case Tag::acnMask:
++            // audio.common V5 (A17) added the ambisonics ACN mask; the low
++            // 8 bits hold the active ACN channel set.
++            return __builtin_popcount(layout.get<Tag::acnMask>() & mask &
++                    ::aidl::android::media::audio::common::AudioChannelLayout::
++                            ACN_CHANNEL_COUNT_BIT_MASK);
+     }
+     return 0;
+ }
