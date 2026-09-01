@@ -85,6 +85,7 @@ declare -A PROJECT=(
     [vendor_gms]="vendor/gms"
     [vendor_lineage]="vendor/lineage"
     [vendor_qcom_opensource_interfaces]="vendor/qcom/opensource/interfaces"
+    [vendor_qcom_opensource_audio-hal_st-hal-ar]="vendor/qcom/opensource/audio-hal/st-hal-ar"
     [vendor_xiaomi_onyx]="vendor/xiaomi/onyx"
 )
 

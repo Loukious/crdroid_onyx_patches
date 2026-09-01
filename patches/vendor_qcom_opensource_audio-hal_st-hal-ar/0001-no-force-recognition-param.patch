@@ -1,0 +1,15 @@
+diff --git a/src/soundtriggerhw/SoundTriggerSession.cpp b/src/soundtriggerhw/SoundTriggerSession.cpp
+index a8df111..e1ce7a0 100644
+--- a/src/soundtriggerhw/SoundTriggerSession.cpp
++++ b/src/soundtriggerhw/SoundTriggerSession.cpp
+@@ -391,7 +391,9 @@ int SoundTriggerSession::forceRecognitionEvent_l()
+ 
+     STHAL_INFO(LOG_TAG, "Enter, handle %d", mSessionHandle);
+ 
+-    status = pal_stream_set_param(mPalHandle, PAL_PARAM_ID_FORCE_RECOGNITION, nullptr);
++    // The sm8750 audio-ar pal has no PAL_PARAM_ID_FORCE_RECOGNITION and no
++    // force-recognition path at all; report the operation as unsupported.
++    status = -ENOSYS;
+     if (status) {
+         STHAL_ERR(LOG_TAG, "error, failed to force recognition, status = %d", status);
+     }
