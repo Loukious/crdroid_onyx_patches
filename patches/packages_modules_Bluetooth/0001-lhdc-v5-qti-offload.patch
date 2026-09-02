@@ -413,3 +413,177 @@ index d57a886b16..04c35740a3 100644
      case BTAV_A2DP_CODEC_INDEX_SOURCE_OPUS:
        return A2dpOpusToHalConfig(config, codec_configuration) &&
               IsCodecOffloadingEnabled(*codec_configuration);
+diff --git a/system/bta/av/bta_av_aact.cc b/system/bta/av/bta_av_aact.cc
+index 536cb0db7f..ef88a3ec79 100644
+--- a/system/bta/av/bta_av_aact.cc
++++ b/system/bta/av/bta_av_aact.cc
+@@ -115,7 +115,7 @@ constexpr char kBtmLogTag[] = "A2DP";
+ #define BTA_AV_A2DP_OFFLOAD_XMIT_QUOTA 4
+ 
+ static void bta_av_accept_open_timer_cback(void* data);
+-static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p_a2dp_offload);
++static bool bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p_a2dp_offload);
+ 
+ /* state machine states */
+ enum {
+@@ -3178,7 +3178,7 @@ void bta_av_vendor_offload_stop() {
+  ******************************************************************************/
+ void bta_av_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /*p_data*/) {
+   tBTA_AV bta_av_data = {};
+-  tBT_A2DP_OFFLOAD offload_start;
++  tBT_A2DP_OFFLOAD offload_start = {};
+   log::debug("stream {}, audio channels open {}", p_scb->started ? "STARTED" : "STOPPED",
+              bta_av_cb.audio_open_cnt);
+ 
+@@ -3203,7 +3203,11 @@ void bta_av_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /*p_data*/) {
+   if (codec_config->isHardwareProviderCodec()) {
+     bta_av_vendor_offload_start_v2(p_scb, static_cast<A2dpCodecConfigExt*>(codec_config));
+   } else {
+-    bta_av_offload_codec_builder(p_scb, &offload_start);
++    if (!bta_av_offload_codec_builder(p_scb, &offload_start)) {
++      bta_av_data.status = BTA_AV_FAIL_STREAM;
++      (*bta_av_cb.p_cback)(BTA_AV_OFFLOAD_START_RSP_EVT, &bta_av_data);
++      return;
++    }
+     bta_av_vendor_offload_start(p_scb, &offload_start);
+   }
+ }
+@@ -3235,7 +3239,7 @@ void bta_av_offload_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
+   (*bta_av_cb.p_cback)(BTA_AV_OFFLOAD_START_RSP_EVT, &bta_av_data);
+ }
+ 
+-static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p_a2dp_offload) {
++static bool bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p_a2dp_offload) {
+   A2dpCodecConfig* CodecConfig = bta_av_get_a2dp_current_codec();
+   btav_a2dp_codec_index_t codec_index = A2DP_SourceCodecIndex(p_scb->cfg.codec_info);
+   uint32_t codec_type = 0;
+@@ -3264,9 +3268,14 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
+     case BTAV_A2DP_CODEC_INDEX_SOURCE_OPUS:
+       codec_type = BTA_AV_CODEC_TYPE_OPUS;
+       break;
++    case BTAV_A2DP_CODEC_INDEX_SOURCE_LHDCV5:
++      // Qualcomm's legacy A2DP offload VSC uses a dedicated selector for
++      // LHDC V5 (recovered from HyperOS 3.0.302.0 onyx).
++      codec_type = BTA_AV_CODEC_TYPE_LHDCV5;
++      break;
+     default:
+-      log::error("Unknown Codec type");
+-      return;
++      log::error("Unknown codec type {}", codec_index);
++      return false;
+   }
+   if (mtu > MAX_3MBPS_AVDTP_MTU) {
+     mtu = MAX_3MBPS_AVDTP_MTU;
+@@ -3295,11 +3304,21 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
+     case 96000:
+       p_a2dp_offload->sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_96000;
+       break;
++    case 176400:
++      p_a2dp_offload->sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_176400;
++      break;
++    case 192000:
++      p_a2dp_offload->sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_192000;
++      break;
++    default:
++      log::error("Unsupported offload sample rate {}",
++                 A2DP_GetTrackSampleRate(p_scb->cfg.codec_info));
++      return false;
+   }
+   if (stack::l2cap::get_interface().L2CA_GetRemoteChannelId(p_scb->l2c_cid,
+                                                             &p_a2dp_offload->l2c_rcid) == false) {
+     log::error("Failed to fetch l2c rcid");
+-    return;
++    return false;
+   }
+   switch (CodecConfig->getAudioBitsPerSample()) {
+     case 16:
+@@ -3311,12 +3330,17 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
+     case 32:
+       p_a2dp_offload->bits_per_sample = BTAV_A2DP_CODEC_BITS_PER_SAMPLE_32;
+       break;
++    default:
++      log::error("Unsupported offload bit depth {}", CodecConfig->getAudioBitsPerSample());
++      return false;
+   }
+   p_a2dp_offload->ch_mode = A2DP_GetTrackChannelCount(p_scb->cfg.codec_info);
+   p_a2dp_offload->encoded_audio_bitrate = CodecConfig->getTrackBitRate();
+   if (!CodecConfig->getCodecSpecificConfig(p_a2dp_offload)) {
+     log::error("not a valid codec info");
++    return false;
+   }
++  return true;
+ }
+ void bta_av_api_set_peer_sep(tBTA_AV_DATA* p_data) {
+   log::debug("bd_addr={}, sep:{}", p_data->peer_sep.addr, p_data->peer_sep.sep);
+diff --git a/system/bta/include/bta_av_api.h b/system/bta/include/bta_av_api.h
+index 8d4f0cebf3..dcd1038db4 100644
+--- a/system/bta/include/bta_av_api.h
++++ b/system/bta/include/bta_av_api.h
+@@ -153,7 +153,10 @@ typedef enum {
+   BTA_AV_CODEC_TYPE_APTX = 0x04,
+   BTA_AV_CODEC_TYPE_APTXHD = 0x08,
+   BTA_AV_CODEC_TYPE_LDAC = 0x10,
+-  BTA_AV_CODEC_TYPE_OPUS = 0x20
++  BTA_AV_CODEC_TYPE_OPUS = 0x20,
++  // Qualcomm's legacy A2DP offload VSC uses distinct values for LHDC
++  // revisions rather than a bit mask.
++  BTA_AV_CODEC_TYPE_LHDCV5 = 0x63
+ } tBTA_AV_CODEC_TYPE;
+ 
+ /* Event associated with BTA_AV_ENABLE_EVT */
+diff --git a/system/stack/a2dp/a2dp_codec_config.cc b/system/stack/a2dp/a2dp_codec_config.cc
+index 101762dfa5..7cc367a9e8 100644
+--- a/system/stack/a2dp/a2dp_codec_config.cc
++++ b/system/stack/a2dp/a2dp_codec_config.cc
+@@ -279,7 +279,50 @@ bool A2dpCodecConfig::getCodecSpecificConfig(tBT_A2DP_OFFLOAD* p_a2dp_offload) {
+       p_a2dp_offload->codec_info[3] = (vendor_id & 0xFF000000) >> 24;
+       p_a2dp_offload->codec_info[4] = (codec_id & 0x000000FF);
+       p_a2dp_offload->codec_info[5] = (codec_id & 0x0000FF00) >> 8;
+-      if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
++      if (vendor_id == A2DP_LHDC_VENDOR_ID && codec_id == A2DP_LHDCV5_CODEC_ID) {
++        // Xiaomi/Qualcomm stock sends a controller-specific LHDC V5 metadata
++        // block in codec_info[6..21]. Generic AOSP only sends vendorId+codecId.
++        // This mapping was recovered from HyperOS 3.0.302.0 (Onyx).
++        const uint8_t quality = codec_config_.codec_specific_1 & A2DP_LHDC_QUALITY_MASK;
++        const uint8_t p6 = codec_config[9];
++        const uint8_t p7 = codec_config[10];
++        const uint8_t p9 = codec_config[12];
++
++        // Stock maps stack quality 0..3 -> controller 4..7; all higher modes,
++        // including ABR/AUTO, use controller value 8.
++        p_a2dp_offload->codec_info[6] = (quality <= A2DP_LHDC_QUALITY_LOW3) ? quality + 4 : 8;
++        p_a2dp_offload->codec_info[7] = 3;
++        p_a2dp_offload->codec_info[8] = 5;  // V5 frame duration in ms
++        p_a2dp_offload->codec_info[9] = 0;
++        p_a2dp_offload->codec_info[10] = 0;
++        p_a2dp_offload->codec_info[11] = (p7 >> 6) & 0x03;  // min bitrate selector
++        p_a2dp_offload->codec_info[12] = (p7 >> 4) & 0x03;  // max bitrate selector
++        p_a2dp_offload->codec_info[13] = 0;
++        p_a2dp_offload->codec_info[14] = p6 & A2DP_LHDCV5_SAMPLING_FREQ_MASK;
++        p_a2dp_offload->codec_info[15] = p7 & A2DP_LHDCV5_BIT_FMT_MASK;
++        p_a2dp_offload->codec_info[16] = (p9 >> 0) & 0x01;
++        p_a2dp_offload->codec_info[17] = (p9 >> 1) & 0x01;
++        p_a2dp_offload->codec_info[18] = (p9 >> 2) & 0x01;
++        p_a2dp_offload->codec_info[19] = (p9 >> 6) & 0x01;
++        p_a2dp_offload->codec_info[20] = (p9 >> 7) & 0x01;
++        p_a2dp_offload->codec_info[21] = (p9 >> 3) & 0x01;
++
++        log::info(
++                "LHDC V5 controller codec_info[0..21]={:02x} {:02x} {:02x} {:02x} {:02x} "
++                "{:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} "
++                "{:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}",
++                p_a2dp_offload->codec_info[0], p_a2dp_offload->codec_info[1],
++                p_a2dp_offload->codec_info[2], p_a2dp_offload->codec_info[3],
++                p_a2dp_offload->codec_info[4], p_a2dp_offload->codec_info[5],
++                p_a2dp_offload->codec_info[6], p_a2dp_offload->codec_info[7],
++                p_a2dp_offload->codec_info[8], p_a2dp_offload->codec_info[9],
++                p_a2dp_offload->codec_info[10], p_a2dp_offload->codec_info[11],
++                p_a2dp_offload->codec_info[12], p_a2dp_offload->codec_info[13],
++                p_a2dp_offload->codec_info[14], p_a2dp_offload->codec_info[15],
++                p_a2dp_offload->codec_info[16], p_a2dp_offload->codec_info[17],
++                p_a2dp_offload->codec_info[18], p_a2dp_offload->codec_info[19],
++                p_a2dp_offload->codec_info[20], p_a2dp_offload->codec_info[21]);
++      } else if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
+         if (codec_config_.codec_specific_1 == 0) {                        // default is 0, ABR
+           p_a2dp_offload->codec_info[6] = A2DP_LDAC_QUALITY_ABR_OFFLOAD;  // ABR in offload
+         } else {
