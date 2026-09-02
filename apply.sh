@@ -75,6 +75,7 @@ declare -A PROJECT=(
     [build_release]="build/release"
     [build_soong]="build/soong"
     [device_xiaomi_onyx]="device/xiaomi/onyx"
+    [device_xiaomi_onyx-miuicamera]="device/xiaomi/onyx-miuicamera"
     [frameworks_base]="frameworks/base"
     [hardware_qcom-caf_sm8750_audio_primary-hal]="hardware/qcom-caf/sm8750/audio/primary-hal"
     [kernel_xiaomi_sm8735]="kernel/xiaomi/sm8735"

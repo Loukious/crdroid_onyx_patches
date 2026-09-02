@@ -1,0 +1,61 @@
+diff --git a/sepolicy/vendor/hal_camera_default.te b/sepolicy/vendor/hal_camera_default.te
+index a112595..d9d2441 100644
+--- a/sepolicy/vendor/hal_camera_default.te
++++ b/sepolicy/vendor/hal_camera_default.te
+@@ -1 +1,5 @@
++# The camera HAL calls back into the camera app to set up result buffers.
++# Cover both the platform_app domain and the Android 17 versioned
++# platform_app_36 domain (targetSdk <= 36).
+ binder_call(hal_camera_default, platform_app)
++binder_call(hal_camera_default, platform_app_36)
+diff --git a/sepolicy/vendor/platform_app.te b/sepolicy/vendor/platform_app.te
+index b173d4e..2ddc5ce 100644
+--- a/sepolicy/vendor/platform_app.te
++++ b/sepolicy/vendor/platform_app.te
+@@ -1,19 +1,33 @@
+-binder_use(platform_app)
+-binder_call(platform_app, hal_camera_default)
++# Android 17 (SDK 37) assigns platform apps with targetSdk <= 36 to the
++# versioned platform_app_36 domain instead of platform_app. Every rule below
++# must cover both domains or the camera app loses its binder/service/property
++# access: the HAL->app callback binder call gets denied and photos die with
++# miHalBufferReceiveError.
++attribute miui_platform_app;
++typeattribute platform_app miui_platform_app;
++typeattribute platform_app_36 miui_platform_app;
+ 
+-allow platform_app hal_aidlbgservice_service:service_manager find;
++binder_use(miui_platform_app)
++binder_call(miui_platform_app, hal_camera_default)
+ 
+-allow platform_app adsprpcd_file:dir { open read search };
++allow miui_platform_app hal_aidlbgservice_service:service_manager find;
+ 
+-allow platform_app vendor_camera_data_file:dir { append map r_dir_perms write };
+-allow platform_app vendor_camera_data_file:file { getattr open read };
++allow miui_platform_app adsprpcd_file:dir { open read search };
+ 
+-allow platform_app app_data_file:file execute;
++allow miui_platform_app vendor_camera_data_file:dir { append map r_dir_perms write };
++allow miui_platform_app vendor_camera_data_file:file { getattr open read };
++
++allow miui_platform_app app_data_file:file execute;
++
++# /proc/pressure/{io,cpu,mem} telemetry reads from the camera worker threads.
++allow miui_platform_app proc_pressure_io:file { getattr open read };
++allow miui_platform_app proc_pressure_cpu:file { getattr open read };
++allow miui_platform_app proc_pressure_mem:file { getattr open read };
+ 
+ # Properties
+-get_prop(platform_app, vendor_audio_prop)
+-get_prop(platform_app, vendor_camera_p3enable_prop)
+-get_prop(platform_app, vendor_camera_sensor_prop)
+-get_prop(platform_app, vendor_display_prop)
+-get_prop(platform_app, vendor_displayfeature_prop)
+-get_prop(platform_app, vendor_panel_info_prop)
++get_prop(miui_platform_app, vendor_audio_prop)
++get_prop(miui_platform_app, vendor_camera_p3enable_prop)
++get_prop(miui_platform_app, vendor_camera_sensor_prop)
++get_prop(miui_platform_app, vendor_display_prop)
++get_prop(miui_platform_app, vendor_displayfeature_prop)
++get_prop(miui_platform_app, vendor_panel_info_prop)

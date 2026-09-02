@@ -1,0 +1,14 @@
+diff --git a/sepolicy/vendor/hal_quickcamera.te b/sepolicy/vendor/hal_quickcamera.te
+index ff45fa3..1d2bd1b 100644
+--- a/sepolicy/vendor/hal_quickcamera.te
++++ b/sepolicy/vendor/hal_quickcamera.te
+@@ -2,6 +2,9 @@ type hal_quickcamera_service, hal_service_type, protected_service, service_manag
+ 
+ allow hal_quickcamera platform_app:binder { call transfer };
+ allow hal_quickcamera platform_app:fd *;
++# Android 17 versioned platform app domain (targetSdk <= 36) - MiuiCamera.
++allow hal_quickcamera platform_app_36:binder { call transfer };
++allow hal_quickcamera platform_app_36:fd *;
+ allow hal_quickcamera priv_app:binder { call transfer };
+ allow hal_quickcamera priv_app:fd *;
+ allow hal_quickcamera system_app:binder { call transfer };
