@@ -1,0 +1,39 @@
+diff --git a/qcom/opensource/display-drivers/msm/sde/sde_rm.c b/qcom/opensource/display-drivers/msm/sde/sde_rm.c
+index 4301000..03e64a0 100644
+--- a/qcom/opensource/display-drivers/msm/sde/sde_rm.c
++++ b/qcom/opensource/display-drivers/msm/sde/sde_rm.c
+@@ -1242,7 +1242,7 @@ static bool _sde_rm_check_lm_and_get_connected_blks(
+ 		u32 conn_lm_mask)
+ {
+ 	const struct sde_lm_cfg *lm_cfg = to_sde_hw_mixer(lm->hw)->cap;
+-	const struct sde_pingpong_cfg *pp_cfg;
++	const struct sde_pingpong_cfg *pp_cfg = NULL;
+ 	bool ret, is_conn_primary, is_conn_secondary;
+ 	u32 lm_primary_pref, lm_secondary_pref, cwb_pref, dcwb_pref;
+ 	u32 cac_lb_pref, cac_primary_pref;
+diff --git a/qcom/opensource/synx-kernel/msm/synx/synx.c b/qcom/opensource/synx-kernel/msm/synx/synx.c
+index a735338..524d998 100644
+--- a/qcom/opensource/synx-kernel/msm/synx/synx.c
++++ b/qcom/opensource/synx-kernel/msm/synx/synx.c
+@@ -1211,7 +1211,7 @@ int synx_internal_merge(struct synx_session *session,
+ 	u32 *h_child_list = NULL, *h_child_idx_list = NULL;
+ 	struct synx_client *client;
+ 	struct dma_fence **fences = NULL;
+-	struct synx_map_entry *map_entry;
++	struct synx_map_entry *map_entry = NULL;
+ 	struct synx_coredata *synx_obj, *synx_obj_child;
+ 	struct synx_handle_coredata *synx_data_child;
+ 
+diff --git a/qcom/opensource/synx-kernel/msm/synx/synx_util.c b/qcom/opensource/synx-kernel/msm/synx/synx_util.c
+index 654c186..6307860 100644
+--- a/qcom/opensource/synx-kernel/msm/synx/synx_util.c
++++ b/qcom/opensource/synx-kernel/msm/synx/synx_util.c
+@@ -1540,7 +1540,7 @@ int synx_util_save_data(void *fence, u32 flags,
+ 	u32 h_synx)
+ {
+ 	int rc = SYNX_SUCCESS;
+-	struct synx_entry_64 *entry, *curr;
++	struct synx_entry_64 *entry = NULL, *curr;
+ 	u64 key;
+ 	u32 tbl = synx_util_map_params_to_type(flags);
+ 

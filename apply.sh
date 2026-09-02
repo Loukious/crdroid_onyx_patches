@@ -78,6 +78,7 @@ declare -A PROJECT=(
     [frameworks_base]="frameworks/base"
     [hardware_qcom-caf_sm8750_audio_primary-hal]="hardware/qcom-caf/sm8750/audio/primary-hal"
     [kernel_xiaomi_sm8735]="kernel/xiaomi/sm8735"
+    [kernel_xiaomi_sm8735-modules]="kernel/xiaomi/sm8735-modules"
     [packages_apps_Evolver]="packages/apps/Evolver"
     [packages_apps_Settings]="packages/apps/Settings"
     [packages_apps_Updater]="packages/apps/Updater"

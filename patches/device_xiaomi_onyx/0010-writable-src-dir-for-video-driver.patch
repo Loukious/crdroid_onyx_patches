@@ -1,0 +1,16 @@
+diff --git a/BoardConfig.mk b/BoardConfig.mk
+index 2247d57..24b93b3 100644
+--- a/BoardConfig.mk
++++ b/BoardConfig.mk
+@@ -129,6 +129,11 @@ BOARD_VENDOR_RAMDISK_RECOVERY_KERNEL_MODULES_LOAD := $(first_stage_modules) $(se
+ BOOT_KERNEL_MODULES := $(first_stage_modules) $(second_stage_modules)
+ SYSTEM_KERNEL_MODULES := $(gki_modules) $(kunit_modules)
+ 
++# The video-driver module Makefile symlinks msm_video/driver and video/driver
++# into its own source dir; A17 (cnb) soong mounts the source tree read-only
++# for build actions and aborts on that write.
++BUILD_BROKEN_SRC_DIR_IS_WRITABLE := true
++
+ TARGET_KERNEL_EXT_MODULE_ROOT := kernel/xiaomi/sm8735-modules
+ TARGET_KERNEL_EXT_MODULES := \
+     qcom/opensource/mmrm-driver \
