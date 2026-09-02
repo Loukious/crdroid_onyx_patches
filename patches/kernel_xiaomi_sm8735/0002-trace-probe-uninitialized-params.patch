@@ -1,0 +1,13 @@
+diff --git a/kernel/trace/trace_probe.c b/kernel/trace/trace_probe.c
+index 8c73156a7eb9..058b1d041ae6 100644
+--- a/kernel/trace/trace_probe.c
++++ b/kernel/trace/trace_probe.c
+@@ -647,7 +647,7 @@ static int parse_btf_arg(char *varname,
+ 		ret = query_btf_context(ctx);
+ 		if (ret < 0 || ctx->nr_params == 0) {
+ 			trace_probe_log_err(ctx->offset, NO_BTF_ENTRY);
+-			return PTR_ERR(params);
++			return -ENOENT;
+ 		}
+ 	}
+ 	params = ctx->params;
