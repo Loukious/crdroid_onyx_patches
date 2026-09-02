@@ -1,0 +1,415 @@
+diff --git a/android/app/Android.bp b/android/app/Android.bp
+index 016b1cbc0c..a754145f40 100644
+--- a/android/app/Android.bp
++++ b/android/app/Android.bp
+@@ -121,6 +121,7 @@ cc_library_shared {
+         "libudrv-uipc",
+         "libutils",
+         "server_configurable_flags",
++        "vendor.qti.hardware.bluetooth.audio-V1-ndk",
+     ],
+     shared_libs: [
+         "libaaudio",
+diff --git a/framework/java/android/bluetooth/BluetoothCodecType.java b/framework/java/android/bluetooth/BluetoothCodecType.java
+index dd63131f60..9c7451dd41 100644
+--- a/framework/java/android/bluetooth/BluetoothCodecType.java
++++ b/framework/java/android/bluetooth/BluetoothCodecType.java
+@@ -282,8 +282,11 @@ public final class BluetoothCodecType implements Parcelable {
+                     BluetoothCodecConfig.SOURCE_CODEC_TYPE_OPUS, CODEC_ID_OPUS, "Opus");
+         }
+         if (codecId == CODEC_ID_LHDCV5) {
+-            return new BluetoothCodecType(
+-                    BluetoothCodecConfig.SOURCE_CODEC_TYPE_INVALID, CODEC_ID_LHDCV5, "LHDCV5");
++            // Native codec index 7 == BTAV_A2DP_CODEC_INDEX_SOURCE_LHDCV5, matching
++            // the extended codec type built in A2dpCodecConfig.assignCodecConfigPriorities().
++            // Returning SOURCE_CODEC_TYPE_INVALID here makes the audio framework's
++            // A2DP offload preference entry undecodable by the native stack.
++            return new BluetoothCodecType(7, CODEC_ID_LHDCV5, "LHDCV5");
+         }
+         return null;
+     }
+diff --git a/system/audio_hal_interface/Android.bp b/system/audio_hal_interface/Android.bp
+index 7a21cccc68..0cd6ece206 100644
+--- a/system/audio_hal_interface/Android.bp
++++ b/system/audio_hal_interface/Android.bp
+@@ -28,6 +28,7 @@ cc_library_static {
+     ],
+     static_libs: [
+         "bluetooth_flags_c_lib",
++        "vendor.qti.hardware.bluetooth.audio-V1-ndk",
+         "libbluetooth_hci_pdl",
+         "libbluetooth_log",
+         "libbluetooth_metrics",
+diff --git a/system/audio_hal_interface/aidl/a2dp/codec_status_aidl.cc b/system/audio_hal_interface/aidl/a2dp/codec_status_aidl.cc
+index d57a886b16..04c35740a3 100644
+--- a/system/audio_hal_interface/aidl/a2dp/codec_status_aidl.cc
++++ b/system/audio_hal_interface/aidl/a2dp/codec_status_aidl.cc
+@@ -18,8 +18,11 @@
+ 
+ #include "codec_status_aidl.h"
+ 
++#include <aidl/vendor/qti/hardware/bluetooth/audio/classicVendorCapabilities.h>
++#include <aidl/vendor/qti/hardware/bluetooth/audio/classicVendorConfiguration.h>
+ #include <bluetooth/log.h>
+ 
++#include <optional>
+ #include <unordered_set>
+ #include <vector>
+ 
+@@ -52,9 +55,22 @@ using ::aidl::android::hardware::bluetooth::audio::SbcAllocMethod;
+ using ::aidl::android::hardware::bluetooth::audio::SbcCapabilities;
+ using ::aidl::android::hardware::bluetooth::audio::SbcChannelMode;
+ using ::aidl::android::hardware::bluetooth::audio::SbcConfiguration;
++using ::aidl::vendor::qti::hardware::bluetooth::audio::classicVendorCapabilities;
++using ::aidl::vendor::qti::hardware::bluetooth::audio::classicVendorConfiguration;
++using ::aidl::vendor::qti::hardware::bluetooth::audio::LhdcChannelMode;
++using ::aidl::vendor::qti::hardware::bluetooth::audio::LhdcChannelSplitMode;
++using ::aidl::vendor::qti::hardware::bluetooth::audio::LhdcMaxTargetBitrate;
++using ::aidl::vendor::qti::hardware::bluetooth::audio::LhdcMinTargetBitrate;
++using ::aidl::vendor::qti::hardware::bluetooth::audio::LhdcMode;
++using ::aidl::vendor::qti::hardware::bluetooth::audio::LhdcQualityIndex;
++using ::aidl::vendor::qti::hardware::bluetooth::audio::LhdcVersion;
++using ::aidl::vendor::qti::hardware::bluetooth::audio::VendorCodecType;
+ 
+ using ::bluetooth::audio::a2dp::ahal_codec_configuration;
+ 
++using LhdcCapabilities = classicVendorCapabilities::LhdcCapabilities;
++using LhdcConfiguration = classicVendorConfiguration::LhdcConfiguration;
++
+ namespace {
+ 
+ // capabilities from BluetoothAudioClientInterface::GetAudioCapabilities()
+@@ -120,6 +136,146 @@ bool ContainedInVector(const std::vector<T>& vector, const typename identity<T>:
+   return std::find(vector.begin(), vector.end(), target) != vector.end();
+ }
+ 
++// The QTI AIDL extension identifies classic LHDC as vendor codec 3. Its
++// nested parcelables are carried in standard VINTF ParcelableHolders.
++constexpr int32_t kQtiBluetoothAudioVendorId = 1;
++constexpr char16_t kQtiLhdcCodecId = 3;
++
++// Full AVDTP vendor codec information element offsets. H0-H2 occupy bytes
++// 0-2, followed by the four-byte vendor ID and two-byte codec ID.
++constexpr size_t kLhdcP7 = 10;
++constexpr size_t kLhdcV5P9 = 12;
++
++std::optional<LhdcCapabilities> GetLhdcCapabilities(const CodecCapabilities& codec_capability) {
++  if (codec_capability.codecType != CodecType::VENDOR ||
++      codec_capability.capabilities.getTag() !=
++              CodecCapabilities::Capabilities::vendorCapabilities) {
++    return std::nullopt;
++  }
++
++  const auto& extension =
++          codec_capability.capabilities.get<CodecCapabilities::Capabilities::vendorCapabilities>()
++                  .extension;
++  std::optional<classicVendorCapabilities> vendor_capability;
++  const binder_status_t status = extension.getParcelable(&vendor_capability);
++  if (status != STATUS_OK || !vendor_capability.has_value()) {
++    log::warn("Unable to decode QTI vendor capability: status={} value={}", status,
++              vendor_capability.has_value());
++    return std::nullopt;
++  }
++  if (vendor_capability->vendorCodecType != VendorCodecType::LHDC) {
++    log::warn("Unsupported QTI vendor capability: type={} tag={}",
++              toString(vendor_capability->vendorCodecType),
++              static_cast<int32_t>(vendor_capability->capabilities.getTag()));
++    return std::nullopt;
++  }
++
++  if (vendor_capability->capabilities.getTag() ==
++      classicVendorCapabilities::CodecSpecific::lhdcCapabilities) {
++    return vendor_capability->capabilities
++            .get<classicVendorCapabilities::CodecSpecific::lhdcCapabilities>();
++  }
++
++  // QTI's V4 provider on onyx identifies this capability as LHDC but leaves
++  // the union at its default aptX Adaptive R4 arm. Mirror the capability set
++  // advertised by BTAudioCodecsAidl while retaining normal validation of the
++  // locally generated LHDC configuration below.
++  if (vendor_capability->capabilities.getTag() !=
++      classicVendorCapabilities::CodecSpecific::aptxAdaptiveR4Cap) {
++    log::warn("Unexpected QTI LHDC capability tag={}",
++              static_cast<int32_t>(vendor_capability->capabilities.getTag()));
++    return std::nullopt;
++  }
++
++  log::warn("QTI LHDC capability uses default union arm; applying provider capability set");
++  LhdcCapabilities capability;
++  capability.sampleRateHz = {44100, 48000, 88200, 96000, 192000};
++  capability.channelMode = {LhdcChannelMode::STEREO};
++  capability.qualityIndex = {LhdcQualityIndex::QUALITY_HIGH, LhdcQualityIndex::QUALITY_MID,
++                             LhdcQualityIndex::QUALITY_LOW, LhdcQualityIndex::QUALITY_LOW4,
++                             LhdcQualityIndex::QUALITY_ABR,
++                             static_cast<LhdcQualityIndex>(9),
++                             static_cast<LhdcQualityIndex>(0)};
++  capability.bitsPerSample = {16, 24, 32};
++  capability.version = {LhdcVersion::LHDC_V2, LhdcVersion::LHDC_V3, LhdcVersion::LHDC_V4,
++                        LhdcVersion::LHDC_V5};
++  capability.mode = {LhdcMode::HQ, LhdcMode::LL};
++  capability.maxTargetBitrate = {
++          LhdcMaxTargetBitrate::MaxTargetBitrate_900kV4_noLimitV5,
++          LhdcMaxTargetBitrate::MaxTargetBitrate_500kV4_400kV5,
++          LhdcMaxTargetBitrate::MaxTargetBitrate_400kV4_600kV5,
++          LhdcMaxTargetBitrate::MaxTargetBitrate_ReservedV4_900kV5};
++  capability.minTargetBitrate = {
++          LhdcMinTargetBitrate::MinTargetBitrate_defaultV4_noLimitV5,
++          LhdcMinTargetBitrate::MinTargetBitrate_320kV4_128kV5,
++          LhdcMinTargetBitrate::MinTargetBitrate_256kV5,
++          LhdcMinTargetBitrate::MinTargetBitrate_400kV5};
++  capability.channelSplitMode = {LhdcChannelSplitMode::LHDC_CH_SPLIT_NONE,
++                                 LhdcChannelSplitMode::LHDC_CH_SPLIT_TWS,
++                                 LhdcChannelSplitMode::LHDC_CH_SPLIT_TWS_PLUS};
++  capability.llacEnable = false;
++  capability.losslessEnable = false;
++  capability.jasEnable = false;
++  capability.xmsaEnable = false;
++  return capability;
++}
++
++std::optional<LhdcConfiguration> GetLhdcConfiguration(const CodecConfiguration& codec_configuration) {
++  if (codec_configuration.codecType != CodecType::VENDOR ||
++      codec_configuration.config.getTag() != CodecConfiguration::CodecSpecific::vendorConfig) {
++    return std::nullopt;
++  }
++
++  const auto& vendor_config =
++          codec_configuration.config.get<CodecConfiguration::CodecSpecific::vendorConfig>();
++  if (vendor_config.vendorId != kQtiBluetoothAudioVendorId ||
++      vendor_config.codecId != kQtiLhdcCodecId) {
++    return std::nullopt;
++  }
++
++  std::optional<classicVendorConfiguration> classic_config;
++  if (vendor_config.codecConfig.getParcelable(&classic_config) != STATUS_OK ||
++      !classic_config.has_value() || classic_config->vendorCodecType != VendorCodecType::LHDC ||
++      classic_config->config.getTag() != classicVendorConfiguration::CodecSpecific::lhdcConfig) {
++    return std::nullopt;
++  }
++
++  return classic_config->config.get<classicVendorConfiguration::CodecSpecific::lhdcConfig>();
++}
++
++bool lhdc_offloading_capability_match(const LhdcCapabilities& lhdc_capability,
++                                      const LhdcConfiguration& lhdc_config) {
++  const bool unsupported_feature =
++          (lhdc_config.llacEnable && !lhdc_capability.llacEnable) ||
++          (lhdc_config.losslessEnable && !lhdc_capability.losslessEnable) ||
++          (lhdc_config.jasEnable && !lhdc_capability.jasEnable) ||
++          (lhdc_config.xmsaEnable && !lhdc_capability.xmsaEnable);
++  // Xiaomi's V5 bridge leaves channelSplitMode UNKNOWN because the field is
++  // only meaningful for the legacy V2/V3/V4 TWS split modes.
++  const bool channel_split_supported =
++          (lhdc_config.version == LhdcVersion::LHDC_V5 &&
++           lhdc_config.channelSplitMode == LhdcChannelSplitMode::UNKNOWN) ||
++          ContainedInVector(lhdc_capability.channelSplitMode, lhdc_config.channelSplitMode);
++
++  if (!ContainedInVector(lhdc_capability.channelMode, lhdc_config.channelMode) ||
++      !ContainedInVector(lhdc_capability.qualityIndex, lhdc_config.qualityIndex) ||
++      !ContainedInVector(lhdc_capability.bitsPerSample,
++                         static_cast<uint8_t>(lhdc_config.bitsPerSample)) ||
++      !ContainedInVector(lhdc_capability.sampleRateHz, lhdc_config.sampleRateHz) ||
++      !ContainedInVector(lhdc_capability.version, lhdc_config.version) ||
++      !ContainedInVector(lhdc_capability.mode, lhdc_config.mode) ||
++      !ContainedInVector(lhdc_capability.maxTargetBitrate, lhdc_config.maxTargetBitrate) ||
++      !ContainedInVector(lhdc_capability.minTargetBitrate, lhdc_config.minTargetBitrate) ||
++      !channel_split_supported || unsupported_feature) {
++    log::warn("software codec={} capability={}", lhdc_config.toString(),
++              lhdc_capability.toString());
++    return false;
++  }
++  log::info("offloading codec={} capability={}", lhdc_config.toString(),
++            lhdc_capability.toString());
++  return true;
++}
++
+ bool sbc_offloading_capability_match(const SbcCapabilities& sbc_capability,
+                                      const SbcConfiguration& sbc_config) {
+   if (!ContainedInVector(sbc_capability.channelMode, sbc_config.channelMode) ||
+@@ -239,6 +395,15 @@ bool IsCodecOffloadingEnabled(const CodecConfiguration& codec_config) {
+                 codec_config.config.get<CodecConfiguration::CodecSpecific::opusConfig>();
+         return opus_offloading_capability_match(opus_capability, opus_config);
+       }
++      case CodecType::VENDOR: {
++        auto lhdc_capability = GetLhdcCapabilities(codec_capability);
++        auto lhdc_config = GetLhdcConfiguration(codec_config);
++        if (!lhdc_capability.has_value() || !lhdc_config.has_value()) {
++          log::warn("Unsupported vendor offload codec={}", codec_config.toString());
++          return false;
++        }
++        return lhdc_offloading_capability_match(*lhdc_capability, *lhdc_config);
++      }
+       case CodecType::UNKNOWN:
+         [[fallthrough]];
+       default:
+@@ -531,6 +696,125 @@ bool A2dpOpusToHalConfig(const ahal_codec_configuration& config, CodecConfigurat
+   return true;
+ }
+ 
++std::optional<LhdcQualityIndex> A2dpCodecToHalLhdcQualityIndex(
++        const btav_a2dp_codec_config_t& codec_config) {
++  const uint8_t quality = static_cast<uint8_t>(codec_config.codec_specific_1 & 0xff);
++
++  if (codec_config.codec_type == BTAV_A2DP_CODEC_INDEX_SOURCE_LHDCV5) {
++    // Qualcomm's public QTI enum has no fixed 320-kbps or 1000-kbps V5
++    // values. On onyx we extend the provider capability vector with raw 0
++    // for fixed 320 kbps and raw 9 for fixed 1000 kbps. QTI8 remains the
++    // stock ABR path.
++    switch (quality) {
++      case 8:
++        return static_cast<LhdcQualityIndex>(9);  // HIGH1 / 1000 kbps
++      case 7:
++        return LhdcQualityIndex::QUALITY_HIGH;   // 900 kbps
++      case 6:
++        return LhdcQualityIndex::QUALITY_MID;    // 500 kbps
++      case 5:
++        return LhdcQualityIndex::QUALITY_LOW;    // 400 kbps
++      case 9:
++        return LhdcQualityIndex::QUALITY_LOW4;   // raw QTI8 / real ABR
++      case 4:
++        return static_cast<LhdcQualityIndex>(0); // raw QTI0 / fixed 320 kbps
++      case 3:
++        return LhdcQualityIndex::QUALITY_ABR;    // raw QTI4 / fixed 256 kbps
++      case 0:
++      case 1:
++      case 2:
++        // Preserve the existing low-mode compatibility mapping. QTI does not
++        // expose distinct 64/128/192-kbps V5 quality enums.
++        return static_cast<LhdcQualityIndex>(quality + 4);
++      default:
++        return std::nullopt;
++    }
++  }
++
++  switch (quality) {
++    case 7:
++      return LhdcQualityIndex::QUALITY_HIGH;
++    case 6:
++      return LhdcQualityIndex::QUALITY_MID;
++    case 5:
++      return LhdcQualityIndex::QUALITY_LOW;
++    case 4:
++      return LhdcQualityIndex::QUALITY_LOW4;
++    default:
++      return std::nullopt;
++  }
++}
++
++bool A2dpLhdcToHalConfig(const ahal_codec_configuration& config, CodecConfiguration* codec_config) {
++  const auto codec_index = config.codec_config.codec_type;
++  if (codec_index != BTAV_A2DP_CODEC_INDEX_SOURCE_LHDCV5) {
++    return false;
++  }
++
++  LhdcConfiguration lhdc_config = {};
++  lhdc_config.sampleRateHz = A2dpCodecToHalSampleRate(config.codec_config);
++  if (lhdc_config.sampleRateHz <= 0) {
++    log::error("Unknown LHDC sample_rate={}", config.codec_config.sample_rate);
++    return false;
++  }
++  if (config.codec_config.channel_mode != BTAV_A2DP_CODEC_CHANNEL_MODE_STEREO) {
++    log::error("Unknown LHDC channel_mode={}", config.codec_config.channel_mode);
++    return false;
++  }
++  lhdc_config.channelMode = LhdcChannelMode::STEREO;
++
++  auto quality = A2dpCodecToHalLhdcQualityIndex(config.codec_config);
++  if (!quality.has_value()) {
++    log::warn("LHDC quality={} is not supported by QTI offload",
++              config.codec_config.codec_specific_1 & 0xff);
++    return false;
++  }
++  lhdc_config.qualityIndex = *quality;
++
++  lhdc_config.bitsPerSample = A2dpCodecToHalBitsPerSample(config.codec_config);
++  if (lhdc_config.bitsPerSample <= 0) {
++    log::error("Unknown LHDC bits_per_sample={}", config.codec_config.bits_per_sample);
++    return false;
++  }
++
++  const auto& codec_info = config.codec_specific_information_elements;
++  const bool low_latency = (config.codec_config.codec_specific_2 & 0x1) != 0;
++  const bool jas_enabled = (config.codec_config.codec_specific_3 & 0x1) != 0;
++  lhdc_config.mode = low_latency ? LhdcMode::LL : LhdcMode::HQ;
++  lhdc_config.jasEnable = jas_enabled;
++  lhdc_config.xmsaEnable = false;
++
++  lhdc_config.version = LhdcVersion::LHDC_V5;
++  // Xiaomi's V5 bridge leaves channel split unspecified for V5. The field
++  // only describes the older V2/V3 TWS split modes.
++  lhdc_config.channelSplitMode = LhdcChannelSplitMode::UNKNOWN;
++  lhdc_config.maxTargetBitrate = static_cast<LhdcMaxTargetBitrate>(codec_info[kLhdcP7] & 0x30);
++  lhdc_config.minTargetBitrate =
++          static_cast<LhdcMinTargetBitrate>((codec_info[kLhdcP7] & 0xc0) >> 6);
++  lhdc_config.llacEnable = false;
++  lhdc_config.jasEnable = jas_enabled || (codec_info[kLhdcV5P9] & 0x02) != 0;
++  lhdc_config.losslessEnable = false;
++  if (!low_latency && (codec_info[kLhdcV5P9] & 0x40) != 0) {
++    lhdc_config.mode = LhdcMode::LL;
++  }
++
++  classicVendorConfiguration classic_config = {};
++  classic_config.vendorCodecType = VendorCodecType::LHDC;
++  classic_config.config.set<classicVendorConfiguration::CodecSpecific::lhdcConfig>(lhdc_config);
++
++  CodecConfiguration::VendorConfiguration vendor_config = {};
++  vendor_config.vendorId = kQtiBluetoothAudioVendorId;
++  vendor_config.codecId = kQtiLhdcCodecId;
++  if (vendor_config.codecConfig.setParcelable(classic_config) != STATUS_OK) {
++    log::error("Failed to serialize QTI LHDC configuration");
++    return false;
++  }
++
++  codec_config->codecType = CodecType::VENDOR;
++  codec_config->config.set<CodecConfiguration::CodecSpecific::vendorConfig>(vendor_config);
++  return true;
++}
++
+ }  // namespace
+ 
+ bool UpdateOffloadingCapabilities(
+@@ -538,6 +822,7 @@ bool UpdateOffloadingCapabilities(
+   audio_hal_capabilities = BluetoothAudioClientInterface::GetAudioCapabilities(
+           SessionType::A2DP_HARDWARE_OFFLOAD_ENCODING_DATAPATH);
+   std::unordered_set<CodecType> codec_type_set;
++  bool lhdc_enabled = false;
+   for (auto preference : framework_preference) {
+     switch (preference.codec_type) {
+       case BTAV_A2DP_CODEC_INDEX_SOURCE_SBC:
+@@ -561,6 +846,9 @@ bool UpdateOffloadingCapabilities(
+       case BTAV_A2DP_CODEC_INDEX_SOURCE_OPUS:
+         codec_type_set.insert(CodecType::OPUS);
+         break;
++      case BTAV_A2DP_CODEC_INDEX_SOURCE_LHDCV5:
++        lhdc_enabled = true;
++        break;
+       case BTAV_A2DP_CODEC_INDEX_SINK_SBC:
+       case BTAV_A2DP_CODEC_INDEX_SINK_AAC:
+       case BTAV_A2DP_CODEC_INDEX_SINK_OPUS:
+@@ -587,8 +875,13 @@ bool UpdateOffloadingCapabilities(
+ 
+   offloading_preference.clear();
+   for (auto capability : audio_hal_capabilities) {
+-    auto codec_type = capability.get<AudioCapabilities::a2dpCapabilities>().codecType;
+-    if (codec_type_set.find(codec_type) != codec_type_set.end()) {
++    const auto& a2dp_capability = capability.get<AudioCapabilities::a2dpCapabilities>();
++    auto codec_type = a2dp_capability.codecType;
++
++    const bool enable_lhdc =
++            codec_type == CodecType::VENDOR && lhdc_enabled &&
++            GetLhdcCapabilities(a2dp_capability).has_value();
++    if (enable_lhdc || codec_type_set.find(codec_type) != codec_type_set.end()) {
+       log::info("enabled offloading capability={}", capability.toString());
+       offloading_preference.push_back(capability);
+     } else {
+@@ -644,6 +937,10 @@ bool getHalCodecConfiguration(const ahal_codec_configuration& config,
+       return A2dpLdacToHalConfig(config, codec_configuration) &&
+              IsCodecOffloadingEnabled(*codec_configuration);
+ 
++    case BTAV_A2DP_CODEC_INDEX_SOURCE_LHDCV5:
++      return A2dpLhdcToHalConfig(config, codec_configuration) &&
++             IsCodecOffloadingEnabled(*codec_configuration);
++
+     case BTAV_A2DP_CODEC_INDEX_SOURCE_OPUS:
+       return A2dpOpusToHalConfig(config, codec_configuration) &&
+              IsCodecOffloadingEnabled(*codec_configuration);

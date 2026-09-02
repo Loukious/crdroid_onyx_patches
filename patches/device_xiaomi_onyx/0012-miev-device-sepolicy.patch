@@ -1,0 +1,38 @@
+diff --git a/sepolicy/vendor/device.te b/sepolicy/vendor/device.te
+index 79ba4af..623f344 100644
+--- a/sepolicy/vendor/device.te
++++ b/sepolicy/vendor/device.te
+@@ -1,6 +1,9 @@
+ # Charge
+ type vendor_charge_block_device, dev_type;
+ 
++# miev (media event interface created by miev.ko, written by the audio HAL)
++type vendor_miev_device, dev_type;
++
+ # Displayfeature
+ type vendor_displayfeature_device, dev_type;
+ type vendor_displaylog_device, dev_type;
+diff --git a/sepolicy/vendor/file_contexts b/sepolicy/vendor/file_contexts
+index 9ee4aa6..44a6e1a 100644
+--- a/sepolicy/vendor/file_contexts
++++ b/sepolicy/vendor/file_contexts
+@@ -20,6 +20,7 @@
+ /(vendor|odm)/lib(64)?/libmiphone_capture_bokeh\.so u:object_r:same_process_hal_file:s0
+ /data/vendor/aon(/.*)? u:object_r:vendor_aon_vendor_data_file:s0
+ /dev/camlog u:object_r:camlog_device:s0
++/dev/miev u:object_r:vendor_miev_device:s0
+ /mnt/vendor/persist/camera(/.*)? u:object_r:camera_persist_file:s0
+ /odm/lib(64)?/libmialgo_utils\.so u:object_r:same_process_hal_file:s0
+ /odm/lib(64)?/libmiocr\.so u:object_r:same_process_hal_file:s0
+diff --git a/sepolicy/vendor/hal_audio.te b/sepolicy/vendor/hal_audio.te
+index cac4fb0..d636083 100644
+--- a/sepolicy/vendor/hal_audio.te
++++ b/sepolicy/vendor/hal_audio.te
+@@ -10,6 +10,7 @@ get_prop(hal_audio_default, vendor_audio_cloud_ctrl_mi_prop)
+ r_dir_file(hal_audio_default, vendor_persist_audio_file)
+ 
+ allow hal_audio_default audio_socket:sock_file rw_file_perms;
++allow hal_audio_default vendor_miev_device:chr_file rw_file_perms;
+ allow hal_audio_default hal_mediaeventgatherservice_service:fd *;
+ allow hal_audio_default sysfs:file rw_file_perms;
+ allow hal_audio_default vendor_persist_audio_file:dir rw_dir_perms;
