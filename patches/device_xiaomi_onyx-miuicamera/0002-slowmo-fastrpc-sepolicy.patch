@@ -1,0 +1,22 @@
+diff --git a/sepolicy/vendor/platform_app.te b/sepolicy/vendor/platform_app.te
+index 2ddc5ce..d3427ab 100644
+--- a/sepolicy/vendor/platform_app.te
++++ b/sepolicy/vendor/platform_app.te
+@@ -12,7 +12,16 @@ binder_call(miui_platform_app, hal_camera_default)
+ 
+ allow miui_platform_app hal_aidlbgservice_service:service_manager find;
+ 
+-allow miui_platform_app adsprpcd_file:dir { open read search };
++allow miui_platform_app adsprpcd_file:dir { open read search getattr };
++
++# Slow-motion MEIN interpolation: the app's SNPE/QNN engine must open the
++# CDSP fastrpc nodes and load the unsigned-PD shell off /vendor/dsp, exactly
++# like the camera HAL (hal_camera_default) does. Stock HyperOS ships these
++# allows; without them QnnDsp createUnsignedPD fails (0x3), the SNPE engine
++# comes up null and MialgoNnRun zeroes the UV planes -> green slow-mo output.
++allow miui_platform_app adsprpcd_file:file { getattr open read map };
++allow miui_platform_app vendor_qdsp_device:chr_file { getattr open read ioctl };
++allow miui_platform_app vendor_xdsp_device:chr_file { getattr open read ioctl };
+ 
+ allow miui_platform_app vendor_camera_data_file:dir { append map r_dir_perms write };
+ allow miui_platform_app vendor_camera_data_file:file { getattr open read };
