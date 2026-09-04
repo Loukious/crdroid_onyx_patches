@@ -1,0 +1,16 @@
+diff --git a/private/domain.te b/private/domain.te
+index b560d6ef6..1d06c883b 100644
+--- a/private/domain.te
++++ b/private/domain.te
+@@ -2220,6 +2220,11 @@ full_treble_only(`
+     -shell
+     userdebug_or_eng(`-simpleperf_boot')
+     -system_executes_vendor_violators
++    # MiuiCamera: its SNPE/QNN engine maps the unsigned-PD shell off
++    # /vendor/dsp for slow-motion MEIN interpolation. onyx only; the vendor
++    # policy owns the matching allow rules (onyx-miuicamera platform_app.te).
++    -platform_app
++    -platform_app_36
+     -traced_perf # library/binary access for symbolization
+     -ueventd # reads /vendor/ueventd.rc
+     -vold # loads incremental fs driver

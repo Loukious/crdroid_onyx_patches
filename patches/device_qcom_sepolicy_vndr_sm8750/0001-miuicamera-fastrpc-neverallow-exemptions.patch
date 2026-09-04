@@ -1,0 +1,23 @@
+diff --git a/generic/vendor/common/domain.te b/generic/vendor/common/domain.te
+index 6811cfe1f..b6744ce0e 100644
+--- a/generic/vendor/common/domain.te
++++ b/generic/vendor/common/domain.te
+@@ -92,6 +92,9 @@ userdebug_or_eng(` -vendor_usta_app')
+ userdebug_or_eng(` -vendor_ustaservice_app')
+ userdebug_or_eng(` -vendor_sysmonapp_app_test')
+ userdebug_or_eng(` -vendor_snapcam_app')
++# MiuiCamera: its SNPE/QNN engine opens the CDSP fastrpc nodes for
++# slow-motion MEIN interpolation (see onyx-miuicamera platform_app.te).
++- miui_platform_app
+ }vendor_xdsp_device:chr_file *;
+ 
+ neverallow { domain -init -vendor_init - ueventd } vendor_xdsp_device:chr_file ~{r_file_perms};
+@@ -112,7 +115,7 @@ neverallow { domain
+ userdebug_or_eng(` -vendor_sysmonapp_app_test')
+ } vendor_qdsp_device:chr_file *;
+ neverallow { domain -init -vendor_init - ueventd } vendor_qdsp_device:chr_file ~{r_file_perms};
+-neverallow { appdomain - shell userdebug_or_eng(`-vendor_sysmonapp_app_test') } vendor_qdsp_device:chr_file ~{ioctl read};
++neverallow { appdomain - shell - miui_platform_app userdebug_or_eng(`-vendor_sysmonapp_app_test') } vendor_qdsp_device:chr_file ~{ioctl read};
+ neverallow mediacodec vendor_qdsp_device:chr_file ~{ioctl read};
+ neverallow { domain
+ - init
