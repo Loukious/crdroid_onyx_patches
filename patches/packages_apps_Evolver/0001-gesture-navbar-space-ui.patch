@@ -21,13 +21,13 @@ index c5822eb..7431b33 100644
 +    </string-array>
  </resources>
 diff --git a/res/values/evolution_strings.xml b/res/values/evolution_strings.xml
-index d9ed77e..d62985d 100644
+index 34375af..986606a 100644
 --- a/res/values/evolution_strings.xml
 +++ b/res/values/evolution_strings.xml
-@@ -1808,4 +1808,11 @@
-     <string name="global_actions_use_compose_dialog_summary">Use the new power menu with a customizable, draggable tile layout. Disable to use the classic power menu.</string>
-     <string name="global_actions_advanced_reboot_title">Enable Advanced Reboot</string>
-     <string name="global_actions_advanced_reboot_summary">Unlocks a new dialog that allows advanced rebooting</string>
+@@ -1815,4 +1815,11 @@
+     <string name="screenshot_clipboard_only_summary">Copy screenshot to clipboard instead of saving in storage</string>
+     <string name="hide_status_bar_in_screenshot_title">Hide status bar in screenshots</string>
+     <string name="hide_status_bar_in_screenshot_summary">Crop the status bar area out of full screenshots</string>
 +
 +    <!-- Gesture navigation space -->
 +    <string name="gesture_navbar_space_title">Gesture navigation space</string>
