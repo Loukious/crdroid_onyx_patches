@@ -1,5 +1,5 @@
 diff --git a/android/app/Android.bp b/android/app/Android.bp
-index 016b1cbc0c..a754145f40 100644
+index 016b1cb..a754145 100644
 --- a/android/app/Android.bp
 +++ b/android/app/Android.bp
 @@ -121,6 +121,7 @@ cc_library_shared {
@@ -11,7 +11,7 @@ index 016b1cbc0c..a754145f40 100644
      shared_libs: [
          "libaaudio",
 diff --git a/android/app/res/values/config.xml b/android/app/res/values/config.xml
-index 8b58d397ee..41166108ae 100644
+index 8b58d39..4116610 100644
 --- a/android/app/res/values/config.xml
 +++ b/android/app/res/values/config.xml
 @@ -112,6 +112,7 @@
@@ -23,7 +23,7 @@ index 8b58d397ee..41166108ae 100644
      <!-- Package that is responsible for user interaction on pairing request,
           success or cancel.
 diff --git a/android/app/src/com/android/bluetooth/a2dp/A2dpCodecConfig.java b/android/app/src/com/android/bluetooth/a2dp/A2dpCodecConfig.java
-index bdab78bee5..171433de01 100644
+index bdab78b..171433d 100644
 --- a/android/app/src/com/android/bluetooth/a2dp/A2dpCodecConfig.java
 +++ b/android/app/src/com/android/bluetooth/a2dp/A2dpCodecConfig.java
 @@ -61,6 +61,8 @@ class A2dpCodecConfig {
@@ -81,7 +81,7 @@ index bdab78bee5..171433de01 100644
      }
  
 diff --git a/framework/api/current.txt b/framework/api/current.txt
-index 547ccf32d6..efaa9d15f0 100644
+index 547ccf3..efaa9d1 100644
 --- a/framework/api/current.txt
 +++ b/framework/api/current.txt
 @@ -459,10 +459,14 @@ package android.bluetooth {
@@ -112,7 +112,7 @@ index 547ccf32d6..efaa9d15f0 100644
      field public static final long CODEC_ID_OPUS = 16834815L; // 0x100e0ffL
      field public static final long CODEC_ID_SBC = 0L; // 0x0L
 diff --git a/framework/api/lint-baseline.txt b/framework/api/lint-baseline.txt
-index 5e5e511354..fb67d246e4 100644
+index 5e5e511..fb67d24 100644
 --- a/framework/api/lint-baseline.txt
 +++ b/framework/api/lint-baseline.txt
 @@ -1,4 +1,10 @@
@@ -127,7 +127,7 @@ index 5e5e511354..fb67d246e4 100644
      Field 'ACTION_DISCOVERY_FINISHED' is missing @BroadcastBehavior
  BroadcastBehavior: android.bluetooth.BluetoothAdapter#ACTION_DISCOVERY_STARTED:
 diff --git a/framework/java/android/bluetooth/BluetoothCodecConfig.java b/framework/java/android/bluetooth/BluetoothCodecConfig.java
-index 9b39da73aa..5ee4058bd1 100644
+index 9b39da7..5ee4058 100644
 --- a/framework/java/android/bluetooth/BluetoothCodecConfig.java
 +++ b/framework/java/android/bluetooth/BluetoothCodecConfig.java
 @@ -54,6 +54,10 @@ public final class BluetoothCodecConfig implements Parcelable {
@@ -212,7 +212,7 @@ index 9b39da73aa..5ee4058bd1 100644
                  return true;
          }
 diff --git a/framework/java/android/bluetooth/BluetoothCodecType.java b/framework/java/android/bluetooth/BluetoothCodecType.java
-index dd63131f60..1b023d4adf 100644
+index dd63131..1b023d4 100644
 --- a/framework/java/android/bluetooth/BluetoothCodecType.java
 +++ b/framework/java/android/bluetooth/BluetoothCodecType.java
 @@ -63,6 +63,9 @@ public final class BluetoothCodecType implements Parcelable {
@@ -299,7 +299,7 @@ index dd63131f60..1b023d4adf 100644
          return null;
      }
 diff --git a/system/audio_hal_interface/Android.bp b/system/audio_hal_interface/Android.bp
-index 7a21cccc68..0cd6ece206 100644
+index 7a21ccc..0cd6ece 100644
 --- a/system/audio_hal_interface/Android.bp
 +++ b/system/audio_hal_interface/Android.bp
 @@ -28,6 +28,7 @@ cc_library_static {
@@ -311,7 +311,7 @@ index 7a21cccc68..0cd6ece206 100644
          "libbluetooth_log",
          "libbluetooth_metrics",
 diff --git a/system/audio_hal_interface/aidl/a2dp/a2dp_encoding_aidl.cc b/system/audio_hal_interface/aidl/a2dp/a2dp_encoding_aidl.cc
-index 08389c191a..644c0ef483 100644
+index 08389c1..644c0ef 100644
 --- a/system/audio_hal_interface/aidl/a2dp/a2dp_encoding_aidl.cc
 +++ b/system/audio_hal_interface/aidl/a2dp/a2dp_encoding_aidl.cc
 @@ -26,8 +26,10 @@
@@ -372,7 +372,7 @@ index 08389c191a..644c0ef483 100644
  }
  
 diff --git a/system/audio_hal_interface/aidl/a2dp/a2dp_provider_info.cc b/system/audio_hal_interface/aidl/a2dp/a2dp_provider_info.cc
-index 29684b5ca5..2110d731bf 100644
+index 29684b5..2110d73 100644
 --- a/system/audio_hal_interface/aidl/a2dp/a2dp_provider_info.cc
 +++ b/system/audio_hal_interface/aidl/a2dp/a2dp_provider_info.cc
 @@ -30,6 +30,7 @@
@@ -395,7 +395,7 @@ index 29684b5ca5..2110d731bf 100644
          return BTAV_A2DP_CODEC_INDEX_SOURCE_LDAC;
        }
 diff --git a/system/audio_hal_interface/aidl/a2dp/codec_status_aidl.cc b/system/audio_hal_interface/aidl/a2dp/codec_status_aidl.cc
-index d57a886b16..bca69f697c 100644
+index d57a886..bca69f6 100644
 --- a/system/audio_hal_interface/aidl/a2dp/codec_status_aidl.cc
 +++ b/system/audio_hal_interface/aidl/a2dp/codec_status_aidl.cc
 @@ -18,15 +18,21 @@
@@ -982,7 +982,7 @@ index d57a886b16..bca69f697c 100644
        return A2dpOpusToHalConfig(config, codec_configuration) &&
               IsCodecOffloadingEnabled(*codec_configuration);
 diff --git a/system/bta/av/bta_av_aact.cc b/system/bta/av/bta_av_aact.cc
-index 536cb0db7f..afb6e1e046 100644
+index 536cb0d..f61a3db 100644
 --- a/system/bta/av/bta_av_aact.cc
 +++ b/system/bta/av/bta_av_aact.cc
 @@ -63,6 +63,7 @@
@@ -1091,15 +1091,40 @@ index 536cb0db7f..afb6e1e046 100644
          break;
      }
    } else {
-@@ -3071,6 +3130,7 @@ static void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* of
-   ARRAY_TO_STREAM(p_param, offload_start->codec_info, (int8_t)sizeof(offload_start->codec_info));
+@@ -3050,6 +3109,15 @@ static void offload_vendor_callback(tBTM_VSC_CMPL* param) {
+   }
+ }
+ 
++/*
++ * The HyperOS controller accepts at most 32 bytes of codec-specific
++ * information in the A2DP offload vendor commands, regardless of the
++ * larger AVDT_CODEC_SIZE the stack uses internally for LHDC V5.  Sending
++ * the full array (45 bytes) makes the controller reject the command with
++ * status 0x12 (invalid parameters), so the wire format is capped here.
++ */
++#define BTA_AV_OFFLOAD_CODEC_INFO_LEN 32
++
+ static void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* offload_start) {
+   uint8_t param[sizeof(tBT_A2DP_OFFLOAD)];
+   log::debug("");
+@@ -3068,9 +3136,15 @@ static void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* of
+   UINT16_TO_STREAM(p_param, offload_start->acl_hdl);
+   UINT16_TO_STREAM(p_param, offload_start->l2c_rcid);
+   UINT16_TO_STREAM(p_param, offload_start->mtu);
+-  ARRAY_TO_STREAM(p_param, offload_start->codec_info, (int8_t)sizeof(offload_start->codec_info));
++  // Truncate to the controller's 32-byte codec info limit; trailing bytes
++  // are always zero (offload_start = {}).
++  const int codec_info_len =
++          static_cast<int>(std::min(sizeof(offload_start->codec_info),
++                                     static_cast<size_t>(BTA_AV_OFFLOAD_CODEC_INFO_LEN)));
++  ARRAY_TO_STREAM(p_param, offload_start->codec_info, codec_info_len);
    bta_av_cb.offload_start_pending_hndl = p_scb->hndl;
    bta_av_cb.offload_start_v2 = false;
 +  bta_av_cb.offload_start_qti = false;
    log::info(
            "codec: {:#x}, sample rate: {:#x}, bit depth: {:#x}, channel: {:#x}, "
            "bitrate: {:#x}, ACL: {:#x}, L2CAP: {:#x}, MTU: {:#x}",
-@@ -3081,6 +3141,58 @@ static void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* of
+@@ -3081,6 +3155,59 @@ static void bta_av_vendor_offload_start(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* of
                                                                param, offload_vendor_callback);
  }
  
@@ -1134,8 +1159,9 @@ index 536cb0db7f..afb6e1e046 100644
 +  UINT16_TO_STREAM(p_param, 150);  // time to play
 +
 +  // Unlike the generic command, Qualcomm consumes the complete Adaptive
-+  // AVDTP information element, including the R2.x feature bytes.
-+  ARRAY_TO_STREAM(p_param, p_scb->cfg.codec_info, AVDT_CODEC_SIZE);
++  // AVDTP information element, including the R2.x feature bytes.  The
++  // controller still caps the element at 32 bytes on the wire.
++  ARRAY_TO_STREAM(p_param, p_scb->cfg.codec_info, BTA_AV_OFFLOAD_CODEC_INFO_LEN);
 +
 +  // The Adaptive codec information element selects the DSP profile. Do not
 +  // infer controller QHS/QLL support from the lossless codec configuration.
@@ -1158,7 +1184,7 @@ index 536cb0db7f..afb6e1e046 100644
  static void bta_av_vendor_offload_start_v2(tBTA_AV_SCB* p_scb, A2dpCodecConfigExt* offload_codec) {
    log::debug("");
  
-@@ -3125,6 +3237,7 @@ static void bta_av_vendor_offload_start_v2(tBTA_AV_SCB* p_scb, A2dpCodecConfigEx
+@@ -3125,6 +3252,7 @@ static void bta_av_vendor_offload_start_v2(tBTA_AV_SCB* p_scb, A2dpCodecConfigEx
    // Update the pending state.
    bta_av_cb.offload_start_pending_hndl = p_scb->hndl;
    bta_av_cb.offload_start_v2 = true;
@@ -1166,7 +1192,7 @@ index 536cb0db7f..afb6e1e046 100644
  
    get_btm_client_interface().vendor.BTM_VendorSpecificCommand(HCI_CONTROLLER_A2DP, p_param - param,
                                                                param, offload_vendor_callback);
-@@ -3136,6 +3249,18 @@ void bta_av_vendor_offload_stop() {
+@@ -3136,6 +3264,18 @@ void bta_av_vendor_offload_stop() {
  
    log::debug("");
  
@@ -1185,7 +1211,7 @@ index 536cb0db7f..afb6e1e046 100644
    if (bta_av_cb.offload_start_v2) {
      tBTA_AV_SCB* p_scb = bta_av_hndl_to_scb(bta_av_cb.offload_started_hndl);
      if (p_scb == nullptr) {
-@@ -3178,7 +3303,7 @@ void bta_av_vendor_offload_stop() {
+@@ -3178,7 +3318,7 @@ void bta_av_vendor_offload_stop() {
   ******************************************************************************/
  void bta_av_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /*p_data*/) {
    tBTA_AV bta_av_data = {};
@@ -1194,7 +1220,7 @@ index 536cb0db7f..afb6e1e046 100644
    log::debug("stream {}, audio channels open {}", p_scb->started ? "STARTED" : "STOPPED",
               bta_av_cb.audio_open_cnt);
  
-@@ -3200,10 +3325,29 @@ void bta_av_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /*p_data*/) {
+@@ -3200,10 +3340,29 @@ void bta_av_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /*p_data*/) {
      return;
    }
  
@@ -1225,7 +1251,7 @@ index 536cb0db7f..afb6e1e046 100644
      bta_av_vendor_offload_start(p_scb, &offload_start);
    }
  }
-@@ -3235,7 +3379,7 @@ void bta_av_offload_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
+@@ -3235,7 +3394,7 @@ void bta_av_offload_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
    (*bta_av_cb.p_cback)(BTA_AV_OFFLOAD_START_RSP_EVT, &bta_av_data);
  }
  
@@ -1234,7 +1260,7 @@ index 536cb0db7f..afb6e1e046 100644
    A2dpCodecConfig* CodecConfig = bta_av_get_a2dp_current_codec();
    btav_a2dp_codec_index_t codec_index = A2DP_SourceCodecIndex(p_scb->cfg.codec_info);
    uint32_t codec_type = 0;
-@@ -3258,15 +3402,26 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
+@@ -3258,15 +3417,26 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
      case BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_HD:
        codec_type = BTA_AV_CODEC_TYPE_APTXHD;
        break;
@@ -1263,7 +1289,7 @@ index 536cb0db7f..afb6e1e046 100644
    }
    if (mtu > MAX_3MBPS_AVDTP_MTU) {
      mtu = MAX_3MBPS_AVDTP_MTU;
-@@ -3295,11 +3450,21 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
+@@ -3295,11 +3465,21 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
      case 96000:
        p_a2dp_offload->sample_rate = BTAV_A2DP_CODEC_SAMPLE_RATE_96000;
        break;
@@ -1286,7 +1312,7 @@ index 536cb0db7f..afb6e1e046 100644
    }
    switch (CodecConfig->getAudioBitsPerSample()) {
      case 16:
-@@ -3311,12 +3476,17 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
+@@ -3311,12 +3491,17 @@ static void bta_av_offload_codec_builder(tBTA_AV_SCB* p_scb, tBT_A2DP_OFFLOAD* p
      case 32:
        p_a2dp_offload->bits_per_sample = BTAV_A2DP_CODEC_BITS_PER_SAMPLE_32;
        break;
@@ -1305,7 +1331,7 @@ index 536cb0db7f..afb6e1e046 100644
  void bta_av_api_set_peer_sep(tBTA_AV_DATA* p_data) {
    log::debug("bd_addr={}, sep:{}", p_data->peer_sep.addr, p_data->peer_sep.sep);
 diff --git a/system/bta/av/bta_av_api.cc b/system/bta/av/bta_av_api.cc
-index 59c5630660..63dabeb9dd 100644
+index 59c5630..63dabeb 100644
 --- a/system/bta/av/bta_av_api.cc
 +++ b/system/bta/av/bta_av_api.cc
 @@ -621,6 +621,30 @@ void BTA_AvSetLatency(tBTA_AV_HNDL handle, bool is_low_latency) {
@@ -1340,7 +1366,7 @@ index 59c5630660..63dabeb9dd 100644
   *
   * Function         BTA_AvSetPeerSep
 diff --git a/system/bta/av/bta_av_int.h b/system/bta/av/bta_av_int.h
-index 69d48beeb4..926babb0ba 100644
+index 69d48be..926babb 100644
 --- a/system/bta/av/bta_av_int.h
 +++ b/system/bta/av/bta_av_int.h
 @@ -117,6 +117,8 @@ enum {
@@ -1427,7 +1453,7 @@ index 69d48beeb4..926babb0ba 100644
  void bta_av_signalling_timer(tBTA_AV_DATA* p_data);
  void bta_av_rc_disc_done(tBTA_AV_DATA* p_data);
 diff --git a/system/bta/av/bta_av_main.cc b/system/bta/av/bta_av_main.cc
-index d68be3ddbd..5d299096cd 100644
+index d68be3d..5d29909 100644
 --- a/system/bta/av/bta_av_main.cc
 +++ b/system/bta/av/bta_av_main.cc
 @@ -187,6 +187,7 @@ static void bta_av_api_enable(tBTA_AV_DATA* p_data) {
@@ -1463,7 +1489,7 @@ index d68be3ddbd..5d299096cd 100644
        return "unknown";
    }
 diff --git a/system/bta/include/bta_av_api.h b/system/bta/include/bta_av_api.h
-index 8d4f0cebf3..7c5e5a6f52 100644
+index 8d4f0ce..7c5e5a6 100644
 --- a/system/bta/include/bta_av_api.h
 +++ b/system/bta/include/bta_av_api.h
 @@ -32,6 +32,7 @@
@@ -1508,7 +1534,7 @@ index 8d4f0cebf3..7c5e5a6f52 100644
   *
   * Function         BTA_AvOffloadStart
 diff --git a/system/btif/co/bta_av_co.cc b/system/btif/co/bta_av_co.cc
-index 9750e8cf04..d871510659 100644
+index 9750e8c..d871510 100644
 --- a/system/btif/co/bta_av_co.cc
 +++ b/system/btif/co/bta_av_co.cc
 @@ -51,11 +51,13 @@
@@ -1548,7 +1574,7 @@ index 9750e8cf04..d871510659 100644
    btif_av_report_source_codec_state(p_peer->addr, codec_config, codecs_local_capabilities,
                                      codecs_selectable_capabilities);
 diff --git a/system/btif/include/btif_av.h b/system/btif/include/btif_av.h
-index 46c6c5e8fb..5a97a26bc7 100644
+index 46c6c5e..5a97a26 100644
 --- a/system/btif/include/btif_av.h
 +++ b/system/btif/include/btif_av.h
 @@ -32,6 +32,17 @@
@@ -1579,7 +1605,7 @@ index 46c6c5e8fb..5a97a26bc7 100644
 +
  #endif /* BTIF_AV_H */
 diff --git a/system/btif/src/btif_a2dp_source.cc b/system/btif/src/btif_a2dp_source.cc
-index d9a14021e8..837cb86b87 100644
+index d9a1402..837cb86 100644
 --- a/system/btif/src/btif_a2dp_source.cc
 +++ b/system/btif/src/btif_a2dp_source.cc
 @@ -518,31 +518,43 @@ static void btif_a2dp_source_start_session_delayed(const RawAddress& peer_addres
@@ -1669,7 +1695,7 @@ index d9a14021e8..837cb86b87 100644
  #ifdef __ANDROID__
    ATRACE_INT("btif TX queue", tx_queue_len);
 diff --git a/system/btif/src/btif_av.cc b/system/btif/src/btif_av.cc
-index 323af5320c..737267d46a 100644
+index 323af53..737267d 100644
 --- a/system/btif/src/btif_av.cc
 +++ b/system/btif/src/btif_av.cc
 @@ -71,6 +71,7 @@
@@ -1884,7 +1910,7 @@ index 323af5320c..737267d46a 100644
  
    BtifAvEvent btif_av_event(BTIF_AV_SET_LATENCY_REQ_EVT, &set_latency_req, sizeof(set_latency_req));
 diff --git a/system/btif/src/btif_hci_vs.cc b/system/btif/src/btif_hci_vs.cc
-index 80d2d702ae..e2a2c17bb9 100644
+index 80d2d70..e2a2c17 100644
 --- a/system/btif/src/btif_hci_vs.cc
 +++ b/system/btif/src/btif_hci_vs.cc
 @@ -26,6 +26,7 @@
@@ -1904,7 +1930,7 @@ index 80d2d702ae..e2a2c17bb9 100644
                                    base::Unretained(callbacks), code, data));
  }
 diff --git a/system/include/hardware/bt_av.h b/system/include/hardware/bt_av.h
-index 8d0c37a374..be8ef33dae 100644
+index 8d0c37a..be8ef33 100644
 --- a/system/include/hardware/bt_av.h
 +++ b/system/include/hardware/bt_av.h
 @@ -64,6 +64,12 @@ typedef enum {
@@ -1943,7 +1969,7 @@ index 8d0c37a374..be8ef33dae 100644
    bool lossless;
  
 diff --git a/system/stack/Android.bp b/system/stack/Android.bp
-index 512ca1a023..2fbeab3dd2 100644
+index 512ca1a..2fbeab3 100644
 --- a/system/stack/Android.bp
 +++ b/system/stack/Android.bp
 @@ -54,6 +54,11 @@ cc_library_static {
@@ -1991,7 +2017,7 @@ index 512ca1a023..2fbeab3dd2 100644
          "btm/btm_sco_hci.cc",
          "btm/btm_sco_hfp_hal.cc",
 diff --git a/system/stack/a2dp/a2dp_codec_config.cc b/system/stack/a2dp/a2dp_codec_config.cc
-index 101762dfa5..4f3744f912 100644
+index 101762d..4f3744f 100644
 --- a/system/stack/a2dp/a2dp_codec_config.cc
 +++ b/system/stack/a2dp/a2dp_codec_config.cc
 @@ -50,6 +50,7 @@
@@ -2156,7 +2182,7 @@ index 101762dfa5..4f3744f912 100644
    const tA2DP_ENCODER_INTERFACE* a2dp_encoder_interface = A2DP_GetEncoderInterface(p_codec_info);
    return a2dp_encoder_interface ? a2dp_encoder_interface->get_effective_frame_size() : 0;
 diff --git a/system/stack/a2dp/a2dp_vendor.cc b/system/stack/a2dp/a2dp_vendor.cc
-index a33ac5f42c..ecef66e9c8 100644
+index a33ac5f..ecef66e 100644
 --- a/system/stack/a2dp/a2dp_vendor.cc
 +++ b/system/stack/a2dp/a2dp_vendor.cc
 @@ -31,6 +31,7 @@
@@ -2296,7 +2322,7 @@ index a33ac5f42c..ecef66e9c8 100644
      return A2DP_VendorCodecInfoStringLdac(p_codec_info);
 diff --git a/system/stack/a2dp/a2dp_vendor_aptx_adaptive.cc b/system/stack/a2dp/a2dp_vendor_aptx_adaptive.cc
 new file mode 100644
-index 0000000000..cfe7e66c1a
+index 0000000..cfe7e66
 --- /dev/null
 +++ b/system/stack/a2dp/a2dp_vendor_aptx_adaptive.cc
 @@ -0,0 +1,1365 @@
@@ -3666,7 +3692,7 @@ index 0000000000..cfe7e66c1a
 +  return false;
 +}
 diff --git a/system/stack/acl/acl.cc b/system/stack/acl/acl.cc
-index e6c45e64e1..b6b7a6d4ab 100644
+index e6c45e6..b6b7a6d 100644
 --- a/system/stack/acl/acl.cc
 +++ b/system/stack/acl/acl.cc
 @@ -35,6 +35,8 @@ void tACL_CONN::Reset() {
@@ -3679,7 +3705,7 @@ index e6c45e64e1..b6b7a6d4ab 100644
    switch_role_state_ = BtmAclSwitchKeyState::kIdle;
    sca = 0;
 diff --git a/system/stack/acl/acl.h b/system/stack/acl/acl.h
-index d6db677163..35b9030933 100644
+index d6db677..35b9030 100644
 --- a/system/stack/acl/acl.h
 +++ b/system/stack/acl/acl.h
 @@ -21,6 +21,7 @@
@@ -3703,7 +3729,7 @@ index d6db677163..35b9030933 100644
  #define BTM_SEC_RS_PENDING 1     /* Role Switch in progress */
  #define BTM_SEC_DISC_PENDING 2   /* Disconnect is pending */
 diff --git a/system/stack/btm/btm_client_interface.cc b/system/stack/btm/btm_client_interface.cc
-index d4d397434c..74458ec434 100644
+index d4d3974..74458ec 100644
 --- a/system/stack/btm/btm_client_interface.cc
 +++ b/system/stack/btm/btm_client_interface.cc
 @@ -18,6 +18,7 @@
@@ -3725,7 +3751,7 @@ index d4d397434c..74458ec434 100644
  };
  
 diff --git a/system/stack/btm/btm_devctl.cc b/system/stack/btm/btm_devctl.cc
-index a6d42b476e..c87423f7b3 100644
+index a6d42b4..c87423f 100644
 --- a/system/stack/btm/btm_devctl.cc
 +++ b/system/stack/btm/btm_devctl.cc
 @@ -39,6 +39,7 @@
@@ -3748,7 +3774,7 @@ index a6d42b476e..c87423f7b3 100644
  /*******************************************************************************
 diff --git a/system/stack/btm/btm_qhs.cc b/system/stack/btm/btm_qhs.cc
 new file mode 100644
-index 0000000000..4d4d33449d
+index 0000000..4d4d334
 --- /dev/null
 +++ b/system/stack/btm/btm_qhs.cc
 @@ -0,0 +1,388 @@
@@ -4142,7 +4168,7 @@ index 0000000000..4d4d33449d
 +}
 diff --git a/system/stack/btm/btm_qhs.h b/system/stack/btm/btm_qhs.h
 new file mode 100644
-index 0000000000..92c4e0fd91
+index 0000000..92c4e0f
 --- /dev/null
 +++ b/system/stack/btm/btm_qhs.h
 @@ -0,0 +1,19 @@
@@ -4166,7 +4192,7 @@ index 0000000000..92c4e0fd91
 +void BTM_QllVendorSpecificEvent(uint8_t subevent, const uint8_t* payload, size_t length);
 +void BTM_QhsTestMaybeInjectBrEdrState(const RawAddress& bd_addr);
 diff --git a/system/stack/include/a2dp_codec_api.h b/system/stack/include/a2dp_codec_api.h
-index b1948c35cc..dbfa69c32a 100644
+index b1948c3..dbfa69c 100644
 --- a/system/stack/include/a2dp_codec_api.h
 +++ b/system/stack/include/a2dp_codec_api.h
 @@ -706,6 +706,13 @@ int A2DP_GetEecoderEffectiveFrameSize(const uint8_t* p_codec_info);
@@ -4184,7 +4210,7 @@ index b1948c35cc..dbfa69c32a 100644
  #ifndef DEFINE_ENUM_FLAG_OPERATORS
  // Use NOLINT to suppress missing parentheses warnings around bitmask.
 diff --git a/system/stack/include/a2dp_constants.h b/system/stack/include/a2dp_constants.h
-index 73eb300ded..6e8e325b87 100644
+index 73eb300..6e8e325 100644
 --- a/system/stack/include/a2dp_constants.h
 +++ b/system/stack/include/a2dp_constants.h
 @@ -23,7 +23,9 @@
@@ -4216,7 +4242,7 @@ index 73eb300ded..6e8e325b87 100644
    LHDCV5 = VendorCodecId(kLhdcV5CompanyId, kLhdcV5CodecId),
 diff --git a/system/stack/include/a2dp_vendor_aptx_adaptive.h b/system/stack/include/a2dp_vendor_aptx_adaptive.h
 new file mode 100644
-index 0000000000..d2016d59a3
+index 0000000..d2016d5
 --- /dev/null
 +++ b/system/stack/include/a2dp_vendor_aptx_adaptive.h
 @@ -0,0 +1,213 @@
@@ -4435,7 +4461,7 @@ index 0000000000..d2016d59a3
 +#endif  // A2DP_VENDOR_APTX_ADAPTIVE_H
 diff --git a/system/stack/include/a2dp_vendor_aptx_adaptive_constants.h b/system/stack/include/a2dp_vendor_aptx_adaptive_constants.h
 new file mode 100644
-index 0000000000..054943445d
+index 0000000..0549434
 --- /dev/null
 +++ b/system/stack/include/a2dp_vendor_aptx_adaptive_constants.h
 @@ -0,0 +1,117 @@
@@ -4557,7 +4583,7 @@ index 0000000000..054943445d
 +#endif  // A2DP_VENDOR_APTX_ADAPTIVE_CONSTANTS_H
 +
 diff --git a/system/stack/include/btm_client_interface.h b/system/stack/include/btm_client_interface.h
-index 542c757603..75d815664e 100644
+index 542c757..75d8156 100644
 --- a/system/stack/include/btm_client_interface.h
 +++ b/system/stack/include/btm_client_interface.h
 @@ -152,6 +152,10 @@ struct btm_client_interface_t {
