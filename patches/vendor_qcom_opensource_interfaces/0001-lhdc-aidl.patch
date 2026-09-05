@@ -1,16 +1,3 @@
-diff --git a/bluetooth_audio/aidl/Android.bp b/bluetooth_audio/aidl/Android.bp
-index 62f0b8b..9203fbb 100644
---- a/bluetooth_audio/aidl/Android.bp
-+++ b/bluetooth_audio/aidl/Android.bp
-@@ -10,7 +10,7 @@ aidl_interface {
-         ndk: {
-             apex_available: [
-                 "//apex_available:platform",
--                "com.android.btservices",
-+                "com.android.bt",
-             ],
-             min_sdk_version: "31",
-         },
 diff --git a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/.hash b/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/.hash
 index c90a552..2edf6b9 100644
 --- a/bluetooth_audio/aidl/aidl_api/vendor.qti.hardware.bluetooth.audio/1/.hash
