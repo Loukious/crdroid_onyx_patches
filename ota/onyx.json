@@ -1,3 +1,22 @@
 {
-  "response": []
+  "response": [
+    {
+      "maintainer": "Loukious",
+      "oem": "Xiaomi",
+      "device": "POCO F7",
+      "filename": "EvolutionX-17.0-20260906-onyx-12.1-Unofficial.zip",
+      "download": "https://sourceforge.net/projects/onyx-evox-loukious/files/EvolutionX-17.0-20260906-onyx-12.1-Unofficial.zip/download?use_mirror=versatile",
+      
+      "timestamp": 1788659744,
+      "md5": "3ee1f01c8f8a10dc5fc7cf54eb89618e",
+      "sha256": "596b3da7b37df4acdc8a94c0716bc6a3810361d69728f2103b2738490c3043ab",
+      "size": 5157909327,
+      "version": "12.1",
+      "buildtype": "userdebug",
+      "forum": "https://github.com/Loukious/crave_aosp_builder/discussions",
+      "firmware": "https://sourceforge.net/projects/onyx-evox-loukious/files/",
+      "paypal": "https://buymeacoffee.com/loukious",
+      "github": "Loukious"
+    }
+  ]
 }
