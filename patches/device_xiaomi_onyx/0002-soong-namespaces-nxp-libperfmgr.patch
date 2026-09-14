@@ -1,0 +1,18 @@
+diff --git a/device.mk b/device.mk
+index 6d7a968..4ebf522 100644
+--- a/device.mk
++++ b/device.mk
+@@ -394,9 +394,12 @@ PRODUCT_SOONG_NAMESPACES += \
+     $(LOCAL_PATH) \
+     hardware/google/interfaces \
+     hardware/google/pixel \
++    hardware/google/pixel/power-libperfmgr \
+     hardware/lineage/interfaces/power-libperfmgr \
+     hardware/qcom-caf/common/libqti-perfd-client \
+-    hardware/xiaomi
++    hardware/xiaomi \
++    hardware/nxp/keymint/generic \
++    hardware/nxp/weaver/generic
+ 
+ # Telephony
+ PRODUCT_PACKAGES += \

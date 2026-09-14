@@ -1,5 +1,20 @@
+diff --git a/res/values/evolution_strings.xml b/res/values/evolution_strings.xml
+index 986606a..7f66819 100644
+--- a/res/values/evolution_strings.xml
++++ b/res/values/evolution_strings.xml
+@@ -1810,6 +1810,10 @@
+     <string name="global_actions_advanced_reboot_title">Enable Advanced Reboot</string>
+     <string name="global_actions_advanced_reboot_summary">Unlocks a new dialog that allows advanced rebooting</string>
+ 
++    <!-- OTG -->
++    <string name="otg_toggle_title">OTG</string>
++    <string name="otg_toggle_summary">Allow the USB Type-C port to detect OTG adapters. Turns off automatically after 10 minutes idle</string>
++
+     <!-- Screenshots -->
+     <string name="screenshot_clipboard_only_title">Copy to clipboard only</string>
+     <string name="screenshot_clipboard_only_summary">Copy screenshot to clipboard instead of saving in storage</string>
 diff --git a/res/xml/evolution_settings_miscellaneous.xml b/res/xml/evolution_settings_miscellaneous.xml
-index 7ebd028..05f457f 100644
+index 82a86fd..a5d7812 100644
 --- a/res/xml/evolution_settings_miscellaneous.xml
 +++ b/res/xml/evolution_settings_miscellaneous.xml
 @@ -130,6 +130,11 @@
@@ -14,18 +29,6 @@ index 7ebd028..05f457f 100644
      </PreferenceCategory>
  
      <PreferenceCategory
-diff --git a/res/values/evolution_strings.xml b/res/values/evolution_strings.xml
---- a/res/values/evolution_strings.xml
-+++ b/res/values/evolution_strings.xml
-@@ -1822,4 +1822,8 @@
-     <string name="gesture_navbar_space_default">Default</string>
-     <string name="gesture_navbar_space_compact">Compact</string>
-     <string name="gesture_navbar_space_minimal">Minimal</string>
-+
-+    <!-- OTG -->
-+    <string name="otg_toggle_title">OTG</string>
-+    <string name="otg_toggle_summary">Allow the USB Type-C port to detect OTG adapters. Turns off automatically after 10 minutes idle</string>
- </resources>
 diff --git a/src/org/evolution/settings/preferences/OtgSwitchPreference.java b/src/org/evolution/settings/preferences/OtgSwitchPreference.java
 new file mode 100644
 index 0000000..0dd38f7

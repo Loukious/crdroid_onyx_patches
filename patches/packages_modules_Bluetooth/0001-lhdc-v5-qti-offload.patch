@@ -11,13 +11,17 @@ index 016b1cb..a754145 100644
      shared_libs: [
          "libaaudio",
 diff --git a/android/app/res/values/config.xml b/android/app/res/values/config.xml
-index 8b58d39..d31c625 100644
+index 8b58d39..6855ed1 100644
 --- a/android/app/res/values/config.xml
 +++ b/android/app/res/values/config.xml
-@@ -112,6 +112,10 @@
+@@ -111,7 +111,13 @@
+     <integer name="a2dp_source_codec_priority_aac">2001</integer>
      <integer name="a2dp_source_codec_priority_aptx">3001</integer>
      <integer name="a2dp_source_codec_priority_aptx_hd">4001</integer>
-     <integer name="a2dp_source_codec_priority_ldac">5001</integer>
+-    <integer name="a2dp_source_codec_priority_ldac">5001</integer>
++    <!-- Ranked by max quality: LDAC (24/96, 990kbps) above aptX-Adaptive
++         (~420kbps) but below the LHDC family (vendor-optimized, 24/96+). -->
++    <integer name="a2dp_source_codec_priority_ldac">7501</integer>
 +    <integer name="a2dp_source_codec_priority_lhdcv2">8002</integer>
 +    <integer name="a2dp_source_codec_priority_lhdcv3">8003</integer>
 +    <integer name="a2dp_source_codec_priority_lhdcv5">8004</integer>
@@ -26,10 +30,18 @@ index 8b58d39..d31c625 100644
      <!-- Package that is responsible for user interaction on pairing request,
           success or cancel.
 diff --git a/android/app/src/com/android/bluetooth/a2dp/A2dpCodecConfig.java b/android/app/src/com/android/bluetooth/a2dp/A2dpCodecConfig.java
-index bdab78b..9a5bfcb 100644
+index bdab78b..a619a24 100644
 --- a/android/app/src/com/android/bluetooth/a2dp/A2dpCodecConfig.java
 +++ b/android/app/src/com/android/bluetooth/a2dp/A2dpCodecConfig.java
-@@ -59,8 +59,14 @@ class A2dpCodecConfig {
+@@ -32,7 +32,6 @@ import android.util.Log;
+ 
+ import com.android.bluetooth.R;
+ import com.android.bluetooth.flags.Flags;
+-import com.android.modules.utils.build.SdkLevel;
+ 
+ import java.util.List;
+ import java.util.Objects;
+@@ -59,8 +58,14 @@ class A2dpCodecConfig {
              BluetoothCodecConfig.CODEC_PRIORITY_DEFAULT;
      private @CodecPriority int mA2dpSourceCodecPriorityOpus =
              BluetoothCodecConfig.CODEC_PRIORITY_DEFAULT;
@@ -44,10 +56,21 @@ index bdab78b..9a5bfcb 100644
  
      private BluetoothCodecConfig[] mCodecConfigOffloading = new BluetoothCodecConfig[0];
  
-@@ -302,6 +308,32 @@ class A2dpCodecConfig {
+@@ -302,25 +307,64 @@ class A2dpCodecConfig {
              mA2dpSourceCodecPriorityOpus = value;
          }
  
+-        // LHDCv5 codec is not supported on Android 16 Baklava, the audio framework
+-        // will not recognize the codec type and default to SBC as default
+-        // configuration, which is often offloaded. This configuration can be overridden
+-        // by setting the system property for LHDCv5 codec priority, e.g. in case SBC
+-        // is not offloaded on the platform.
+-        value =
+-                SystemProperties.getInt(
+-                        "bluetooth.a2dp.source.lhdcv5_priority.config",
+-                        SdkLevel.isAtLeastC()
+-                                ? 5002
+-                                : BluetoothCodecConfig.CODEC_PRIORITY_DISABLED);
 +        try {
 +            value =
 +                    SystemProperties.getInt(
@@ -73,11 +96,17 @@ index bdab78b..9a5bfcb 100644
 +                && (value < BluetoothCodecConfig.CODEC_PRIORITY_HIGHEST)) {
 +            mA2dpSourceCodecPriorityLhdcv3 = value;
 +        }
-+
-         // LHDCv5 codec is not supported on Android 16 Baklava, the audio framework
-         // will not recognize the codec type and default to SBC as default
-         // configuration, which is often offloaded. This configuration can be overridden
-@@ -319,8 +351,25 @@ class A2dpCodecConfig {
+ 
++        try {
++            value =
++                    SystemProperties.getInt(
++                            "bluetooth.a2dp.source.lhdcv5_priority.config",
++                            resources.getInteger(R.integer.a2dp_source_codec_priority_lhdcv5));
++        } catch (NotFoundException e) {
++            value = BluetoothCodecConfig.CODEC_PRIORITY_DEFAULT;
++        }
+         if ((value >= BluetoothCodecConfig.CODEC_PRIORITY_DISABLED)
+                 && (value < BluetoothCodecConfig.CODEC_PRIORITY_HIGHEST)) {
              mA2dpSourceCodecPriorityLhdcv5 = value;
          }
  
@@ -104,7 +133,7 @@ index bdab78b..9a5bfcb 100644
          codecConfig =
                  new BluetoothCodecConfig.Builder()
                          .setCodecType(BluetoothCodecConfig.SOURCE_CODEC_TYPE_SBC)
-@@ -357,6 +406,26 @@ class A2dpCodecConfig {
+@@ -357,6 +401,26 @@ class A2dpCodecConfig {
                          .setCodecPriority(mA2dpSourceCodecPriorityOpus)
                          .build();
          codecConfigArray[5] = codecConfig;
@@ -131,7 +160,7 @@ index bdab78b..9a5bfcb 100644
          codecConfig =
                  new BluetoothCodecConfig.Builder()
                          .setExtendedCodecType(
-@@ -364,7 +433,18 @@ class A2dpCodecConfig {
+@@ -364,7 +428,18 @@ class A2dpCodecConfig {
                                          7, BluetoothCodecType.CODEC_ID_LHDCV5, "LHDCV5"))
                          .setCodecPriority(mA2dpSourceCodecPriorityLhdcv5)
                          .build();
@@ -1929,7 +1958,7 @@ index d9a1402..159cc1a 100644
  #ifdef __ANDROID__
    ATRACE_INT("btif TX queue", tx_queue_len);
 diff --git a/system/btif/src/btif_av.cc b/system/btif/src/btif_av.cc
-index 323af53..cbae407 100644
+index a78a63d..fe4e479 100644
 --- a/system/btif/src/btif_av.cc
 +++ b/system/btif/src/btif_av.cc
 @@ -71,6 +71,7 @@
