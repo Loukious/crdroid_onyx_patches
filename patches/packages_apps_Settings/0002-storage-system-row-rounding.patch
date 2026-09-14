@@ -1,0 +1,40 @@
+diff --git a/src/com/android/settings/deviceinfo/storage/StorageAsyncLoader.java b/src/com/android/settings/deviceinfo/storage/StorageAsyncLoader.java
+index 7b8b237..f653e14 100644
+--- a/src/com/android/settings/deviceinfo/storage/StorageAsyncLoader.java
++++ b/src/com/android/settings/deviceinfo/storage/StorageAsyncLoader.java
+@@ -153,10 +153,32 @@ public class StorageAsyncLoader
+     }
+ 
+     private long getSystemSize() {
++        // Upstream computes this as
++        //     StorageStatsManager.getTotalBytes(UUID_DEFAULT)
++        //     - Environment.getDataDirectory().getTotalSpace()
++        // where the first term is roundStorageSize(data.total + root.total):
++        // a marketing-rounded total (512 GB, powers of 1000) subtracted
++        // against raw statfs bytes. Whenever the data partition alone exceeds
++        // the rounded bucket -- a 514 GB userdata on a "512 GB" device like
++        // onyx -- the difference goes negative and the OS row shows a
++        // negative size. statfs of the root directory is no alternative
++        // either: on KernelSU devices /system sits behind a module overlayfs
++        // and reports the overlay's backing filesystem instead of the
++        // partition.
++        //
++        // Report the real footprint: everything on the internal block device
++        // that is not usable for user data -- the system, vendor and other
++        // partitions plus filesystem metadata. That is the raw block device
++        // size (same source the >512 GB path of
++        // StorageStatsService.getTotalBytes already uses) minus the data
++        // filesystem's total.
++        final long dataTotal = Environment.getDataDirectory().getTotalSpace();
+         try {
+-            return mStatsManager.getTotalBytes(StorageManager.UUID_DEFAULT)
+-                    - Environment.getDataDirectory().getTotalSpace();
+-        } catch (IOException e) {
++            return Math.max(0,
++                    getContext().getSystemService(StorageManager.class)
++                            .getInternalStorageBlockDeviceSize()
++                            - dataTotal);
++        } catch (Exception e) {
+             Log.e(TAG, "Exception in calculating System category size", e);
+             return 0;
+         }
