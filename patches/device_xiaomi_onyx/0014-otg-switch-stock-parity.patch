@@ -1,0 +1,71 @@
+diff --git a/rootdir/etc/init.onyx.rc b/rootdir/etc/init.onyx.rc
+index 59700a4..a11f352 100644
+--- a/rootdir/etc/init.onyx.rc
++++ b/rootdir/etc/init.onyx.rc
+@@ -203,6 +203,15 @@ on property:dev.bootcomplete=1
+     chown system system /sys/class/xm_power/charger/smart_charge/smart_night
+     chmod 0660 /sys/class/xm_power/charger/smart_charge/smart_night
+ 
++    # Type-C OTG switch node. Stock wires the same chown/chmod from the
++    # micharge HAL's rc so Settings can reach the node; this ROM's micharge
++    # HAL is a dummy, so the Settings OTG switch (Evolver > Miscellaneous)
++    # reads and writes the node directly. The node itself is the state:
++    # nothing is persisted, OTG detection boots off like stock, and the
++    # charger firmware clears the node again ~10 minutes after idle.
++    chown system system /sys/class/xm_power/typec/cc_toggle
++    chmod 0660 /sys/class/xm_power/typec/cc_toggle
++
+ # Enable WLAN SSR recovery
+ on property:persist.vendor.ssr.restart_level=ALL_ENABLE
+     write /sys/kernel/cnss/recovery 3
+diff --git a/sepolicy/private/system_app.te b/sepolicy/private/system_app.te
+new file mode 100644
+index 0000000..0c096e6
+--- /dev/null
++++ b/sepolicy/private/system_app.te
+@@ -0,0 +1,7 @@
++# The OTG switch in Evolver > Miscellaneous reads and writes the Type-C
++# cc_toggle node (/sys/class/xm_power/typec/cc_toggle) directly. On stock the
++# micharge HAL brokers this; this ROM ships a dummy HAL, so Settings (running
++# as system_app) touches the node itself. The node is chown'd to system with
++# mode 0660 in init.onyx.rc, exactly like stock's micharge service rc does.
++allow system_app vendor_sysfs_xm_power:dir search;
++allow system_app vendor_sysfs_xm_power:file rw_file_perms;
+diff --git a/sepolicy/public/file.te b/sepolicy/public/file.te
+new file mode 100644
+index 0000000..4e59012
+--- /dev/null
++++ b/sepolicy/public/file.te
+@@ -0,0 +1,5 @@
++# Charger sysfs nodes (/sys/class/xm_power/**). Declared here rather than in
++# vendor/ so the platform-side policy below can reference the type:
++# private/system_app.te grants Settings (which hosts the Evolver OTG switch)
++# direct read/write access to the cc_toggle node, matching stock's OTG switch.
++type vendor_sysfs_xm_power, fs_type, sysfs_type;
+diff --git a/sepolicy/vendor/file.te b/sepolicy/vendor/file.te
+index 214a6eb..106ee91 100644
+--- a/sepolicy/vendor/file.te
++++ b/sepolicy/vendor/file.te
+@@ -11,9 +11,6 @@ type sys_thermal_flash_state, fs_type, sysfs_type;
+ type sys_thermal_torch_real_level, fs_type, sysfs_type;
+ type sysfs_csiphy_umd_paras, fs_type, sysfs_type;
+ 
+-# Charger
+-type vendor_sysfs_xm_power, fs_type, sysfs_type;
+-
+ # Diag
+ type minidump_data_file, data_file_type, file_type;
+ type vendor_bsp_data_log_file, data_file_type, file_type;
+diff --git a/sepolicy/vendor/init.te b/sepolicy/vendor/init.te
+index cc75877..9a8740d 100644
+--- a/sepolicy/vendor/init.te
++++ b/sepolicy/vendor/init.te
+@@ -11,3 +11,8 @@ set_prop(vendor_init, vendor_touchfeature_prop)
+ allow vendor_init minidump_data_file:dir create_dir_perms;
+ allow vendor_init minidump_data_file:file create_file_perms;
+ allow vendor_init migt_dev:chr_file getattr;
++
++# chown/chmod of the Type-C OTG switch node at dev.bootcomplete (init.onyx.rc),
++# mirroring stock's micharge service rc. Needed so Settings (system_app) can
++# read/write the node; see also private/system_app.te.
++allow vendor_init vendor_sysfs_xm_power:file { getattr open read setattr };
