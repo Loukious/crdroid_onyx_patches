@@ -21,6 +21,11 @@
 #        SKIP_WLAN=1          don't overlay the wlan driver
 #        GITHUB_TOKEN         used for the release API if the repo is private
 #
+#   stage_kernel also records the release tag it staged in
+#   vendor/extra/kernel/onyx/.kernel-release-tag; ci/pin-konoha-symvers.sh
+#   turns that into SYMVERS_URL so the wlan module builds against exactly
+#   the kernel the ROM ships.
+#
 # ---------------------------------------------------------------------------
 # A NOTE ON PIPELINES, because it has already cost one build (crave 295566, a
 # four-minute failure that took three hours of queue to reach).
@@ -358,6 +363,22 @@ stage_kernel() {
         return 1
     fi
 
+    # The release tag, recorded next to the staged Image so the build recipes
+    # can pin the wlan module's Module.symvers to this exact kernel (see
+    # ci/pin-konoha-symvers.sh). Parsed with a bash regex rather than a
+    # grep/head pipeline so nothing here can be SIGPIPEd under pipefail.
+    local ktag=''
+    [[ "$json" =~ \"tag_name\":\ *\"([^\"]+)\" ]] && ktag="${BASH_REMATCH[1]}"
+
+    # Pinning needs the release to carry a Module.symvers asset; releases
+    # published before 2026-09-14 don't, and the wlan build falls back to the
+    # legacy manually-maintained wlan-kernel-symbols release.
+    case "$json" in
+        *'"name": "Module.symvers"'*|*'"name":"Module.symvers"'*) ;;
+        *) ylw "   note: no Module.symvers asset in this release;" \
+             "the wlan build will use the legacy wlan-kernel-symbols symvers" ;;
+    esac
+
     ylw "   fetching $(basename "$asset")"
     local tmp; tmp="$(mktemp -d)"; _TMPS+=("$tmp")
     curl -fsSL "${auth[@]+"${auth[@]}"}" -o "$tmp/ak3.zip" "$asset" \
@@ -383,6 +404,11 @@ stage_kernel() {
     mv -f "$tmp/Image" "$dest" || { red "FATAL: cannot write $dest"; return 1; }
     local sz; sz="$(stat -c%s "$dest")"
     grn "   ++ $dest ($sz bytes, from $src, arm64 magic ok)"
+    if [ -n "$ktag" ]; then
+        printf '%s\n' "$ktag" > "$(dirname "$dest")/.kernel-release-tag" \
+            || red "   !! could not write the kernel-release-tag file (non-fatal)"
+        grn "   ++ kernel release tag: $ktag"
+    fi
 }
 
 # -------------------------------------------------------------------- preflight

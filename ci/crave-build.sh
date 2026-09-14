@@ -198,6 +198,10 @@ fi
 # a crave run on the build server, not a Devspace build -- the rules only
 # forbid make/mka in the Devspace CLI.
 say "preparing the Kono-Ha kernel-ABI tree (before mka)"
+# Pin the Module.symvers to the kernel release apply.sh staged for THIS build
+# (the release's own asset, not the manual wlan-kernel-symbols release).
+# Sourced: it exports SYMVERS_URL/SYMVERS_SHA256_URL for the prep script.
+source "$HERE/ci/pin-konoha-symvers.sh"
 prep="kernel/xiaomi/sm8735-modules/qcom/opensource/wlan/qcacld-3.0/konoha-abi-prep.sh"
 [ -f "$prep" ] || { echo "FATAL: $prep missing (wlan overlay did not land?)"; exit 1; }
 clang_bin="$(ls -d prebuilts/clang/host/linux-x86/clang-*/bin 2>/dev/null | sort -V | tail -1)"
