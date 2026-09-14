@@ -1,0 +1,115 @@
+diff --git a/res/xml/evolution_settings_miscellaneous.xml b/res/xml/evolution_settings_miscellaneous.xml
+index 7ebd028..05f457f 100644
+--- a/res/xml/evolution_settings_miscellaneous.xml
++++ b/res/xml/evolution_settings_miscellaneous.xml
+@@ -130,6 +130,11 @@
+             android:summary="@string/hide_status_bar_in_screenshot_summary"
+             android:defaultValue="false" />
+ 
++        <org.evolution.settings.preferences.OtgSwitchPreference
++            android:key="otg_toggle"
++            android:title="@string/otg_toggle_title"
++            android:summary="@string/otg_toggle_summary" />
++
+     </PreferenceCategory>
+ 
+     <PreferenceCategory
+diff --git a/res/values/evolution_strings.xml b/res/values/evolution_strings.xml
+--- a/res/values/evolution_strings.xml
++++ b/res/values/evolution_strings.xml
+@@ -1822,4 +1822,8 @@
+     <string name="gesture_navbar_space_default">Default</string>
+     <string name="gesture_navbar_space_compact">Compact</string>
+     <string name="gesture_navbar_space_minimal">Minimal</string>
++
++    <!-- OTG -->
++    <string name="otg_toggle_title">OTG</string>
++    <string name="otg_toggle_summary">Allow the USB Type-C port to detect OTG adapters. Turns off automatically after 10 minutes idle</string>
+ </resources>
+diff --git a/src/org/evolution/settings/preferences/OtgSwitchPreference.java b/src/org/evolution/settings/preferences/OtgSwitchPreference.java
+new file mode 100644
+index 0000000..0dd38f7
+--- /dev/null
++++ b/src/org/evolution/settings/preferences/OtgSwitchPreference.java
+@@ -0,0 +1,81 @@
++/*
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.evolution.settings.preferences;
++
++import android.content.Context;
++import android.util.AttributeSet;
++import android.util.Log;
++
++import lineageos.preference.SelfRemovingSwitchPreference;
++
++import java.io.FileOutputStream;
++import java.nio.file.Files;
++import java.nio.file.Paths;
++
++/**
++ * Switch backed directly by the Type-C cc_toggle sysfs node, mirroring the
++ * stock OTG switch: the node itself is the state. Nothing is persisted, so
++ * OTG detection boots off until the user flips the switch (like stock), and
++ * the charger firmware clears the node again roughly ten minutes after the
++ * port goes idle.
++ */
++public class OtgSwitchPreference extends SelfRemovingSwitchPreference {
++
++    private static final String TAG = "OtgSwitchPreference";
++    private static final String OTG_NODE = "/sys/class/xm_power/typec/cc_toggle";
++
++    public OtgSwitchPreference(Context context, AttributeSet attrs, int defStyle) {
++        super(context, attrs, defStyle);
++    }
++
++    public OtgSwitchPreference(Context context, AttributeSet attrs) {
++        super(context, attrs);
++    }
++
++    public OtgSwitchPreference(Context context) {
++        super(context);
++    }
++
++    @Override
++    protected boolean isPersisted() {
++        // The node always holds the state; there is no persisted storage.
++        return true;
++    }
++
++    @Override
++    protected void putBoolean(String key, boolean value) {
++        writeNode(value ? "1" : "0");
++    }
++
++    @Override
++    protected boolean getBoolean(String key, boolean defaultValue) {
++        return "1".equals(readNode());
++    }
++
++    private static String readNode() {
++        try {
++            return new String(Files.readAllBytes(Paths.get(OTG_NODE))).trim();
++        } catch (Exception e) {
++            Log.e(TAG, "failed to read " + OTG_NODE, e);
++            return "";
++        }
++    }
++
++    private static void writeNode(String value) {
++        // Skip no-op writes: the preference framework persists the current
++        // value when the screen is opened, and rewriting "1" would re-arm
++        // the firmware's idle timer (and poke the ADSP) on every visit.
++        if (value.equals(readNode())) {
++            return;
++        }
++        try {
++            FileOutputStream os = new FileOutputStream(OTG_NODE);
++            os.write(value.getBytes());
++            os.close();
++        } catch (Exception e) {
++            Log.e(TAG, "failed to write " + OTG_NODE, e);
++        }
++    }
++}
