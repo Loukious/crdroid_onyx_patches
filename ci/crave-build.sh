@@ -12,7 +12,7 @@
 # against the rules (https://github.com/FOSSonTop/crave/blob/master/rules.md).
 # It is invoked by .github/workflows/crdroid-onyx.yml as:
 #
-#   crave run --projectID 93 --no-patch -- "<clone this repo> && bash ci/crave-build.sh"
+#   crave run --projectID "$CRAVE_PROJECT_ID" --no-patch -- "<clone this repo> && bash ci/crave-build.sh"
 #
 # Keeping the recipe here rather than inline in the workflow means it is
 # reviewable in git, editable without touching CI, and the crave command string
