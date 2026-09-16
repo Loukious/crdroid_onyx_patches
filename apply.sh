@@ -120,26 +120,62 @@ apply_patches() {
             n="$(basename "$patch")"
 
             # Already applied? Then the reverse patch applies cleanly.
-            if git -C "$ROM/$proj" apply --reverse --check "$patch" 2>/dev/null; then
+            if patch -d "$ROM/$proj" -p1 -R --dry-run < "$patch" >/dev/null 2>&1; then
                 echo "   -- $n (already applied)"
                 already=$((already+1))
                 continue
             fi
 
-            if git -C "$ROM/$proj" apply --3way --whitespace=nowarn "$patch" 2>/dev/null; then
-                grn "   ++ $n"
-                applied=$((applied+1))
-            elif git -C "$ROM/$proj" apply --whitespace=nowarn "$patch" 2>/dev/null; then
-                # --3way needs the pre-image blobs in the object store; on a
-                # shallow sync they may be absent, so retry with plain context.
-                grn "   ++ $n (context match)"
+            # Use patch(1) with --fuzz=3 instead of git apply.  patch(1)
+            # tolerates line-number drift (reports "offset +N lines") rather
+            # than failing outright, which is the #1 cause of build breakage
+            # when upstream adds/removes lines above a hunk.
+            local pout
+            if pout="$(patch -d "$ROM/$proj" -p1 --fuzz=3 --no-backup-if-mismatch < "$patch" 2>&1)"; then
+                # Report any fuzz/offset so it shows in CI logs as a heads-up.
+                # Captured instead of piped: see the pipeline note up top.
+                local fuzz_match
+                fuzz_match="$(printf '%s' "$pout" | grep -E 'offset|fuzz' || true)"
+                if [ -n "$fuzz_match" ]; then
+                    ylw "   ++ $n (applied with fuzz/offset)"
+                else
+                    grn "   ++ $n"
+                fi
                 applied=$((applied+1))
             else
                 red "   !! $n FAILED"
-                # Captured, not piped into head: see the pipeline note up top.
-                local diag
-                diag="$(git -C "$ROM/$proj" apply --3way --whitespace=nowarn "$patch" 2>&1)"
-                printf '%s\n' "$diag" | sed -n '1,10p' | sed 's/^/         /'
+                printf '%s\n' "$pout" | sed -n '1,10p' | sed 's/^/         /'
+                fail=1
+            fi
+        done
+    done
+}
+
+# -------------------------------------------------------------------- scripts
+# Content-matching scripts for simple edits (line additions/removals/swaps)
+# that should never break on upstream line-number drift.  Each script receives
+# $ROM/$proj as $1 and is expected to be idempotent.
+apply_scripts() {
+    local sdir key proj script n
+    for sdir in "$HERE"/scripts/*/; do
+        [ -d "$sdir" ] || continue
+        key="$(basename "$sdir")"
+        proj="${PROJECT[$key]:-}"
+        if [ -z "$proj" ]; then
+            red "FATAL: no project mapping for scripts/$key"; fail=1; continue
+        fi
+        if [ ! -d "$ROM/$proj" ]; then
+            red "FATAL: $proj missing from the tree (sync incomplete?)"; fail=1; continue
+        fi
+
+        echo "== $proj (scripts)"
+        for script in "$sdir"*.sh; do
+            [ -e "$script" ] || continue
+            n="$(basename "$script")"
+            if bash "$script" "$ROM/$proj"; then
+                applied=$((applied+1))
+            else
+                red "   !! $n FAILED"
                 fail=1
             fi
         done
@@ -435,7 +471,7 @@ preflight() {
         grn "   ok"
     fi
 
-    echo "== preflight 3/4: patch set is structurally sound"
+    echo "== preflight 3/5: patch set is structurally sound"
     local pdir key p n dirs=0 pats=0
     for pdir in "$HERE"/patches/*/; do
         [ -d "$pdir" ] || continue
@@ -459,10 +495,32 @@ preflight() {
         done
         [ "$found" = 1 ] || { red "   !! patches/$key contains no .patch files"; rc=1; }
     done
-    if [ "$dirs" = 0 ]; then red "   !! no patch directories at all"; rc=1; fi
+    if [ "$dirs" = 0 ] && [ ! -d "$HERE/scripts" ]; then red "   !! no patch directories or scripts at all"; rc=1; fi
     echo "   $pats patch file(s) across $dirs project dir(s)"
 
-    echo "== preflight 4/4: kernel asset resolves AND an Image really comes out"
+    echo "== preflight 4/5: scripts are valid"
+    local sdir s scripts=0 sdirs=0
+    for sdir in "$HERE"/scripts/*/; do
+        [ -d "$sdir" ] || continue
+        sdirs=$((sdirs+1))
+        key="$(basename "$sdir")"
+        if [ -z "${PROJECT[$key]:-}" ]; then
+            red "   !! scripts/$key has no PROJECT mapping (build would abort)"; rc=1
+        fi
+        for s in "$sdir"*.sh; do
+            [ -e "$s" ] || continue
+            scripts=$((scripts+1))
+            if [ ! -s "$s" ]; then
+                red "   !! $key/$(basename "$s") is empty"; rc=1; continue
+            fi
+            if ! bash -n "$s" 2>/dev/null; then
+                red "   !! $key/$(basename "$s") has syntax errors"; rc=1
+            fi
+        done
+    done
+    echo "   $scripts script(s) across $sdirs project dir(s)"
+
+    echo "== preflight 5/5: kernel asset resolves AND an Image really comes out"
     if [ "${SKIP_KERNEL:-0}" = "1" ]; then
         ylw "   skipped (SKIP_KERNEL=1)"
     else
@@ -488,6 +546,7 @@ fi
 [ -d "$ROM/.repo" ] || { red "FATAL: $ROM is not a repo tree (no .repo)"; exit 1; }
 
 apply_patches
+apply_scripts
 
 if [ "${SKIP_FIRMWARE:-0}" != "1" ]; then
     echo "== firmware overlay"
