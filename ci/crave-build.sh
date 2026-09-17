@@ -208,20 +208,6 @@ clang_bin="$(ls -d prebuilts/clang/host/linux-x86/clang-*/bin 2>/dev/null | sort
 [ -n "$clang_bin" ] || { echo "FATAL: no prebuilts/clang/host/linux-x86/clang-* found"; exit 1; }
 CLANG_PATH="$PWD/$clang_bin" bash "$prep" || { echo "FATAL: konoha-abi prep failed"; exit 1; }
 
-# ---------------------------------------------------------------- bindgen clang
-# soong's bindgen rule hardcodes clang-r584948 (build/soong/rust/bindgen.go).
-# On one crave node (build 300122) that libclang refused to load, clang-sys
-# silently fell back to the node's system libclang, which cannot see clang's
-# builtin headers: "fatal error: 'stdbool.h' file not found" from
-# libbinder_ndk_bindgen, 12 minutes into the compile. The same node loaded
-# clang-r584948b fine -- the kernel's own rust-bindgen probe picked it after
-# rejecting clang-r596125 as "unusable". Locally all three load and generate
-# identical bindings (verified against out/host/linux-x86/bin/bindgen), and
-# their glibc requirements are identical, so pointing soong's bindgen at the
-# 'b' variant costs nothing and survives nodes where the plain r584948 is
-# unloadable. LLVM_BINDGEN_PREBUILTS_VERSION is the env override soong reads
-# for exactly this (bindgen.go: Getenv before the hardcoded default).
-export LLVM_BINDGEN_PREBUILTS_VERSION=clang-r584948b
 
 # ---------------------------------------------------------------------- build
 # installclean, NOT `make clean` / `rm -rf out`: it drops the installed image
