@@ -292,21 +292,28 @@ scrub
 #
 # The resource-dir path is discovered dynamically so this survives Clang bumps.
 _bindgen_clang="prebuilts/clang/host/linux-x86/clang-r584948/bin/clang"
+[ -x "$_bindgen_clang" ] || _bindgen_clang="$(ls -1 prebuilts/clang/host/linux-x86/clang-r*/bin/clang 2>/dev/null | head -1)"
+_inc=""
 if [ -x "$_bindgen_clang" ]; then
     _res_dir="$("$_bindgen_clang" -print-resource-dir 2>/dev/null)" || true
-    if [ -d "$_res_dir/include" ]; then
-        export BINDGEN_EXTRA_CLANG_ARGS="-isystem $PWD/$_res_dir/include"
-        say "bindgen clang builtin headers: $PWD/$_res_dir/include"
-    else
-        # Fallback: glob for the include directory
-        _inc="$(ls -d prebuilts/clang/host/linux-x86/clang-r584948/lib/clang/*/include 2>/dev/null | head -1)"
-        if [ -d "$_inc" ]; then
-            export BINDGEN_EXTRA_CLANG_ARGS="-isystem $PWD/$_inc"
-            say "bindgen clang builtin headers (glob): $PWD/$_inc"
-        else
-            echo "WARNING: could not locate clang builtin headers for bindgen"
+    case "$_res_dir" in
+        /*) [ -d "$_res_dir/include" ] && _inc="$_res_dir/include" ;;
+        *)  [ -d "$PWD/$_res_dir/include" ] && _inc="$PWD/$_res_dir/include" ;;
+    esac
+fi
+if [ -z "$_inc" ]; then
+    for _d in "$PWD"/prebuilts/clang/host/linux-x86/clang-r*/lib*/clang/*/include; do
+        if [ -d "$_d" ]; then
+            _inc="$_d"
+            break
         fi
-    fi
+    done
+fi
+if [ -n "$_inc" ] && [ -d "$_inc" ]; then
+    export BINDGEN_EXTRA_CLANG_ARGS="-isystem $_inc"
+    say "bindgen clang builtin headers: $_inc"
+else
+    echo "WARNING: could not locate clang builtin headers for bindgen"
 fi
 
 say "mka evolution"
