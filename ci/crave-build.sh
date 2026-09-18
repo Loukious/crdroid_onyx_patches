@@ -271,6 +271,44 @@ scrub() {
 
 scrub
 
+# -------------------------------------------------------- bindgen builtin hdrs
+# Soong's rust_bindgen rule passes `-nostdlibinc -target aarch64-linux-android`
+# to the embedded libclang inside out/host/linux-x86/bin/bindgen.  That strips
+# the default system-include search path.  The compiler-builtin headers
+# (stdbool.h, stddef.h, stdint.h ...) are NOT in bionic/libc/include -- they
+# live exclusively in the Clang resource directory:
+#   prebuilts/clang/host/linux-x86/clang-<ver>/lib/clang/<major>/include/
+#
+# On a normal developer workstation, libclang can deduce its own resource dir
+# from the LIBCLANG_PATH that Soong sets, because the entire prebuilts tree is
+# visible.  On Crave's Siso-backed build, undeclared inputs are sandboxed away,
+# so libclang's auto-discovery silently fails and every bindgen target dies
+# with "fatal error: 'stdbool.h' file not found" (33 targets in the cnb tree).
+#
+# rust-bindgen honours the BINDGEN_EXTRA_CLANG_ARGS environment variable: any
+# flags there are appended to every invocation's clang argument list.  Exporting
+# a single `-isystem <resource-dir>/include` gives libclang the path it needs,
+# without touching Soong sources or Siso's sandbox config.
+#
+# The resource-dir path is discovered dynamically so this survives Clang bumps.
+_bindgen_clang="prebuilts/clang/host/linux-x86/clang-r584948/bin/clang"
+if [ -x "$_bindgen_clang" ]; then
+    _res_dir="$("$_bindgen_clang" -print-resource-dir 2>/dev/null)" || true
+    if [ -d "$_res_dir/include" ]; then
+        export BINDGEN_EXTRA_CLANG_ARGS="-isystem $PWD/$_res_dir/include"
+        say "bindgen clang builtin headers: $PWD/$_res_dir/include"
+    else
+        # Fallback: glob for the include directory
+        _inc="$(ls -d prebuilts/clang/host/linux-x86/clang-r584948/lib/clang/*/include 2>/dev/null | head -1)"
+        if [ -d "$_inc" ]; then
+            export BINDGEN_EXTRA_CLANG_ARGS="-isystem $PWD/$_inc"
+            say "bindgen clang builtin headers (glob): $PWD/$_inc"
+        else
+            echo "WARNING: could not locate clang builtin headers for bindgen"
+        fi
+    fi
+fi
+
 say "mka evolution"
 mka evolution
 rc=$?
