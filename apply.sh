@@ -405,19 +405,28 @@ stage_kernel() {
     local ktag=''
     [[ "$json" =~ \"tag_name\":\ *\"([^\"]+)\" ]] && ktag="${BASH_REMATCH[1]}"
 
-    # Pinning needs the release to carry a Module.symvers asset; releases
-    # published before 2026-09-14 don't, and the wlan build falls back to the
-    # legacy manually-maintained wlan-kernel-symbols release.
+    # Reject missing ABI assets in preflight, before spending queue time.
     case "$json" in
         *'"name": "Module.symvers"'*|*'"name":"Module.symvers"'*) ;;
-        *) ylw "   note: no Module.symvers asset in this release;" \
-             "the wlan build will use the legacy wlan-kernel-symbols symvers" ;;
+        *) red "FATAL: release has no matching Module.symvers"; return 1 ;;
     esac
+    case "$json" in
+        *'"name": "Module.symvers.sha256"'*|*'"name":"Module.symvers.sha256"'*) ;;
+        *) red "FATAL: release has no Module.symvers.sha256"; return 1 ;;
+    esac
+    [ -n "$ktag" ] || { red "FATAL: release has no tag"; return 1; }
+    local digest
+    digest="$(printf '%s' "$json" | python3 -c 'import json,sys; r=json.load(sys.stdin); print(next((a.get("digest") or "" for a in r["assets"] if a["browser_download_url"] == sys.argv[1]), ""))' "$asset")" \
+        || { red "FATAL: cannot read release asset digest"; return 1; }
+    [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+        || { red "FATAL: kernel asset has no SHA256 digest"; return 1; }
 
     ylw "   fetching $(basename "$asset")"
     local tmp; tmp="$(mktemp -d)"; _TMPS+=("$tmp")
     curl -fsSL "${auth[@]+"${auth[@]}"}" -o "$tmp/ak3.zip" "$asset" \
         || { red "FATAL: download failed"; return 1; }
+    printf '%s  %s\n' "${digest#sha256:}" "$tmp/ak3.zip" | sha256sum -c - \
+        || { red "FATAL: kernel asset checksum mismatch"; return 1; }
 
     mkdir -p "$(dirname "$dest")"
 
@@ -441,7 +450,7 @@ stage_kernel() {
     grn "   ++ $dest ($sz bytes, from $src, arm64 magic ok)"
     if [ -n "$ktag" ]; then
         printf '%s\n' "$ktag" > "$(dirname "$dest")/.kernel-release-tag" \
-            || red "   !! could not write the kernel-release-tag file (non-fatal)"
+            || { red "FATAL: could not record kernel release tag"; return 1; }
         grn "   ++ kernel release tag: $ktag"
     fi
 }

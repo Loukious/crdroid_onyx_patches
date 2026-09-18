@@ -14,20 +14,18 @@
 # maintained wlan-kernel-symbols refresh step that broke crave build 299960
 # (stale .sha256) and would drift silently the other way.
 #
-# konoha-abi-prep.sh reads SYMVERS_URL / SYMVERS_SHA256_URL from the
-# environment. Its default, used when this helper exports nothing, is the
-# legacy wlan-kernel-symbols release. Releases published before 2026-09-14
-# have no Module.symvers asset; those warn loudly and fall back.
+# Persist the URL outside git projects: Android filters exported variables
+# before ninja, so the compile-time validation must read the same file.
+# Missing release assets are fatal, never a reason to use legacy symbols.
 #
 # Exports: SYMVERS_URL, SYMVERS_SHA256_URL (only on success).
 
 _pin_tag_file="vendor/extra/kernel/onyx/.kernel-release-tag"
 
 if [ ! -s "$_pin_tag_file" ]; then
-    echo "pin-konoha-symvers: no .kernel-release-tag staged (SKIP_KERNEL=1 or an" \
-         "old apply.sh); the wlan build uses konoha-abi-prep.sh defaults"
+    echo "FATAL: pin-konoha-symvers: no staged kernel release tag" >&2
     unset _pin_tag_file
-    return 0
+    return 1
 fi
 
 _pin_tag="$(cat "$_pin_tag_file")"
@@ -39,10 +37,13 @@ _pin_url="https://github.com/Loukious/konoha-kernel-gki/releases/download/${_pin
 if curl -fsI -o /dev/null --retry 2 "$_pin_url"; then
     export SYMVERS_URL="$_pin_url"
     export SYMVERS_SHA256_URL="${_pin_url}.sha256"
+    mkdir -p kernel/xiaomi/konoha-abi
+    printf '%s\n' "$_pin_url" > kernel/xiaomi/konoha-abi/.symvers-pin.tmp
+    mv kernel/xiaomi/konoha-abi/.symvers-pin.tmp kernel/xiaomi/konoha-abi/.symvers-pin
     echo "pin-konoha-symvers: Module.symvers pinned to kernel release $_pin_tag"
 else
-    echo "WARNING: pin-konoha-symvers: kernel release $_pin_tag has no Module.symvers asset" >&2
-    echo "WARNING: falling back to the legacy wlan-kernel-symbols release (may be stale)" >&2
+    echo "FATAL: pin-konoha-symvers: cannot access Module.symvers for $_pin_tag" >&2
+    return 1
 fi
 
 unset _pin_tag_file _pin_tag _pin_url
