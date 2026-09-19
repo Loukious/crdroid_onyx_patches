@@ -214,6 +214,33 @@ scrub() {
 
 scrub
 
+# ---------------------------------------------------------- bindgen toolchain
+# If the manifest carries only a letter-suffixed rebuild of Soong's dedicated
+# rust_bindgen Clang revision, select it through Soong's supported override.
+_bindgen_rev="$(sed -n 's/^[[:space:]]*bindgenClangVersion = "\(clang-r[^"]*\)".*/\1/p' \
+    build/soong/rust/bindgen.go | head -1)"
+_clang_root="prebuilts/clang/host/linux-x86"
+[ -n "$_bindgen_rev" ] || { echo "FATAL: cannot determine bindgen Clang revision"; exit 1; }
+if [ ! -x "$_clang_root/$_bindgen_rev/bin/clang" ]; then
+    _replacement=""
+    for _candidate in "$_clang_root/$_bindgen_rev"?; do
+        if [ -x "$_candidate/bin/clang" ] &&
+           compgen -G "$_candidate/lib*/libclang.so*" >/dev/null &&
+           compgen -G "$_candidate/lib*/clang/*/include/stddef.h" >/dev/null; then
+            _replacement="$(basename "$_candidate")"
+            break
+        fi
+    done
+    [ -n "$_replacement" ] || {
+        echo "FATAL: missing $_bindgen_rev and no compatible sibling exists"
+        exit 1
+    }
+    export LLVM_BINDGEN_PREBUILTS_VERSION="$_replacement"
+    say "Soong bindgen Clang: $_bindgen_rev missing; using $_replacement"
+else
+    say "Soong bindgen Clang: $_bindgen_rev"
+fi
+
 say "mka evolution"
 mka evolution
 rc=$?
