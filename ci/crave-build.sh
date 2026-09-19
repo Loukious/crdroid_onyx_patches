@@ -271,49 +271,32 @@ scrub() {
 
 scrub
 
-# -------------------------------------------------------- bindgen builtin hdrs
-# Soong's rust_bindgen rule passes `-nostdlibinc -target aarch64-linux-android`
-# to the embedded libclang inside out/host/linux-x86/bin/bindgen.  That strips
-# the default system-include search path.  The compiler-builtin headers
-# (stdbool.h, stddef.h, stdint.h ...) are NOT in bionic/libc/include -- they
-# live exclusively in the Clang resource directory:
-#   prebuilts/clang/host/linux-x86/clang-<ver>/lib/clang/<major>/include/
-#
-# On a normal developer workstation, libclang can deduce its own resource dir
-# from the LIBCLANG_PATH that Soong sets, because the entire prebuilts tree is
-# visible.  On Crave's Siso-backed build, undeclared inputs are sandboxed away,
-# so libclang's auto-discovery silently fails and every bindgen target dies
-# with "fatal error: 'stdbool.h' file not found" (33 targets in the cnb tree).
-#
-# rust-bindgen honours the BINDGEN_EXTRA_CLANG_ARGS environment variable: any
-# flags there are appended to every invocation's clang argument list.  Exporting
-# a single `-isystem <resource-dir>/include` gives libclang the path it needs,
-# without touching Soong sources or Siso's sandbox config.
-#
-# The resource-dir path is discovered dynamically so this survives Clang bumps.
-_bindgen_clang="prebuilts/clang/host/linux-x86/clang-r584948/bin/clang"
-[ -x "$_bindgen_clang" ] || _bindgen_clang="$(ls -1 prebuilts/clang/host/linux-x86/clang-r*/bin/clang 2>/dev/null | head -1)"
-_inc=""
-if [ -x "$_bindgen_clang" ]; then
-    _res_dir="$("$_bindgen_clang" -print-resource-dir 2>/dev/null)" || true
-    case "$_res_dir" in
-        /*) [ -d "$_res_dir/include" ] && _inc="$_res_dir/include" ;;
-        *)  [ -d "$PWD/$_res_dir/include" ] && _inc="$PWD/$_res_dir/include" ;;
-    esac
-fi
-if [ -z "$_inc" ]; then
-    for _d in "$PWD"/prebuilts/clang/host/linux-x86/clang-r*/lib*/clang/*/include; do
-        if [ -d "$_d" ]; then
-            _inc="$_d"
+# ---------------------------------------------------------- bindgen toolchain
+# Evolution cnb asks for clang-r584948 but currently syncs clang-r584948b.
+# A nonexistent CLANG_PATH makes bindgen miss stdbool.h/stddef.h. Use Soong's
+# supported override, selecting only a suffixed rebuild of the exact revision.
+_bindgen_rev="$(sed -n 's/^[[:space:]]*bindgenClangVersion = "\(clang-r[^"]*\)".*/\1/p' \
+    build/soong/rust/bindgen.go | head -1)"
+_clang_root="prebuilts/clang/host/linux-x86"
+[ -n "$_bindgen_rev" ] || { echo "FATAL: cannot determine bindgen Clang revision"; exit 1; }
+if [ ! -x "$_clang_root/$_bindgen_rev/bin/clang" ]; then
+    _replacement=""
+    for _candidate in "$_clang_root/$_bindgen_rev"?; do
+        if [ -x "$_candidate/bin/clang" ] &&
+           compgen -G "$_candidate/lib*/libclang.so*" >/dev/null &&
+           compgen -G "$_candidate/lib*/clang/*/include/stddef.h" >/dev/null; then
+            _replacement="$(basename "$_candidate")"
             break
         fi
     done
-fi
-if [ -n "$_inc" ] && [ -d "$_inc" ]; then
-    export BINDGEN_EXTRA_CLANG_ARGS="-isystem $_inc"
-    say "bindgen clang builtin headers: $_inc"
+    [ -n "$_replacement" ] || {
+        echo "FATAL: missing $_bindgen_rev and no compatible sibling exists"
+        exit 1
+    }
+    export LLVM_BINDGEN_PREBUILTS_VERSION="$_replacement"
+    say "Soong bindgen Clang: $_bindgen_rev missing; using $_replacement"
 else
-    echo "WARNING: could not locate clang builtin headers for bindgen"
+    say "Soong bindgen Clang: $_bindgen_rev"
 fi
 
 say "mka evolution"
