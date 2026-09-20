@@ -271,37 +271,6 @@ scrub() {
 
 scrub
 
-# ---------------------------------------------------------- bindgen toolchain
-# Evolution cnb asks for clang-r584948 but currently syncs clang-r584948b.
-# A nonexistent CLANG_PATH makes bindgen miss stdbool.h/stddef.h. Use Soong's
-# supported override, selecting only a suffixed rebuild of the exact revision.
-_bindgen_rev="$(sed -n 's/^[[:space:]]*bindgenClangVersion = "\(clang-r[^"]*\)".*/\1/p' \
-    build/soong/rust/bindgen.go | head -1)"
-_clang_root="prebuilts/clang/host/linux-x86"
-[ -n "$_bindgen_rev" ] || { echo "FATAL: cannot determine bindgen Clang revision"; exit 1; }
-bindgen_toolchain_ok() {
-    [ -x "$1/bin/clang" ] &&
-    compgen -G "$1/lib*/libclang.so*" >/dev/null &&
-    compgen -G "$1/lib*/clang/*/include/stddef.h" >/dev/null &&
-    compgen -G "$1/lib*/clang/*/include/stdbool.h" >/dev/null
-}
-if ! bindgen_toolchain_ok "$_clang_root/$_bindgen_rev"; then
-    _replacement=""
-    for _candidate in "$_clang_root/$_bindgen_rev"?; do
-        if bindgen_toolchain_ok "$_candidate"; then
-            _replacement="$(basename "$_candidate")"
-            break
-        fi
-    done
-    [ -n "$_replacement" ] || {
-        echo "FATAL: missing $_bindgen_rev and no compatible sibling exists"
-        exit 1
-    }
-    export LLVM_BINDGEN_PREBUILTS_VERSION="$_replacement"
-    say "Soong bindgen Clang: $_bindgen_rev missing; using $_replacement"
-else
-    say "Soong bindgen Clang: $_bindgen_rev"
-fi
 
 say "mka evolution"
 mka evolution

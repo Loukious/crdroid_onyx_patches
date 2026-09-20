@@ -1,0 +1,21 @@
+diff --git a/rust/bindgen.go b/rust/bindgen.go
+--- a/rust/bindgen.go
++++ b/rust/bindgen.go
+@@ -64,5 +64,8 @@ var (
+ 	_ = pctx.SourcePathVariable("bindgenLibClang",
+ 		"${cc_config.ClangBase}/${bindgenHostPrebuiltTag}/${bindgenClangVersion}/${bindgenClangLibdir}")
++	_ = pctx.SourcePathVariable("bindgenClangBuiltinHeaders",
++		"${cc_config.ClangBase}/${bindgenHostPrebuiltTag}/${bindgenClangVersion}/"+
++			"${bindgenClangLibdir}clang/22/include")
+ 
+ 	//TODO(ivanlozano) Switch this to RuleBuilder
+ 	//
+@@ -72,6 +75,7 @@ var (
+ 		blueprint.RuleParams{
+ 			Command: "CLANG_PATH=$bindgenClang LIBCLANG_PATH=$bindgenLibClang RUSTFMT=${config.RustBin}/rustfmt " +
+-				"$cmd $flags $$(cat $flagfiles) $in -o $out -- -MD -MF $out.d $cflags",
++				"$cmd $flags $$(cat $flagfiles) $in -o $out -- -MD -MF $out.d $cflags " +
++				"-isystem $bindgenClangBuiltinHeaders",
+ 			CommandDeps:     []string{"$cmd"},
+ 			Deps:            blueprint.DepsGCC,
+ 			Depfile:         "$out.d",
