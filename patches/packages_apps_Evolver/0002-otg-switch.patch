@@ -1,9 +1,9 @@
 diff --git a/res/values/evolution_strings.xml b/res/values/evolution_strings.xml
-index 986606a..7f66819 100644
+index 5654cc6..ef08d36 100644
 --- a/res/values/evolution_strings.xml
 +++ b/res/values/evolution_strings.xml
-@@ -1810,6 +1810,10 @@
-     <string name="global_actions_advanced_reboot_title">Enable Advanced Reboot</string>
+@@ -1824,6 +1824,10 @@
+     <string name="gesture_navbar_space_minimal">Minimal</string>
      <string name="global_actions_advanced_reboot_summary">Unlocks a new dialog that allows advanced rebooting</string>
  
 +    <!-- OTG -->

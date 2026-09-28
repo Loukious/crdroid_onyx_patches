@@ -1,0 +1,556 @@
+diff --git a/services/core/java/com/android/server/locksettings/Android.bp b/services/core/java/com/android/server/locksettings/Android.bp
+new file mode 100644
+index 000000000..4cf2dfeab
+--- /dev/null
++++ b/services/core/java/com/android/server/locksettings/Android.bp
+@@ -0,0 +1,5 @@
++filegroup {
++    name: "secure-auth-duress-codec-sources",
++    srcs: ["SecureAuthDuressCodec.java", "SecureAuthDuressReservation.java"],
++    visibility: ["//frameworks/base/services/tests/secureauthduress"],
++}
+diff --git a/services/core/java/com/android/server/locksettings/SecureAuthDuressCodec.java b/services/core/java/com/android/server/locksettings/SecureAuthDuressCodec.java
+new file mode 100644
+index 000000000..7d4cfa276
+--- /dev/null
++++ b/services/core/java/com/android/server/locksettings/SecureAuthDuressCodec.java
+@@ -0,0 +1,81 @@
++/* Copyright (C) 2026 The Android Open Source Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.server.locksettings;
++
++import java.nio.ByteBuffer;
++import java.util.Objects;
++
++/** Bounded serialization of duress-only stretched verifiers; never normal-user credentials. */
++final class SecureAuthDuressCodec {
++    private static final int VERSION = 1;
++    private static final int SALT_SIZE = 16;
++    private static final int DIGEST_SIZE = 32;
++    private static final int RECORD_SIZE = 4 + SALT_SIZE + DIGEST_SIZE;
++    private static final int ENCODED_SIZE = 1 + 2 * RECORD_SIZE;
++
++    record Verifier(int type, int logN, int logR, int logP, byte[] salt, byte[] digest) {
++        Verifier {
++            // Types 3/4 are the stable native PIN/password types. Bound corrupted scrypt costs.
++            if ((type != 3 && type != 4) || logN < 9 || logN > 14
++                    || logR < 0 || logR > 4 || logP < 0 || logP > 3) {
++                throw new IllegalArgumentException("Invalid duress verifier parameters");
++            }
++            Objects.requireNonNull(salt);
++            Objects.requireNonNull(digest);
++            if (salt.length != SALT_SIZE || digest.length != DIGEST_SIZE) {
++                throw new IllegalArgumentException("Invalid duress verifier size");
++            }
++            salt = salt.clone();
++            digest = digest.clone();
++        }
++
++        @Override public byte[] salt() { return salt.clone(); }
++        @Override public byte[] digest() { return digest.clone(); }
++    }
++
++    record Pair(Verifier pin, Verifier password) {
++        Pair {
++            if (pin.type() != 3 || password.type() != 4) {
++                throw new IllegalArgumentException("Invalid duress verifier types");
++            }
++        }
++    }
++
++    static byte[] encode(Pair pair) {
++        ByteBuffer buffer = ByteBuffer.allocate(ENCODED_SIZE);
++        buffer.put((byte) VERSION);
++        write(buffer, pair.pin());
++        write(buffer, pair.password());
++        return buffer.array();
++    }
++
++    static Pair decode(byte[] encoded) {
++        if (encoded == null || encoded.length != ENCODED_SIZE) {
++            throw new IllegalArgumentException("Invalid duress verifier storage size");
++        }
++        ByteBuffer buffer = ByteBuffer.wrap(encoded);
++        if (Byte.toUnsignedInt(buffer.get()) != VERSION) {
++            throw new IllegalArgumentException("Unknown duress verifier storage version");
++        }
++        return new Pair(read(buffer), read(buffer));
++    }
++
++    private static void write(ByteBuffer buffer, Verifier verifier) {
++        buffer.put((byte) verifier.type()).put((byte) verifier.logN())
++                .put((byte) verifier.logR()).put((byte) verifier.logP());
++        buffer.put(verifier.salt());
++        buffer.put(verifier.digest());
++    }
++
++    private static Verifier read(ByteBuffer buffer) {
++        int type = Byte.toUnsignedInt(buffer.get());
++        int logN = Byte.toUnsignedInt(buffer.get());
++        int logR = Byte.toUnsignedInt(buffer.get());
++        int logP = Byte.toUnsignedInt(buffer.get());
++        byte[] salt = new byte[SALT_SIZE];
++        byte[] digest = new byte[DIGEST_SIZE];
++        buffer.get(salt).get(digest);
++        return new Verifier(type, logN, logR, logP, salt, digest);
++    }
++}
+diff --git a/services/core/java/com/android/server/locksettings/SecureAuthDuressCredentialStore.java b/services/core/java/com/android/server/locksettings/SecureAuthDuressCredentialStore.java
+new file mode 100644
+index 000000000..cda1b5d9b
+--- /dev/null
++++ b/services/core/java/com/android/server/locksettings/SecureAuthDuressCredentialStore.java
+@@ -0,0 +1,156 @@
++/* Copyright (C) 2026 The Android Open Source Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.server.locksettings;
++
++import static com.android.internal.widget.LockPatternUtils.CREDENTIAL_TYPE_PASSWORD;
++import static com.android.internal.widget.LockPatternUtils.CREDENTIAL_TYPE_PIN;
++import static com.android.internal.widget.LockPatternUtils.PIN_LENGTH_UNAVAILABLE;
++
++import android.os.UserHandle;
++
++import com.android.internal.util.ArrayUtils;
++import com.android.internal.widget.LockscreenCredential;
++import com.android.server.locksettings.SyntheticPasswordManager.PasswordData;
++
++import java.security.MessageDigest;
++
++import libcore.util.HexEncoding;
++
++/** GrapheneOS-inspired stretching for dedicated duress secrets, without a normal-PIN oracle. */
++final class SecureAuthDuressCredentialStore {
++    private static final String STORAGE_KEY = "secure_auth_duress_verifiers_v1";
++    private static final String RESERVATION_KEY = "secure_auth_duress_reservation_v1";
++    private static final int ENCODED_HEX_LENGTH = 210;
++    private final LockSettingsStorage mStorage;
++    private final SyntheticPasswordManager mSpManager;
++
++    SecureAuthDuressCredentialStore(LockSettingsStorage storage,
++            SyntheticPasswordManager spManager) {
++        mStorage = storage;
++        mSpManager = spManager;
++    }
++
++    // The trusted service must freshly verify the owner before calling mutation or disclosure.
++    String prepareEnrollment(LockscreenCredential pin, LockscreenCredential password) {
++        if (pin.isNone() && password.isNone()) {
++            return null;
++        }
++        validate(pin, CREDENTIAL_TYPE_PIN);
++        validate(password, CREDENTIAL_TYPE_PASSWORD);
++        SecureAuthDuressCodec.Pair pair = new SecureAuthDuressCodec.Pair(
++                create(pin), create(password));
++        return HexEncoding.encodeToString(SecureAuthDuressCodec.encode(pair));
++    }
++
++    void commitEnrollment(String encoded, java.util.List<SecureAuthDuressReservation.Identity> certified) {
++        if (encoded == null) {
++            mStorage.removeKey(RESERVATION_KEY, UserHandle.USER_SYSTEM);
++        } else {
++            SecureAuthDuressReservation receipt = SecureAuthDuressReservation.certify(
++                    HexEncoding.decode(encoded), certified);
++            mStorage.setString(RESERVATION_KEY,
++                    HexEncoding.encodeToString(receipt.encode()), UserHandle.USER_SYSTEM);
++        }
++        if (encoded == null) {
++            mStorage.removeKey(STORAGE_KEY, UserHandle.USER_SYSTEM);
++        } else {
++            mStorage.setString(STORAGE_KEY, encoded, UserHandle.USER_SYSTEM);
++        }
++    }
++
++    boolean reservationCovers(java.util.List<SecureAuthDuressReservation.Identity> current) {
++        String encoded = mStorage.getString(STORAGE_KEY, null, UserHandle.USER_SYSTEM);
++        String receipt = mStorage.getString(RESERVATION_KEY, null, UserHandle.USER_SYSTEM);
++        if (encoded == null || encoded.length() != ENCODED_HEX_LENGTH || receipt == null
++                || receipt.length() < 100 || receipt.length() > 196) return false;
++        try {
++            return SecureAuthDuressReservation.decode(HexEncoding.decode(receipt))
++                    .covers(HexEncoding.decode(encoded), current);
++        } catch (IllegalArgumentException malformed) {
++            return false;
++        }
++    }
++
++    void refreshReservation(java.util.List<SecureAuthDuressReservation.Identity> current) {
++        String encoded = mStorage.getString(STORAGE_KEY, null, UserHandle.USER_SYSTEM);
++        if (encoded == null) return;
++        if (current.isEmpty() || current.size() > 4) {
++            mStorage.removeKey(RESERVATION_KEY, UserHandle.USER_SYSTEM);
++            return;
++        }
++        SecureAuthDuressReservation receipt = SecureAuthDuressReservation.certify(
++                HexEncoding.decode(encoded), current);
++        mStorage.setString(RESERVATION_KEY,
++                HexEncoding.encodeToString(receipt.encode()), UserHandle.USER_SYSTEM);
++    }
++
++    boolean isConfigured() {
++        // Protected status must still permit removal of an invalid stored record.
++        return mStorage.getString(STORAGE_KEY, null, UserHandle.USER_SYSTEM) != null;
++    }
++
++    /** Caller must first establish a fresh, complete native normal-credential rejection. */
++    boolean matchesAfterNormalRejection(LockscreenCredential input) {
++        if ((!input.isPin() && !input.isPassword()) || input.hasInvalidChars()) return false;
++        SecureAuthDuressCodec.Pair pair = load();
++        if (pair == null) return false;
++        return matches(pair.pin(), input) || matches(pair.password(), input);
++    }
++
++    private SecureAuthDuressCodec.Pair load() {
++        String encoded = mStorage.getString(STORAGE_KEY, null, UserHandle.USER_SYSTEM);
++        if (encoded == null) return null;
++        if (encoded.length() != ENCODED_HEX_LENGTH) {
++            throw new IllegalStateException("Invalid duress verifier storage");
++        }
++        return SecureAuthDuressCodec.decode(HexEncoding.decode(encoded));
++    }
++
++    private SecureAuthDuressCodec.Verifier create(LockscreenCredential credential) {
++        PasswordData data = PasswordData.create(credential.getType(), PIN_LENGTH_UNAVAILABLE);
++        byte[] stretched = mSpManager.stretchLskf(credential, data);
++        try {
++            return new SecureAuthDuressCodec.Verifier(data.credentialType, data.scryptLogN,
++                    data.scryptLogR, data.scryptLogP, data.salt, stretched);
++        } finally {
++            ArrayUtils.zeroize(stretched);
++        }
++    }
++
++    private boolean matches(SecureAuthDuressCodec.Verifier verifier, LockscreenCredential input) {
++        PasswordData data = new PasswordData();
++        data.credentialType = verifier.type();
++        data.scryptLogN = (byte) verifier.logN();
++        data.scryptLogR = (byte) verifier.logR();
++        data.scryptLogP = (byte) verifier.logP();
++        data.salt = verifier.salt();
++        data.pinLength = PIN_LENGTH_UNAVAILABLE;
++        try (LockscreenCredential copy =
++                input.duplicateForSecureSpaceVerification(data.credentialType)) {
++            if (copy == null) return false;
++            byte[] stretched = mSpManager.stretchLskf(copy, data);
++            byte[] expected = verifier.digest();
++            try {
++                return MessageDigest.isEqual(expected, stretched);
++            } finally {
++                ArrayUtils.zeroize(stretched);
++                ArrayUtils.zeroize(expected);
++            }
++        }
++    }
++
++    private static void validate(LockscreenCredential credential, int expectedType) {
++        if (credential.getType() != expectedType || credential.isUnifiedProfilePassword()) {
++            throw new IllegalArgumentException("Incorrect duress credential type");
++        }
++        credential.validateBasicRequirements();
++        if (expectedType == CREDENTIAL_TYPE_PIN) {
++            for (byte digit : credential.getCredential()) {
++                if (digit < '0' || digit > '9') {
++                    throw new IllegalArgumentException("Duress PIN must contain digits");
++                }
++            }
++        }
++    }
++}
+diff --git a/services/core/java/com/android/server/locksettings/SecureAuthDuressReservation.java b/services/core/java/com/android/server/locksettings/SecureAuthDuressReservation.java
+new file mode 100644
+index 000000000..f5db5e18e
+--- /dev/null
++++ b/services/core/java/com/android/server/locksettings/SecureAuthDuressReservation.java
+@@ -0,0 +1,82 @@
++/* Copyright (C) 2026 The Android Open Source Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.server.locksettings;
++
++import java.nio.ByteBuffer;
++import java.security.MessageDigest;
++import java.security.NoSuchAlgorithmException;
++import java.util.List;
++
++/** Receipt certifying disjoint duress secrets against a native credential namespace. */
++final class SecureAuthDuressReservation {
++    record Identity(int userId, int serialNumber, long protectorId) {
++        Identity {
++            if (userId < 0 || serialNumber < 0 || protectorId == 0) {
++                throw new IllegalArgumentException("Invalid native credential identity");
++            }
++        }
++    }
++    private final byte[] binding;
++    private final List<Identity> identities;
++
++    private SecureAuthDuressReservation(byte[] binding, List<Identity> identities) {
++        if (binding.length != 32 || identities.isEmpty() || identities.size() > 4) {
++            throw new IllegalArgumentException("Invalid reservation dimensions");
++        }
++        int previous = -1;
++        for (Identity identity : identities) {
++            if (identity.userId() <= previous) {
++                throw new IllegalArgumentException("Unordered or repeated native user");
++            }
++            previous = identity.userId();
++        }
++        this.binding = binding.clone();
++        this.identities = List.copyOf(identities);
++    }
++
++    static SecureAuthDuressReservation certify(byte[] encodedVerifiers, List<Identity> identities) {
++        return new SecureAuthDuressReservation(digest(encodedVerifiers), identities);
++    }
++
++    boolean covers(byte[] encodedVerifiers, List<Identity> current) {
++        return !current.isEmpty() && MessageDigest.isEqual(binding, digest(encodedVerifiers))
++                && current.size() <= 4 && identities.containsAll(current);
++    }
++
++    byte[] encode() {
++        ByteBuffer out = ByteBuffer.allocate(34 + 16 * identities.size());
++        out.put((byte) 1).put(binding).put((byte) identities.size());
++        for (Identity identity : identities) {
++            out.putInt(identity.userId()).putInt(identity.serialNumber()).putLong(identity.protectorId());
++        }
++        return out.array();
++    }
++
++    static SecureAuthDuressReservation decode(byte[] bytes) {
++        if (bytes == null || bytes.length < 50 || bytes.length > 98) {
++            throw new IllegalArgumentException("Invalid reservation length");
++        }
++        ByteBuffer in = ByteBuffer.wrap(bytes);
++        if (in.get() != 1) throw new IllegalArgumentException("Invalid reservation version");
++        byte[] binding = new byte[32];
++        in.get(binding);
++        int count = Byte.toUnsignedInt(in.get());
++        if (count < 1 || count > 4 || in.remaining() != count * 16) {
++            throw new IllegalArgumentException("Invalid reservation count");
++        }
++        java.util.ArrayList<Identity> identities = new java.util.ArrayList<>();
++        for (int i = 0; i < count; i++) {
++            identities.add(new Identity(in.getInt(), in.getInt(), in.getLong()));
++        }
++        return new SecureAuthDuressReservation(binding, identities);
++    }
++
++    private static byte[] digest(byte[] data) {
++        try {
++            return MessageDigest.getInstance("SHA-256").digest(data);
++        } catch (NoSuchAlgorithmException impossible) {
++            throw new AssertionError(impossible);
++        }
++    }
++}
+diff --git a/services/tests/secureauthduress/Android.bp b/services/tests/secureauthduress/Android.bp
+new file mode 100644
+index 000000000..0ed6ca0d0
+--- /dev/null
++++ b/services/tests/secureauthduress/Android.bp
+@@ -0,0 +1,11 @@
++java_test_host {
++    name: "SecureAuthDuressCodecTests",
++    srcs: [
++        ":secure-auth-duress-codec-sources",
++        "SecureAuthDuressCodecTest.java",
++        "SecureAuthDuressReservationTest.java",
++    ],
++    static_libs: ["junit"],
++    test_suites: ["general-tests"],
++    test_config: "AndroidTest.xml",
++}
+diff --git a/services/tests/secureauthduress/AndroidTest.xml b/services/tests/secureauthduress/AndroidTest.xml
+new file mode 100644
+index 000000000..b94cbc8a8
+--- /dev/null
++++ b/services/tests/secureauthduress/AndroidTest.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<configuration description="Duress-verifier storage validation on the host.">
++    <option name="test-suite-tag" value="general-tests" />
++    <test class="com.android.tradefed.testtype.HostTest">
++        <option name="jar" value="SecureAuthDuressCodecTests.jar" />
++        <option name="class" value="com.android.server.locksettings.SecureAuthDuressCodecTest" />
++    </test>
++</configuration>
+diff --git a/services/tests/secureauthduress/SecureAuthDuressCodecTest.java b/services/tests/secureauthduress/SecureAuthDuressCodecTest.java
+new file mode 100644
+index 000000000..94b5ab821
+--- /dev/null
++++ b/services/tests/secureauthduress/SecureAuthDuressCodecTest.java
+@@ -0,0 +1,107 @@
++/* Copyright (C) 2026 The Android Open Source Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.server.locksettings;
++
++import static org.junit.Assert.assertArrayEquals;
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.fail;
++
++import org.junit.Test;
++
++import java.util.Arrays;
++
++public class SecureAuthDuressCodecTest {
++    private static SecureAuthDuressCodec.Pair pair() {
++        byte[] salt = new byte[16];
++        byte[] digest = new byte[32];
++        Arrays.fill(salt, (byte) 17);
++        Arrays.fill(digest, (byte) 42);
++        return new SecureAuthDuressCodec.Pair(
++                new SecureAuthDuressCodec.Verifier(3, 9, 3, 1, salt, digest),
++                new SecureAuthDuressCodec.Verifier(4, 9, 3, 1, salt, digest));
++    }
++
++    private static void rejects(byte[] encoded) {
++        try {
++            SecureAuthDuressCodec.decode(encoded);
++            fail("Accepted invalid verifier storage");
++        } catch (IllegalArgumentException expected) {
++        }
++    }
++
++    @Test
++    public void storageRoundTripRetainsNativeStretchParametersAndBothTypes() {
++        SecureAuthDuressCodec.Pair source = pair();
++        SecureAuthDuressCodec.Pair decoded = SecureAuthDuressCodec.decode(
++                SecureAuthDuressCodec.encode(source));
++        assertEquals(3, decoded.pin().type());
++        assertEquals(4, decoded.password().type());
++        assertEquals(9, decoded.pin().logN());
++        assertEquals(3, decoded.pin().logR());
++        assertEquals(1, decoded.pin().logP());
++        assertArrayEquals(source.pin().salt(), decoded.pin().salt());
++        assertArrayEquals(source.password().digest(), decoded.password().digest());
++    }
++
++    @Test
++    public void mutableCallerBuffersCannotAlterVerifier() {
++        byte[] salt = new byte[16];
++        byte[] digest = new byte[32];
++        SecureAuthDuressCodec.Verifier verifier =
++                new SecureAuthDuressCodec.Verifier(3, 9, 3, 1, salt, digest);
++        Arrays.fill(salt, (byte) 9);
++        Arrays.fill(digest, (byte) 9);
++        Arrays.fill(verifier.salt(), (byte) 8);
++        Arrays.fill(verifier.digest(), (byte) 8);
++        assertArrayEquals(new byte[16], verifier.salt());
++        assertArrayEquals(new byte[32], verifier.digest());
++    }
++
++    @Test
++    public void everyTruncationAndTrailingDataAreRejected() {
++        byte[] encoded = SecureAuthDuressCodec.encode(pair());
++        for (int length = 0; length < encoded.length; length++) {
++            rejects(Arrays.copyOf(encoded, length));
++        }
++        rejects(Arrays.copyOf(encoded, encoded.length + 1));
++        rejects(null);
++    }
++
++    @Test
++    public void unknownVersionCannotBecomeDuressMatch() {
++        byte[] encoded = SecureAuthDuressCodec.encode(pair());
++        encoded[0] = (byte) 255;
++        rejects(encoded);
++    }
++
++    @Test
++    public void incorrectOrReversedCredentialTypesAreRejected() {
++        byte[] encoded = SecureAuthDuressCodec.encode(pair());
++        encoded[1] = 4;
++        rejects(encoded);
++        encoded[1] = 0;
++        rejects(encoded);
++        encoded = SecureAuthDuressCodec.encode(pair());
++        encoded[53] = 3;
++        rejects(encoded);
++    }
++
++    @Test
++    public void corruptScryptCostsCannotRequestUnboundedResources() {
++        for (int offset : new int[]{2, 3, 4, 54, 55, 56}) {
++            byte[] encoded = SecureAuthDuressCodec.encode(pair());
++            encoded[offset] = (byte) 255;
++            rejects(encoded);
++        }
++    }
++
++    @Test
++    public void decodedVerifierDoesNotRetainMutableStorageBuffer() {
++        byte[] encoded = SecureAuthDuressCodec.encode(pair());
++        SecureAuthDuressCodec.Pair decoded = SecureAuthDuressCodec.decode(encoded);
++        Arrays.fill(encoded, (byte) 0);
++        assertArrayEquals(pair().pin().salt(), decoded.pin().salt());
++        assertArrayEquals(pair().password().digest(), decoded.password().digest());
++    }
++}
+diff --git a/services/tests/secureauthduress/SecureAuthDuressReservationTest.java b/services/tests/secureauthduress/SecureAuthDuressReservationTest.java
+new file mode 100644
+index 000000000..66e41d5d5
+--- /dev/null
++++ b/services/tests/secureauthduress/SecureAuthDuressReservationTest.java
+@@ -0,0 +1,58 @@
++package com.android.server.locksettings;
++
++import static org.junit.Assert.*;
++import java.util.List;
++import org.junit.Test;
++
++public class SecureAuthDuressReservationTest {
++    private final byte[] pair = new byte[]{1,2,3};
++    private final SecureAuthDuressReservation.Identity owner =
++            new SecureAuthDuressReservation.Identity(0, 1, -25);
++    private final SecureAuthDuressReservation.Identity space =
++            new SecureAuthDuressReservation.Identity(10, 2, 35);
++    @Test public void roundTripCoversExactNativeNamespace() {
++        var receipt = SecureAuthDuressReservation.certify(pair, List.of(owner, space));
++        assertTrue(SecureAuthDuressReservation.decode(receipt.encode()).covers(pair, List.of(owner, space)));
++    }
++    @Test public void removedUserDoesNotInvalidateRemainingReservation() {
++        var receipt = SecureAuthDuressReservation.certify(pair, List.of(owner, space));
++        assertTrue(receipt.covers(pair, List.of(owner)));
++    }
++    @Test public void changedSerialOrProtectorCannotReuseReservation() {
++        var receipt = SecureAuthDuressReservation.certify(pair, List.of(owner, space));
++        assertFalse(receipt.covers(pair, List.of(owner,
++                new SecureAuthDuressReservation.Identity(10, 3, 35))));
++        assertFalse(receipt.covers(pair, List.of(owner,
++                new SecureAuthDuressReservation.Identity(10, 2, 36))));
++    }
++    @Test public void newNativeUserIsNotCertified() {
++        var receipt = SecureAuthDuressReservation.certify(pair, List.of(owner));
++        assertFalse(receipt.covers(pair, List.of(owner, space)));
++    }
++    @Test public void changedDuressPairIsNotCertified() {
++        var receipt = SecureAuthDuressReservation.certify(pair, List.of(owner));
++        assertFalse(receipt.covers(new byte[]{1,2,4}, List.of(owner)));
++    }
++    @Test public void malformedVersionLengthAndCountFailClosed() {
++        var bytes = SecureAuthDuressReservation.certify(pair, List.of(owner)).encode();
++        for (int length = 0; length < bytes.length; length++) {
++            byte[] shortBytes = java.util.Arrays.copyOf(bytes, length);
++            assertThrows(IllegalArgumentException.class, () -> SecureAuthDuressReservation.decode(shortBytes));
++        }
++        byte[] trailing = java.util.Arrays.copyOf(bytes, bytes.length + 1);
++        assertThrows(IllegalArgumentException.class, () -> SecureAuthDuressReservation.decode(trailing));
++        bytes[0] = 2;
++        assertThrows(IllegalArgumentException.class, () -> SecureAuthDuressReservation.decode(bytes));
++    }
++    @Test public void repeatedOrUnorderedNativeIdentityRejected() {
++        assertThrows(IllegalArgumentException.class, () ->
++                SecureAuthDuressReservation.certify(pair, List.of(owner, owner)));
++        assertThrows(IllegalArgumentException.class, () ->
++                SecureAuthDuressReservation.certify(pair, List.of(space, owner)));
++    }
++    @Test public void decodedReservationRejectsZeroProtector() {
++        byte[] bytes = SecureAuthDuressReservation.certify(pair, List.of(owner)).encode();
++        java.util.Arrays.fill(bytes, 42, 50, (byte) 0);
++        assertThrows(IllegalArgumentException.class, () -> SecureAuthDuressReservation.decode(bytes));
++    }
++}

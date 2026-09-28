@@ -1,0 +1,17 @@
+diff --git a/config/BoardConfigLineage.mk b/config/BoardConfigLineage.mk
+index 94564ae..5b97f01 100644
+--- a/config/BoardConfigLineage.mk
++++ b/config/BoardConfigLineage.mk
+@@ -4,6 +4,12 @@
+ # build-manifest.xml
+ BUILD_BROKEN_SRC_DIR_RW_ALLOWLIST := $(abspath .repo/manifests.git)
+ 
++# The Qualcomm video-driver external module creates temporary `driver`
++# symlinks under its own source directory while the kernel module is built.
++# Android 17 mounts the rest of the source tree read-only, so allow only this
++# one source subtree instead of opting the entire tree out of the sandbox.
++BUILD_BROKEN_SRC_DIR_RW_ALLOWLIST += $(abspath kernel/xiaomi/sm8735-modules/qcom/opensource/video-driver)
++
+ # Recovery
+ BOARD_USES_FULL_RECOVERY_IMAGE ?= true
+ 

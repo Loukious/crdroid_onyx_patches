@@ -1,0 +1,12 @@
+diff --git a/config/BoardConfigLineage.mk b/config/BoardConfigLineage.mk
+--- a/config/BoardConfigLineage.mk
++++ b/config/BoardConfigLineage.mk
+@@ -14,3 +14,8 @@
+ BUILD_BROKEN_SRC_DIR_RW_ALLOWLIST += $(abspath kernel/xiaomi/sm8735-modules/qcom/opensource/camera-kernel)
+ 
++# The custom WLAN wrapper updates its ABI cache and builds objects in-source.
++BUILD_BROKEN_SRC_DIR_RW_ALLOWLIST += $(abspath kernel/xiaomi/konoha-abi)
++BUILD_BROKEN_SRC_DIR_RW_ALLOWLIST += $(abspath kernel/xiaomi/sm8735-modules/qcom/opensource/wlan/qcacld-3.0)
++BUILD_BROKEN_SRC_DIR_RW_ALLOWLIST += $(abspath kernel/xiaomi/sm8735-modules/qcom/opensource/wlan/qca-wifi-host-cmn)
++
+ # Recovery

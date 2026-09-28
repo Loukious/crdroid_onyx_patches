@@ -1,0 +1,351 @@
+diff --git a/keystore2/aidl/android/security/authorization/IKeystoreAuthorization.aidl b/keystore2/aidl/android/security/authorization/IKeystoreAuthorization.aidl
+index 9c6778d..523fdcf 100644
+--- a/keystore2/aidl/android/security/authorization/IKeystoreAuthorization.aidl
++++ b/keystore2/aidl/android/security/authorization/IKeystoreAuthorization.aidl
+@@ -187,4 +187,6 @@ interface IKeystoreAuthorization {
+      * `ResponseCode::NO_AUTH_TOKEN_FOUND` - if there is no matching authentication token found
+      */
+     long getLastAuthTime(in long secureUserId, in HardwareAuthenticatorType[] authTypes);
++    // Append to retain all existing transaction IDs. Hardware token bytes remain unchanged.
++    void addAuthTokenForUsers(in int[] userIds, in HardwareAuthToken authToken);
+ }
+diff --git a/keystore2/src/authorization.rs b/keystore2/src/authorization.rs
+index 85481b8..18d2c1d 100644
+--- a/keystore2/src/authorization.rs
++++ b/keystore2/src/authorization.rs
+@@ -334,6 +334,30 @@ impl IKeystoreAuthorization for AuthorizationManager {
+         Ok(())
+     }
+ 
++    fn addAuthTokenForUsers(&self, user_ids: &[i32], auth_token: &HardwareAuthToken) -> BinderResult<()> {
++        check_keystore_permission(KeystorePerm::AddAuth)
++            .context(ks_err!("caller missing AddAuth permissions"))
++            .map_err(into_logged_binder)?;
++        if binder::ThreadState::get_calling_uid() != 1000 {
++            return Err(Error::Rc(ResponseCode::PERMISSION_DENIED))
++                .context(ks_err!("user-scoped tokens require system_server"))
++                .map_err(into_logged_binder);
++        }
++        let mut users = user_ids.to_vec();
++        users.sort_unstable();
++        users.dedup();
++        if users.is_empty() || users.len() > 16 || users.len() != user_ids.len()
++                || users.iter().any(|user| *user < 0) || auth_token.userId == 0
++                || auth_token.mac.len() != 32
++                || (auth_token.authenticatorType.0 & 2 != 0 && auth_token.authenticatorId == 0) {
++            return Err(Error::Rc(ResponseCode::INVALID_ARGUMENT))
++                .context(ks_err!("invalid native authentication scope"))
++                .map_err(into_logged_binder);
++        }
++        ENFORCEMENTS.add_auth_token_for_users(auth_token.clone(), users);
++        Ok(())
++    }
++
+     fn onDeviceUnlocked(&self, user_id: i32, password: Option<&[u8]>) -> BinderResult<()> {
+         let _wp = wd::watch("IKeystoreAuthorization::onDeviceUnlocked");
+         check_keystore_permission(KeystorePerm::Unlock)
+diff --git a/keystore2/src/biometric_user_scope.rs b/keystore2/src/biometric_user_scope.rs
+new file mode 100644
+index 0000000..df952b5
+--- /dev/null
++++ b/keystore2/src/biometric_user_scope.rs
+@@ -0,0 +1,59 @@
++// Copyright (C) 2026 The Android Open Source Project
++// SPDX-License-Identifier: Apache-2.0
++
++//! Logical user scope is additional metadata; signed hardware tokens remain unchanged.
++
++/// Biometric tokens require an explicit native user/profile scope, even when SIDs match.
++pub(crate) fn permits_user(authenticator_type: i32, users: Option<&[i32]>, user: i32) -> bool {
++    if user < 0 {
++        return false;
++    }
++    match users {
++        Some(users) => users.contains(&user),
++        None => authenticator_type & 2 == 0,
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::permits_user;
++
++    #[test]
++    fn shared_authenticator_id_does_not_cross_user_scope() {
++        assert!(permits_user(2, Some(&[10]), 10));
++        assert!(!permits_user(2, Some(&[10]), 0));
++        assert!(!permits_user(2, Some(&[0]), 10));
++    }
++    #[test]
++    fn native_profile_scope_is_retained_without_other_full_users() {
++        assert!(permits_user(2, Some(&[10, 11]), 11));
++        assert!(!permits_user(2, Some(&[10, 11]), 0));
++        assert!(!permits_user(2, Some(&[10, 11]), 12));
++    }
++    #[test]
++    fn unscoped_biometric_tokens_fail_closed() {
++        assert!(!permits_user(2, None, 0));
++        assert!(!permits_user(2, None, 10));
++    }
++    #[test]
++    fn legacy_password_tokens_still_require_native_sid_validation() {
++        assert!(permits_user(1, None, 0));
++        assert!(permits_user(1, None, 10));
++    }
++    #[test]
++    fn mixed_authenticator_types_cannot_escape_biometric_scope() {
++        assert!(!permits_user(3, None, 0));
++        assert!(permits_user(3, Some(&[0]), 0));
++        assert!(!permits_user(3, Some(&[0]), 10));
++    }
++    #[test]
++    fn explicit_empty_scope_authorizes_no_user() {
++        assert!(!permits_user(2, Some(&[]), 0));
++        assert!(!permits_user(1, Some(&[]), 0));
++    }
++    #[test]
++    fn invalid_namespace_is_never_authorized() {
++        assert!(!permits_user(1, None, -1));
++        assert!(!permits_user(2, Some(&[-1]), -1));
++    }
++}
+diff --git a/keystore2/src/database.rs b/keystore2/src/database.rs
+index fed4959..e90e5b4 100644
+--- a/keystore2/src/database.rs
++++ b/keystore2/src/database.rs
+@@ -870,13 +870,20 @@ impl FromSql for BootTime {
+ #[derive(Clone)]
+ pub struct AuthTokenEntry {
+     auth_token: HardwareAuthToken,
++    android_user_scope: Option<Vec<i32>>,
+     // Time received in milliseconds
+     time_received: BootTime,
+ }
+ 
+ impl AuthTokenEntry {
+     fn new(auth_token: HardwareAuthToken, time_received: BootTime) -> Self {
+-        AuthTokenEntry { auth_token, time_received }
++        AuthTokenEntry { auth_token, time_received, android_user_scope: None }
++    }
++
++    /// Additional logical user scope never changes any signed token fields.
++    pub fn permits_user(&self, user: AndroidUserId) -> bool {
++        crate::biometric_user_scope::permits_user(self.auth_token.authenticatorType.0,
++                self.android_user_scope.as_deref(), user.0)
+     }
+ 
+     /// Checks if this auth token satisfies the given authentication information.
+@@ -891,6 +898,13 @@ impl AuthTokenEntry {
+         })
+     }
+ 
++    /// Credential-store and last-auth queries identify a native Gatekeeper SID, not a shared
++    /// biometric authenticator ID.
++    pub fn satisfies_secure_user(&self, sid: SecureUserId, auth_type: HardwareAuthenticatorType) -> bool {
++        self.satisfies(&[sid], auth_type)
++                && (self.auth_token.authenticatorType.0 & 2 == 0 || self.auth_token.userId == sid.0)
++    }
++
+     /// Returns the auth token wrapped by the AuthTokenEntry
+     pub fn auth_token(&self) -> &HardwareAuthToken {
+         &self.auth_token
+@@ -3021,6 +3035,13 @@ impl KeystoreDB {
+             .insert_auth_token_entry(AuthTokenEntry::new(auth_token.clone(), BootTime::now()))
+     }
+ 
++    /// Cache a signed token with the native user/profile group supplied by system_server.
++    pub fn insert_auth_token_for_users(&mut self, auth_token: &HardwareAuthToken, users: Vec<i32>) {
++        let mut entry = AuthTokenEntry::new(auth_token.clone(), BootTime::now());
++        entry.android_user_scope = Some(users);
++        self.perboot.insert_auth_token_entry(entry);
++    }
++
+     /// Find the newest auth token matching the given predicate.
+     pub fn find_auth_token_entry<F>(&self, p: F) -> Option<AuthTokenEntry>
+     where
+diff --git a/keystore2/src/enforcements.rs b/keystore2/src/enforcements.rs
+index d5e30b0..6e4ade9 100644
+--- a/keystore2/src/enforcements.rs
++++ b/keystore2/src/enforcements.rs
+@@ -143,6 +143,7 @@ enum DeferredAuthState {
+ #[derive(Debug)]
+ pub struct AuthInfo {
+     state: DeferredAuthState,
++    user: AndroidUserId,
+     /// An optional key id required to update the usage count if the key usage is limited.
+     key_usage_limited: Option<i64>,
+     confirmation_token_receiver: Option<Arc<Mutex<Option<Receiver<Vec<u8>>>>>>,
+@@ -172,13 +173,20 @@ impl TokenReceiverMap {
+     /// This is the number of calls to add_receiver between cleanups.
+     const CLEANUP_PERIOD: u8 = 25;
+ 
+-    pub fn add_auth_token(&self, hat: HardwareAuthToken) {
++    pub fn add_auth_token(&self, hat: HardwareAuthToken, users: Option<&[i32]>) {
+         let recv = {
+             // Limit the scope of the mutex guard, so that it is not held while the auth token is
+             // added.
+             let mut map = self.map_and_cleanup_counter.lock().unwrap();
+             let (ref mut map, _) = *map;
+-            map.remove_entry(&Challenge(hat.challenge))
++            let challenge = Challenge(hat.challenge);
++            if let Some(receiver) = map.get(&challenge) {
++                if !crate::biometric_user_scope::permits_user(hat.authenticatorType.0,
++                        users, receiver.user.0) {
++                    return;
++                }
++            }
++            map.remove_entry(&challenge)
+         };
+ 
+         if let Some((_, recv)) = recv {
+@@ -203,6 +211,7 @@ impl TokenReceiverMap {
+ #[derive(Debug)]
+ struct TokenReceiver {
+     req: Weak<AuthRequest>,
++    user: AndroidUserId,
+     // Remember the SIDs and auth_type that the token is expected to satisfy.
+     sids: Vec<SecureUserId>,
+     auth_type: HardwareAuthenticatorType,
+@@ -258,6 +267,7 @@ impl AuthInfo {
+                 let auth_request = AuthRequest::op_auth();
+                 let token_receiver = TokenReceiver {
+                     req: Arc::downgrade(&auth_request),
++                    user: self.user,
+                     sids: sids.to_vec(),
+                     auth_type: *auth_type,
+                 };
+@@ -420,6 +430,7 @@ impl Enforcements {
+                     None,
+                     AuthInfo {
+                         state: DeferredAuthState::NoAuthRequired,
++                        user: AndroidUserId(0),
+                         key_usage_limited: None,
+                         confirmation_token_receiver: None,
+                     },
+@@ -604,7 +615,7 @@ impl Enforcements {
+             (None, DeferredAuthState::NoAuthRequired)
+         } else if let Some(key_time_out) = key_time_out {
+             let hat = Self::find_auth_token(|hat: &AuthTokenEntry| match user_auth_type {
+-                Some(auth_type) => hat.satisfies(&user_sids, auth_type),
++                Some(auth_type) => hat.permits_user(user) && hat.satisfies(&user_sids, auth_type),
+                 None => false, // not reachable due to earlier check
+             })
+             .ok_or(Error::Km(Ec::KEY_USER_NOT_AUTHENTICATED))
+@@ -651,7 +662,7 @@ impl Enforcements {
+                 ),
+             )
+         };
+-        Ok((hat, AuthInfo { state, key_usage_limited, confirmation_token_receiver }))
++        Ok((hat, AuthInfo { state, user, key_usage_limited, confirmation_token_receiver }))
+     }
+ 
+     fn find_auth_token<F>(p: F) -> Option<AuthTokenEntry>
+@@ -729,7 +740,13 @@ impl Enforcements {
+     /// auth token this fulfills the request and removes the receiver from the map.
+     pub fn add_auth_token(&self, hat: HardwareAuthToken) {
+         DB.with(|db| db.borrow_mut().insert_auth_token(&hat));
+-        self.op_auth_map.add_auth_token(hat);
++        self.op_auth_map.add_auth_token(hat, None);
++    }
++
++    /// User scope is checked for both timeout keys and pending per-operation requests.
++    pub fn add_auth_token_for_users(&self, hat: HardwareAuthToken, users: Vec<i32>) {
++        DB.with(|db| db.borrow_mut().insert_auth_token_for_users(&hat, users.clone()));
++        self.op_auth_map.add_auth_token(hat, Some(&users));
+     }
+ 
+     /// This allows adding an entry to the op_auth_map, indexed by the operation challenge.
+@@ -794,10 +811,9 @@ impl Enforcements {
+         auth_token_max_age_millis: i64,
+     ) -> Result<(HardwareAuthToken, TimeStampToken)> {
+         let auth_type = HardwareAuthenticatorType::ANY;
+-        let sids: Vec<SecureUserId> = vec![sid];
+         // Filter the matching auth tokens by challenge
+         let result = Self::find_auth_token(|hat: &AuthTokenEntry| {
+-            (challenge == hat.challenge()) && hat.satisfies(&sids, auth_type)
++            (challenge == hat.challenge()) && hat.satisfies_secure_user(sid, auth_type)
+         });
+ 
+         let auth_token = if let Some(auth_token_entry) = result {
+@@ -812,7 +828,7 @@ impl Enforcements {
+                         .is_some_and(|token_age_in_millis| {
+                             auth_token_max_age_millis > token_age_in_millis.milliseconds()
+                         });
+-                    token_valid && auth_token_entry.satisfies(&sids, auth_type)
++                    token_valid && auth_token_entry.satisfies_secure_user(sid, auth_type)
+                 });
+ 
+                 if let Some(auth_token_entry) = result {
+@@ -843,10 +859,59 @@ impl Enforcements {
+         auth_type: HardwareAuthenticatorType,
+     ) -> Option<BootTime> {
+         let result =
+-            Self::find_auth_token(|entry: &AuthTokenEntry| entry.satisfies(&[sid], auth_type));
++            Self::find_auth_token(|entry: &AuthTokenEntry| entry.satisfies_secure_user(sid, auth_type));
+ 
+         result.map(|auth_token_entry| auth_token_entry.time_received())
+     }
+ }
+ 
+ // TODO: Add tests to enforcement module (b/175578618).
++
++#[cfg(test)]
++mod biometric_scope_tests {
++    use super::*;
++    use android_hardware_security_secureclock::aidl::android::hardware::security::secureclock::Timestamp::Timestamp;
++
++    fn token(user_sid: i64) -> HardwareAuthToken {
++        HardwareAuthToken {
++            challenge: 17, userId: user_sid, authenticatorId: 555,
++            authenticatorType: HardwareAuthenticatorType::FINGERPRINT,
++            timestamp: Timestamp { milliSeconds: 1 }, mac: vec![7; 32],
++        }
++    }
++    fn receiver(request: &Arc<AuthRequest>, user: i32) -> TokenReceiver {
++        TokenReceiver { req: Arc::downgrade(request), user: AndroidUserId(user),
++            sids: vec![SecureUserId(555)], auth_type: HardwareAuthenticatorType::FINGERPRINT }
++    }
++    #[test]
++    fn foreign_scoped_token_cannot_fulfil_or_remove_pending_operation() {
++        let map = TokenReceiverMap::default();
++        let request = AuthRequest::op_auth();
++        map.add_receiver(Challenge(17), receiver(&request, 0));
++        map.add_auth_token(token(110), Some(&[10]));
++        assert!(request.get_auth_tokens().is_err());
++        assert!(map.map_and_cleanup_counter.lock().unwrap().0.contains_key(&Challenge(17)));
++        let own = token(99);
++        map.add_auth_token(own.clone(), Some(&[0]));
++        let received = request.get_auth_tokens().unwrap().0;
++        assert_eq!(received.userId, own.userId);
++        assert_eq!(received.authenticatorId, own.authenticatorId);
++        assert_eq!(received.mac, own.mac);
++    }
++    #[test]
++    fn unscoped_biometric_token_does_not_fulfil_pending_operation() {
++        let map = TokenReceiverMap::default();
++        let request = AuthRequest::op_auth();
++        map.add_receiver(Challenge(17), receiver(&request, 0));
++        map.add_auth_token(token(99), None);
++        assert!(request.get_auth_tokens().is_err());
++    }
++    #[test]
++    fn scoped_parent_token_can_fulfil_its_native_profile_operation() {
++        let map = TokenReceiverMap::default();
++        let request = AuthRequest::op_auth();
++        map.add_receiver(Challenge(17), receiver(&request, 11));
++        map.add_auth_token(token(110), Some(&[10, 11]));
++        assert_eq!(request.get_auth_tokens().unwrap().0.userId, 110);
++    }
++}
+diff --git a/keystore2/src/lib.rs b/keystore2/src/lib.rs
+index fc53b91..27a3214 100644
+--- a/keystore2/src/lib.rs
++++ b/keystore2/src/lib.rs
+@@ -18,6 +18,7 @@
+ pub mod apc;
+ pub mod async_task;
+ pub mod authorization;
++mod biometric_user_scope;
+ pub mod boot_level_keys;
+ pub mod database;
+ pub mod ec_crypto;

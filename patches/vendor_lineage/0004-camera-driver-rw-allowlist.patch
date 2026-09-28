@@ -1,0 +1,10 @@
+diff --git a/config/BoardConfigLineage.mk b/config/BoardConfigLineage.mk
+--- a/config/BoardConfigLineage.mk
++++ b/config/BoardConfigLineage.mk
+@@ -11,3 +11,6 @@
+ BUILD_BROKEN_SRC_DIR_RW_ALLOWLIST += $(abspath kernel/xiaomi/sm8735-modules/qcom/opensource/video-driver)
+ 
++# The camera module generates cam_generated_h beside its source files.
++BUILD_BROKEN_SRC_DIR_RW_ALLOWLIST += $(abspath kernel/xiaomi/sm8735-modules/qcom/opensource/camera-kernel)
++
+ # Recovery

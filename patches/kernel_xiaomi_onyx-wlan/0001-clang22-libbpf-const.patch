@@ -1,0 +1,20 @@
+diff --git a/qcacld-3.0/konoha-abi-prep.sh b/qcacld-3.0/konoha-abi-prep.sh
+index 54bbae2..f6a612b 100644
+--- a/qcacld-3.0/konoha-abi-prep.sh
++++ b/qcacld-3.0/konoha-abi-prep.sh
+@@ -143,6 +143,15 @@ git -C "$SRC_DIR" fetch --depth=1 origin "$KERNEL_SOURCE_BRANCH" 2>/dev/null ||
+ git -C "$SRC_DIR" checkout --detach FETCH_HEAD 2>/dev/null || \
+ 	git -C "$SRC_DIR" checkout --detach "origin/$KERNEL_SOURCE_BRANCH"
+ 
++# MiCode's onyx-v-oss libbpf predates Clang 22's stricter const checking.
++# Newer Android clang treats the discarded qualifier as an error because the
++# host-tool build uses -Werror.  next_path is only used for pointer arithmetic,
++# so keeping it const is the correct source-level compatibility fix.
++LIBBPF_SRC="$SRC_DIR/tools/lib/bpf/libbpf.c"
++if grep -q $'\\t\\t\\tchar \\*next_path;' "$LIBBPF_SRC"; then
++	sed -i $'s/\\t\\t\\tchar \\*next_path;/\\t\\t\\tconst char *next_path;/' "$LIBBPF_SRC"
++fi
++
+ # --- stamp release + vendor stubs ------------------------------------------
+ export KERNEL_VERSION KERNEL_PATCHLEVEL KERNEL_SUBLEVEL
+ perl -0pi -e '

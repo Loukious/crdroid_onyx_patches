@@ -1,5 +1,5 @@
 diff --git a/extract-files.py b/extract-files.py
-index 67a785e..dbe67aa 100755
+index a90c789..6e17afb 100755
 --- a/extract-files.py
 +++ b/extract-files.py
 @@ -82,7 +82,80 @@ def blob_fixup_graphic_buffer_size(
@@ -84,7 +84,7 @@ index 67a785e..dbe67aa 100755
          'odm/bin/hw/vendor.xiaomi.hw.touchfeature-service',
          'odm/lib64/libadaptivehdr.so',
 diff --git a/properties/product.prop b/properties/product.prop
-index a847d40..8155b3d 100644
+index 69f274b..83e5a9d 100644
 --- a/properties/product.prop
 +++ b/properties/product.prop
 @@ -30,6 +30,12 @@ bluetooth.profile.pan.panu.enabled=true
@@ -97,6 +97,6 @@ index a847d40..8155b3d 100644
 +persist.vendor.qcom.bluetooth.aptxadaptiver2_2_support=true
 +persist.vendor.qcom.bluetooth.aptxadaptive_split_tx_support=true
 +
- # Phantom process monitoring
- persist.sys.fflag.override.settings_enable_monitor_phantom_procs=false
- 
+ # RKPD
+ remote_provisioning.enable_rkpd=true
+ remote_provisioning.hostname=remoteprovisioning.googleapis.com

@@ -204,7 +204,12 @@ say "preparing the Kono-Ha kernel-ABI tree (before mka)"
 source "$HERE/ci/pin-konoha-symvers.sh" || exit 1
 prep="kernel/xiaomi/sm8735-modules/qcom/opensource/wlan/qcacld-3.0/konoha-abi-prep.sh"
 [ -f "$prep" ] || { echo "FATAL: $prep missing (wlan overlay did not land?)"; exit 1; }
-clang_bin="$(ls -d prebuilts/clang/host/linux-x86/clang-*/bin 2>/dev/null | sort -V | tail -1)"
+# `clang-stable/bin` is present on current cnb trees but contains helper
+# symlinks rather than the clang executable expected by konoha-abi-prep.sh.
+# Pick the newest directory that actually contains an executable compiler.
+clang_bin="$(for d in prebuilts/clang/host/linux-x86/clang-*/bin; do
+    [ -x "$d/clang" ] && printf '%s\n' "$d"
+done | sort -V | tail -1)"
 [ -n "$clang_bin" ] || { echo "FATAL: no prebuilts/clang/host/linux-x86/clang-* found"; exit 1; }
 CLANG_PATH="$PWD/$clang_bin" bash "$prep" || { echo "FATAL: konoha-abi prep failed"; exit 1; }
 

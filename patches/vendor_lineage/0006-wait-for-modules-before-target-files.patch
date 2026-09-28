@@ -1,0 +1,18 @@
+diff --git a/build/tasks/kernel.mk b/build/tasks/kernel.mk
+index 36fb264..787db94 100644
+--- a/build/tasks/kernel.mk
++++ b/build/tasks/kernel.mk
+@@ -434,6 +434,13 @@ endif # FULL_KERNEL_BUILD or TARGET_KERNEL_PLATFORM_TARGET
+ 
+ ifneq ($(filter $(FULL_KERNEL_BUILD),true)$(TARGET_KERNEL_PLATFORM_TARGET),)
+ 
++# Target-files copies module staging separately from the loose boot images.
++# Wait for module installation and packing before taking that snapshot.
++$(BUILT_TARGET_FILES_DIR): $(TARGET_PREBUILT_INT_KERNEL) \
++    $(INTERNAL_VENDOR_RAMDISK_TARGET) \
++    $(INSTALLED_VENDOR_DLKMIMAGE_TARGET) \
++    $(INSTALLED_SYSTEM_DLKMIMAGE_TARGET)
++
+ ifeq ($(NEED_KERNEL_MODULE_ROOT),true)
+ KERNEL_MODULES_OUT := $(TARGET_ROOT_OUT)
+ KERNEL_DEPMOD_STAGING_DIR := $(KERNEL_BUILD_OUT_PREFIX)$(call intermediates-dir-for,PACKAGING,depmod_recovery)

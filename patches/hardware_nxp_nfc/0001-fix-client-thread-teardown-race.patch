@@ -1,0 +1,125 @@
+diff --git a/snxxx/halimpl/hal/phNxpNciHal.cc b/snxxx/halimpl/hal/phNxpNciHal.cc
+index 6e816cf..2dd2ace 100644
+--- a/snxxx/halimpl/hal/phNxpNciHal.cc
++++ b/snxxx/halimpl/hal/phNxpNciHal.cc
+@@ -264,15 +264,24 @@ static void phNxpNciHal_initialize_debug_enabled_flag() {
+ void* phNxpNciHal_client_thread(void* arg) {
+   phNxpNciHal_Control_t* p_nxpncihal_ctrl = (phNxpNciHal_Control_t*)arg;
+   phLibNfc_Message_t msg;
++  const intptr_t client_id = p_nxpncihal_ctrl->client_thread_id;
+ 
+   NXPLOG_NCIHAL_D("thread started");
+ 
++  if (client_id == 0) {
++    NXPLOG_NCIHAL_E("NFC client queue is not initialized");
++    p_nxpncihal_ctrl->thread_running = 0;
++    return NULL;
++  }
++
+   p_nxpncihal_ctrl->thread_running = 1;
+ 
+   while (p_nxpncihal_ctrl->thread_running == 1) {
+     /* Fetch next message from the NFC stack message queue */
+-    if (phDal4Nfc_msgrcv(p_nxpncihal_ctrl->gDrvCfg.nClientId, &msg, 0, 0) ==
+-        -1) {
++    if (phDal4Nfc_msgrcv(client_id, &msg, 0, 0) == -1) {
++      if (p_nxpncihal_ctrl->thread_running == 0) {
++        break;
++      }
+       NXPLOG_NCIHAL_E("NFC client received bad message");
+       continue;
+     }
+@@ -490,12 +499,18 @@ static NFCSTATUS phNxpNciHal_force_fw_download(uint8_t seq_handler_offset,
+       fw_download_success = TRUE;
+     } else if (status == NFCSTATUS_FW_CHECK_INTEGRITY_FAILED ||
+                (phNxpNciHal_fw_mw_ver_check() != NFCSTATUS_SUCCESS)) {
+-      intptr_t client_id = nxpncihal_ctrl.gDrvCfg.nClientId;
++      intptr_t client_id = nxpncihal_ctrl.client_thread_id;
+       nxpncihal_ctrl.gDrvCfg.nClientId = 0;
+       phOsalNfc_Timer_Cleanup();
++      nxpncihal_ctrl.thread_running = 0;
++      phDal4Nfc_msgsempost(client_id);
++      if (0 != pthread_join(nxpncihal_ctrl.client_thread, (void**)NULL)) {
++        NXPLOG_TML_E("Fail to kill client thread after FW download failure!");
++      }
+       phNxpTempMgr::GetInstance().Reset();
+       phTmlNfc_Shutdown_CleanUp();
+       phDal4Nfc_msgrelease(client_id);
++      nxpncihal_ctrl.client_thread_id = 0;
+       return NFCSTATUS_CMD_ABORTED;
+     }
+ 
+@@ -776,6 +791,7 @@ int phNxpNciHal_MinOpen() {
+   }
+   /* Configure hardware link */
+   nxpncihal_ctrl.gDrvCfg.nClientId = phDal4Nfc_msgget(0, 0600);
++  nxpncihal_ctrl.client_thread_id = nxpncihal_ctrl.gDrvCfg.nClientId;
+   nxpncihal_ctrl.gDrvCfg.nLinkType = ENUM_LINK_TYPE_I2C; /* For NFCC */
+   tTmlConfig.pDevName = (int8_t*)nfc_dev_node;
+   tOsalConfig.dwCallbackThreadId = (uintptr_t)nxpncihal_ctrl.gDrvCfg.nClientId;
+diff --git a/snxxx/halimpl/hal/phNxpNciHal.h b/snxxx/halimpl/hal/phNxpNciHal.h
+index c3bf837..5db4f07 100644
+--- a/snxxx/halimpl/hal/phNxpNciHal.h
++++ b/snxxx/halimpl/hal/phNxpNciHal.h
+@@ -143,6 +143,7 @@ typedef struct phNxpNciHal_Control {
+   phNxpNci_HalStatus halStatus; /* Indicate if hal is open or closed */
+   pthread_t client_thread;      /* Integration thread handle */
+   uint8_t thread_running;       /* Thread running if set to 1, else set to 0 */
++  intptr_t client_thread_id;    /* Stable message queue used by client thread */
+   phLibNfc_sConfig_t gDrvCfg;   /* Driver config data */
+ 
+   /* Rx data */
+diff --git a/snxxx/halimpl/recovery/phNxpNciHal_Recovery.cc b/snxxx/halimpl/recovery/phNxpNciHal_Recovery.cc
+index bd98f63..73f1faf 100644
+--- a/snxxx/halimpl/recovery/phNxpNciHal_Recovery.cc
++++ b/snxxx/halimpl/recovery/phNxpNciHal_Recovery.cc
+@@ -537,6 +537,7 @@ static NFCSTATUS phnxpNciHal_partialOpen(void) {
+   }
+   /* Configure hardware link */
+   nxpncihal_ctrl.gDrvCfg.nClientId = phDal4Nfc_msgget(0, 0600);
++  nxpncihal_ctrl.client_thread_id = nxpncihal_ctrl.gDrvCfg.nClientId;
+   nxpncihal_ctrl.gDrvCfg.nLinkType = ENUM_LINK_TYPE_I2C; /* For NFCC */
+   tTmlConfig.pDevName = (int8_t*)nfc_dev_node;
+   tOsalConfig.dwCallbackThreadId = (uintptr_t)nxpncihal_ctrl.gDrvCfg.nClientId;
+diff --git a/snxxx/halimpl/tml/phDal4Nfc_messageQueueLib.cc b/snxxx/halimpl/tml/phDal4Nfc_messageQueueLib.cc
+index b50bdd8..a042645 100644
+--- a/snxxx/halimpl/tml/phDal4Nfc_messageQueueLib.cc
++++ b/snxxx/halimpl/tml/phDal4Nfc_messageQueueLib.cc
+@@ -71,6 +71,25 @@ intptr_t phDal4Nfc_msgget(key_t key, int msgflg) {
+   return ((intptr_t)pQueue);
+ }
+ 
++/*******************************************************************************
++**
++** Function         phDal4Nfc_msgsempost
++**
++** Description      Unblocks a thread waiting on this message queue.
++**
++** Parameters       msqid - message queue handle
++**
++** Returns          None
++**
++*******************************************************************************/
++void phDal4Nfc_msgsempost(intptr_t msqid) {
++  phDal4Nfc_message_queue_t* pQueue = (phDal4Nfc_message_queue_t*)msqid;
++
++  if (pQueue != NULL) {
++    sem_post(&pQueue->nProcessSemaphore);
++  }
++}
++
+ /*******************************************************************************
+ **
+ ** Function         phDal4Nfc_msgrelease
+diff --git a/snxxx/halimpl/tml/phDal4Nfc_messageQueueLib.h b/snxxx/halimpl/tml/phDal4Nfc_messageQueueLib.h
+index dbda967..22452b7 100644
+--- a/snxxx/halimpl/tml/phDal4Nfc_messageQueueLib.h
++++ b/snxxx/halimpl/tml/phDal4Nfc_messageQueueLib.h
+@@ -25,6 +25,7 @@
+ #include <phNfcTypes.h>
+ 
+ intptr_t phDal4Nfc_msgget(key_t key, int msgflg);
++void phDal4Nfc_msgsempost(intptr_t msqid);
+ void phDal4Nfc_msgrelease(intptr_t msqid);
+ intptr_t phDal4Nfc_msgsnd(intptr_t msqid, phLibNfc_Message_t* msg, int msgflg);
+ int phDal4Nfc_msgrcv(intptr_t msqid, phLibNfc_Message_t* msg, long msgtyp,

@@ -1,5 +1,5 @@
 diff --git a/res/xml/gesture_navigation_settings.xml b/res/xml/gesture_navigation_settings.xml
-index 22980c8cbba..d373f9f3a6e 100644
+index 22980c8..d373f9f 100644
 --- a/res/xml/gesture_navigation_settings.xml
 +++ b/res/xml/gesture_navigation_settings.xml
 @@ -47,6 +47,15 @@

@@ -1,0 +1,65 @@
+diff --git a/core/java/android/os/UserManager.java b/core/java/android/os/UserManager.java
+index 7cdca913b..8ab836150 100644
+--- a/core/java/android/os/UserManager.java
++++ b/core/java/android/os/UserManager.java
+@@ -154,6 +154,13 @@ public class UserManager {
+     @SystemApi
+     public static final String USER_TYPE_FULL_SECONDARY = "android.os.usertype.full.SECONDARY";
+ 
++    /**
++     * Full secondary user managed by Secure Spaces. Credentials and storage remain per-user.
++     * @hide
++     */
++    public static final String USER_TYPE_FULL_SECURE_SPACE =
++            "android.os.usertype.full.SECURE_SPACE";
++
+     /**
+      * User type representing a guest user that may be transient.
+      * @hide
+diff --git a/services/core/java/com/android/server/pm/UserTypeFactory.java b/services/core/java/com/android/server/pm/UserTypeFactory.java
+index dbc2f0deb..4861f21d7 100644
+--- a/services/core/java/com/android/server/pm/UserTypeFactory.java
++++ b/services/core/java/com/android/server/pm/UserTypeFactory.java
+@@ -31,6 +31,7 @@ import static android.os.UserManager.USER_TYPE_FULL_DEMO;
+ import static android.os.UserManager.USER_TYPE_FULL_GUEST;
+ import static android.os.UserManager.USER_TYPE_FULL_RESTRICTED;
+ import static android.os.UserManager.USER_TYPE_FULL_SECONDARY;
++import static android.os.UserManager.USER_TYPE_FULL_SECURE_SPACE;
+ import static android.os.UserManager.USER_TYPE_FULL_SYSTEM;
+ import static android.os.UserManager.USER_TYPE_PROFILE_CLONE;
+ import static android.os.UserManager.USER_TYPE_PROFILE_COMMUNAL;
+@@ -115,6 +116,8 @@ public final class UserTypeFactory {
+         builders.put(USER_TYPE_PROFILE_MANAGED, getDefaultTypeProfileManaged());
+         builders.put(USER_TYPE_FULL_SYSTEM, getDefaultTypeFullSystem());
+         builders.put(USER_TYPE_FULL_SECONDARY, getDefaultTypeFullSecondary());
++        builders.put(USER_TYPE_FULL_SECURE_SPACE,
++                getDefaultTypeFullSecondary().setName(USER_TYPE_FULL_SECURE_SPACE));
+         builders.put(USER_TYPE_FULL_GUEST, getDefaultTypeFullGuest());
+         builders.put(USER_TYPE_FULL_DEMO, getDefaultTypeFullDemo());
+         builders.put(USER_TYPE_FULL_RESTRICTED, getDefaultTypeFullRestricted());
+diff --git a/services/tests/servicestests/src/com/android/server/pm/UserManagerServiceUserTypeTest.java b/services/tests/servicestests/src/com/android/server/pm/UserManagerServiceUserTypeTest.java
+index 1493ed54b..c16548463 100644
+--- a/services/tests/servicestests/src/com/android/server/pm/UserManagerServiceUserTypeTest.java
++++ b/services/tests/servicestests/src/com/android/server/pm/UserManagerServiceUserTypeTest.java
+@@ -80,6 +80,21 @@ public class UserManagerServiceUserTypeTest {
+         mResources = InstrumentationRegistry.getTargetContext().getResources();
+     }
+ 
++    @Test
++    public void testSecureSpace_isFullSecondaryWithIndependentPersistedType() {
++        ArrayMap<String, UserTypeDetails> types = UserTypeFactory.getUserTypes();
++        UserTypeDetails secondary = types.get(UserManager.USER_TYPE_FULL_SECONDARY);
++        UserTypeDetails space = types.get(UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        assertNotNull(space);
++        expect.that(space.isFull()).isTrue();
++        expect.that(space.isProfile()).isFalse();
++        expect.that(space.getDefaultUserInfoFlags())
++                .isEqualTo(secondary.getDefaultUserInfoFlags());
++        expect.that(space.getMaxAllowed()).isEqualTo(secondary.getMaxAllowed());
++        expect.that(space.getDefaultRestrictions().keySet())
++                .containsExactlyElementsIn(secondary.getDefaultRestrictions().keySet());
++    }
++
+     @Test
+     @EnableFlags(android.multiuser.Flags.FLAG_HSU_APP_MANAGEMENT)
+     public void testUserTypeBuilder_systemHeadless_hsuAppManagementEnabled() throws Exception {

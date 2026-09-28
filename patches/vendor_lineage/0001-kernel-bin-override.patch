@@ -1,8 +1,8 @@
 diff --git a/build/tasks/kernel.mk b/build/tasks/kernel.mk
-index a40187ed..0983291b 100644
+index 36fb264..2db985f 100644
 --- a/build/tasks/kernel.mk
 +++ b/build/tasks/kernel.mk
-@@ -781,6 +781,16 @@ $(BOARD_PREBUILT_DTBOIMAGE): $(TARGET_PREBUILT_INT_KERNEL) $(MKDTBOIMG)
+@@ -814,6 +814,16 @@ $(BOARD_PREBUILT_DTBOIMAGE): $(TARGET_PREBUILT_INT_KERNEL) $(MKDTBOIMG)
  endif
  endif
  

@@ -1,8 +1,8 @@
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index 1d4ce26e7739..37d447c7c4a5 100644
+index 54e882f39..0c1d012f9 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
-@@ -7039,6 +7039,14 @@ public final class Settings {
+@@ -7049,6 +7049,14 @@ public final class Settings {
           */
          public static final String QS_BRIGHTNESS_SLIDER_HAPTIC = "qs_brightness_slider_haptic";
  
@@ -18,7 +18,7 @@ index 1d4ce26e7739..37d447c7c4a5 100644
           * Whether to show seconds next to clock in status bar
           * 0 - hide (default)
 diff --git a/services/core/java/com/android/server/wm/DisplayPolicy.java b/services/core/java/com/android/server/wm/DisplayPolicy.java
-index e6b60a1539b2..1ff5d750df17 100644
+index 8ef7610d6..eacae72f9 100644
 --- a/services/core/java/com/android/server/wm/DisplayPolicy.java
 +++ b/services/core/java/com/android/server/wm/DisplayPolicy.java
 @@ -88,6 +88,7 @@ import static android.view.WindowManagerGlobal.ADD_MULTIPLE_SINGLETON;

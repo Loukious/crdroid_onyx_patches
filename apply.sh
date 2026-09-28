@@ -83,15 +83,19 @@ declare -A PROJECT=(
     [device_xiaomi_onyx-miuicamera]="device/xiaomi/onyx-miuicamera"
     [device_qcom_sepolicy_vndr_sm8750]="device/qcom/sepolicy_vndr/sm8750"
     [frameworks_base]="frameworks/base"
+    [hardware_nxp_nfc]="hardware/nxp/nfc"
     [hardware_qcom-caf_sm8750_audio_primary-hal]="hardware/qcom-caf/sm8750/audio/primary-hal"
     [kernel_xiaomi_sm8735]="kernel/xiaomi/sm8735"
     [kernel_xiaomi_sm8735-modules]="kernel/xiaomi/sm8735-modules"
+    [kernel_xiaomi_onyx-wlan]="kernel/xiaomi/onyx-wlan"
+    [lineage-sdk]="lineage-sdk"
     [packages_apps_Evolver]="packages/apps/Evolver"
     [packages_apps_Settings]="packages/apps/Settings"
     [packages_apps_Updater]="packages/apps/Updater"
     [packages_modules_Bluetooth]="packages/modules/Bluetooth"
-    [packages_modules_common]="packages/modules/common"
     [system_sepolicy]="system/sepolicy"
+    [system_vold]="system/vold"
+    [system_security]="system/security"
     [vendor_gms]="vendor/gms"
     [vendor_lineage]="vendor/lineage"
     [vendor_qcom_opensource_interfaces]="vendor/qcom/opensource/interfaces"
@@ -102,7 +106,7 @@ fail=0 applied=0 already=0
 
 # ------------------------------------------------------------------- patching
 apply_patches() {
-    local pdir key proj patch n
+    local pdir key proj patch n exact
     for pdir in "$HERE"/patches/*/; do
         [ -d "$pdir" ] || continue   # unexpanded glob: no patch dirs at all
         key="$(basename "$pdir")"
@@ -118,11 +122,36 @@ apply_patches() {
         for patch in "$pdir"*.patch; do
             [ -e "$patch" ] || continue
             n="$(basename "$patch")"
+            exact=0
+            case "$key/$n" in
+                frameworks_base/000[3-9]-*|frameworks_base/0010-*|\
+                packages_apps_Settings/0002-secure-spaces-management.patch|\
+                lineage-sdk/*|hardware_nxp_nfc/*|system_security/*|system_vold/*)
+                    exact=1
+                    ;;
+            esac
 
             # Already applied? Then the reverse patch applies cleanly.
-            if patch -d "$ROM/$proj" -p1 -R --dry-run < "$patch" >/dev/null 2>&1; then
+            if { [ "$exact" = 1 ] &&
+                    git -C "$ROM/$proj" apply --reverse --check "$patch" >/dev/null 2>&1; } ||
+                    { [ "$exact" = 0 ] &&
+                    patch -d "$ROM/$proj" -p1 -R --dry-run < "$patch" >/dev/null 2>&1; }; then
                 echo "   -- $n (already applied)"
                 already=$((already+1))
+                continue
+            fi
+
+            if [ "$exact" = 1 ]; then
+                # Auth/duress/NFC patches are security-sensitive snapshots. Never
+                # relocate their hunks with fuzz: source drift must fail loudly.
+                if git -C "$ROM/$proj" apply --check "$patch" >/dev/null 2>&1 &&
+                        git -C "$ROM/$proj" apply "$patch"; then
+                    grn "   ++ $n (exact)"
+                    applied=$((applied+1))
+                else
+                    red "   !! $n FAILED (exact apply required)"
+                    fail=1
+                fi
                 continue
             fi
 

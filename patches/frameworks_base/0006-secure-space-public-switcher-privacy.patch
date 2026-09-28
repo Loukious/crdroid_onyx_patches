@@ -1,0 +1,385 @@
+diff --git a/core/java/android/content/pm/UserInfo.java b/core/java/android/content/pm/UserInfo.java
+index 9444edd72..6289f6514 100644
+--- a/core/java/android/content/pm/UserInfo.java
++++ b/core/java/android/content/pm/UserInfo.java
+@@ -517,12 +517,14 @@ public class UserInfo implements Parcelable {
+      * <p>This method checks if {@link #supportsSwitchTo()} is true AND the user is a full user.
+      * It specifically excludes the headless system user, as switching to that user
+      * is typically a framework-level operation and not available via the usual switcher UIs.
++     * Concealed Secure Spaces are likewise excluded from public switcher presentation.
+      *
+      * @hide
+      */
+     @android.ravenwood.annotation.RavenwoodThrow
+     public boolean isUiSwitchableHumanUser() {
+-        return supportsSwitchTo() && isFull();
++        return supportsSwitchTo() && isFull()
++                && !UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(userType);
+     }
+ 
+     /**
+diff --git a/core/tests/mockingcoretests/src/android/content/pm/UserInfoTest.java b/core/tests/mockingcoretests/src/android/content/pm/UserInfoTest.java
+index cf8ca95d9..3d430f572 100644
+--- a/core/tests/mockingcoretests/src/android/content/pm/UserInfoTest.java
++++ b/core/tests/mockingcoretests/src/android/content/pm/UserInfoTest.java
+@@ -66,6 +66,15 @@ public final class UserInfoTest {
+             .spyStatic(Resources.class)
+             .build();
+ 
++    @Test
++    public void secureSpace_nativeSwitchSupported_butExcludedFromPublicSwitcher() {
++        UserInfo user = createTestUserInfo(
++                android.os.UserManager.USER_TYPE_FULL_SECURE_SPACE, FLAG_FULL);
++        expect.that(user.isFull()).isTrue();
++        expect.that(user.supportsSwitchTo()).isTrue();
++        expect.that(user.isUiSwitchableHumanUser()).isFalse();
++    }
++
+     @Test
+     public void testSimple() throws Exception {
+         UserInfo ui = createTestUserInfo(FLAG_GUEST);
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractorTest.kt
+index d5bfcdcc1..6a0f827f6 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractorTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractorTest.kt
+@@ -277,6 +277,55 @@ class UserSwitcherInteractorTest : SysuiTestCase() {
+         }
+     }
+ 
++    @Test
++    fun users_secureSpacesAreAbsentFromPublicList() {
++        createUserInteractor()
++        testScope.runTest {
++            val owner = createUserInfos(count = 1, includeGuest = false)[0]
++            val secureSpace = UserInfo(
++                10, "Hidden", "", UserInfo.FLAG_FULL,
++                UserManager.USER_TYPE_FULL_SECURE_SPACE,
++            )
++            userRepository.setUserInfos(listOf(owner, secureSpace))
++            userRepository.setSelectedUserInfo(owner)
++            userRepository.setSettings(UserSwitcherSettingsModel(isUserSwitcherEnabled = true))
++            val value = collectLastValue(underTest.users)
++            assertUsers(models = value(), count = 1)
++            // Filtering presentation must not remove the authentication destination.
++            assertThat(userRepository.getSelectedUserInfo().id).isEqualTo(owner.id)
++        }
++    }
++
++    @Test
++    fun users_inSecureSpaceNoPublicSwitcherRecordsOrActions() {
++        createUserInteractor()
++        testScope.runTest {
++            val owner = createUserInfos(count = 1, includeGuest = false)[0]
++            val secureSpace = UserInfo(
++                10, "Hidden", "", UserInfo.FLAG_FULL,
++                UserManager.USER_TYPE_FULL_SECURE_SPACE,
++            )
++            userRepository.setUserInfos(listOf(owner, secureSpace))
++            userRepository.setSelectedUserInfo(owner)
++            userRepository.setSettings(UserSwitcherSettingsModel(isUserSwitcherEnabled = true))
++            val users = collectLastValue(underTest.users)
++            val actions = collectLastValue(underTest.actions)
++            val records = collectLastValue(underTest.userRecords)
++            val selectedRecord = collectLastValue(underTest.selectedUserRecord)
++            val publicSelectedUser = collectLastValue(underTest.selectedUser)
++            // Exercise a live selection change, including previously cached owner records.
++            userRepository.setSelectedUserInfo(secureSpace)
++            assertThat(underTest.isUserSwitcherEnabled).isFalse()
++            assertThat(users()).isEmpty()
++            assertThat(actions()).isEmpty()
++            assertThat(records()).isEmpty()
++            assertThat(selectedRecord()).isNull()
++            assertThat(publicSelectedUser()?.name).isEqualTo(Text.Loaded(""))
++            assertThat(publicSelectedUser()?.isSelectable).isFalse()
++            assertThat(userRepository.getSelectedUserInfo().id).isEqualTo(secureSpace.id)
++        }
++    }
++
+     @Test
+     fun users_switcherEnabled() {
+         createUserInteractor()
+diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
+index 0271cf84d..603ff273f 100644
+--- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
++++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
+@@ -904,7 +904,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
+                     }
+                     break;
+                 case USERS:
+-                    if (mUserManager.getUsers().size() > 1) {
++                    if (mUserManager.isUserSwitcherEnabled()
++                            && mUserManager.getUsers().stream()
++                                    .filter(UserInfo::isUiSwitchableHumanUser).count() > 1) {
+                         addUserActions(mUsersItems, currentUserInfo);
+                         addIfShouldShowAction(tempActions, new UsersAction());
+                     }
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/policy/UserInfoControllerImpl.java b/packages/SystemUI/src/com/android/systemui/statusbar/policy/UserInfoControllerImpl.java
+index 081f2ee93..136e0dca5 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/policy/UserInfoControllerImpl.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/policy/UserInfoControllerImpl.java
+@@ -150,6 +150,10 @@ public class UserInfoControllerImpl implements UserInfoController {
+             @Override
+             protected UserInfoQueryResult doInBackground(Void... params) {
+                 final UserManager um = UserManager.get(mContext);
++                if (UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(userInfo.userType)) {
++                    return new UserInfoQueryResult("", UserIcons.getDefaultUserIcon(
++                            context.getResources(), UserHandle.USER_NULL, lightIcon), null);
++                }
+ 
+                 // Fall back to the UserManager nickname if we can't read the name from the local
+                 // profile below.
+@@ -168,7 +172,8 @@ public class UserInfoControllerImpl implements UserInfoController {
+ 
+                 // If it's a single-user device, get the profile name, since the nickname is not
+                 // usually valid
+-                if (um.getUsers().size() <= 1) {
++                if (um.getUsers().stream().filter(user -> !UserManager.USER_TYPE_FULL_SECURE_SPACE
++                        .equals(user.userType)).count() <= 1) {
+                     try {
+                         // Try and read the display name from the local profile
+                         final Cursor cursor = context.getContentResolver().query(
+diff --git a/packages/SystemUI/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractor.kt b/packages/SystemUI/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractor.kt
+index df63af8d3..0bd825fbb 100644
+--- a/packages/SystemUI/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractor.kt
+@@ -125,7 +125,16 @@ constructor(
+ 
+     private val callbacks = CopyOnWriteArrayList<UserCallback>()
+     private val userInfos: Flow<List<UserInfo>> =
+-        repository.userInfos.map { userInfos -> userInfos.filter { it.isFull } }
++        combine(repository.userInfos, repository.selectedUserInfo) { userInfos, selectedUser ->
++            // Presentation only: authentication and erasure retain the complete native registry.
++            if (selectedUser.userType == UserManager.USER_TYPE_FULL_SECURE_SPACE) {
++                emptyList()
++            } else {
++                userInfos.filter {
++                    it.isFull && it.userType != UserManager.USER_TYPE_FULL_SECURE_SPACE
++                }
++            }
++        }
+ 
+     /** List of current on-device users to select from. */
+     val users: Flow<List<UserModel>>
+@@ -134,6 +143,10 @@ constructor(
+                 userInfos,
+                 selectedUserInfo,
+                 settings ->
++                // selectedUserInfo can arrive before the filtered list after a switch.
++                if (selectedUserInfo.userType == UserManager.USER_TYPE_FULL_SECURE_SPACE) {
++                    return@combine emptyList()
++                }
+                 toUserModels(
+                     userInfos = userInfos,
+                     selectedUserId = selectedUserInfo.id,
+@@ -141,11 +154,25 @@ constructor(
+                 )
+             }
+ 
+-    /** The currently-selected user. */
++    /** Public presentation of the selected user; private identity stays in UserRepository. */
+     val selectedUser: Flow<UserModel>
+         get() =
+             repository.selectedUserInfo.map { selectedUserInfo ->
+                 val selectedUserId = selectedUserInfo.id
++                if (selectedUserInfo.userType == UserManager.USER_TYPE_FULL_SECURE_SPACE) {
++                    // Hidden controls can still retain data or expose accessibility metadata.
++                    // Never load a private user's name or avatar for a public UI model.
++                    return@map UserModel(
++                        id = selectedUserId,
++                        name = Text.Loaded(""),
++                        image = checkNotNull(applicationContext.getDrawable(
++                            com.android.settingslib.R.drawable.ic_account_circle
++                        )),
++                        isSelected = true,
++                        isSelectable = false,
++                        isGuest = false,
++                    )
++                }
+                 toUserModel(
+                     userInfo = selectedUserInfo,
+                     selectedUserId = selectedUserId,
+@@ -161,8 +188,11 @@ constructor(
+                     userInfos,
+                     repository.userSwitcherSettings,
+                     keyguardInteractor.isKeyguardShowing,
+-                ) { _, userInfos, settings, isDeviceLocked ->
++                ) { selectedUser, userInfos, settings, isDeviceLocked ->
+                     buildList {
++                        if (selectedUser.userType == UserManager.USER_TYPE_FULL_SECURE_SPACE) {
++                            return@buildList
++                        }
+                         val canAccessUserSwitcher =
+                             !isDeviceLocked || settings.isAddUsersFromLockscreen
+                         if (canAccessUserSwitcher) {
+@@ -245,6 +275,9 @@ constructor(
+                 selectedUserInfo,
+                 actionModels,
+                 settings ->
++                if (selectedUserInfo.userType == UserManager.USER_TYPE_FULL_SECURE_SPACE) {
++                    return@combine ArrayList<UserRecord>()
++                }
+                 ArrayList(
+                     userInfos.map {
+                         toRecord(userInfo = it, selectedUserId = selectedUserInfo.id)
+@@ -271,7 +304,11 @@ constructor(
+     val selectedUserRecord: StateFlow<UserRecord?> =
+         repository.selectedUserInfo
+             .map { selectedUserInfo ->
+-                toRecord(userInfo = selectedUserInfo, selectedUserId = selectedUserInfo.id)
++                if (selectedUserInfo.userType == UserManager.USER_TYPE_FULL_SECURE_SPACE) {
++                    null
++                } else {
++                    toRecord(userInfo = selectedUserInfo, selectedUserId = selectedUserInfo.id)
++                }
+             }
+             .stateIn(
+                 scope = applicationScope,
+@@ -299,7 +336,9 @@ constructor(
+         get() = repository.isSimpleUserSwitcher()
+ 
+     val isUserSwitcherEnabled: Boolean
+-        get() = repository.isUserSwitcherEnabled()
++        get() =
++            repository.getSelectedUserInfo().userType != UserManager.USER_TYPE_FULL_SECURE_SPACE &&
++                repository.isUserSwitcherEnabled()
+ 
+     val keyguardUpdateMonitorCallback =
+         object : KeyguardUpdateMonitorCallback() {
+@@ -529,6 +568,9 @@ constructor(
+      * shade context will be used.
+      */
+     fun showUserSwitcher(expandable: Expandable?, context: Context? = null) {
++        if (repository.getSelectedUserInfo().userType == UserManager.USER_TYPE_FULL_SECURE_SPACE) {
++            return
++        }
+         if (featureFlags.isEnabled(Flags.FULL_SCREEN_USER_SWITCHER)) {
+             showDialog(ShowDialogRequestModel.ShowUserSwitcherFullscreenDialog(expandable, context))
+         } else {
+diff --git a/services/core/java/com/android/server/am/UserController.java b/services/core/java/com/android/server/am/UserController.java
+index 971216ef4..8d83a604a 100644
+--- a/services/core/java/com/android/server/am/UserController.java
++++ b/services/core/java/com/android/server/am/UserController.java
+@@ -2562,8 +2562,11 @@ class UserController implements Handler.Callback {
+             ActivityManager.invalidateGetCurrentUserIdCache();
+             userSwitchUiEnabled = mUserSwitchUiEnabled;
+         }
++        UserInfo currentUserInfo = getUserInfo(currentUserId);
++        // UserSwitchingDialog anonymizes transitions involving concealed Secure Spaces. Keep the
++        // full-screen switch cover so framework/keyguard churn is hidden without exposing either
++        // space's identity.
+         if (userSwitchUiEnabled) {
+-            UserInfo currentUserInfo = getUserInfo(currentUserId);
+             Pair<UserInfo, UserInfo> userNames = new Pair<>(currentUserInfo, targetUserInfo);
+             mUiHandler.removeMessages(START_USER_SWITCH_UI_MSG);
+             mUiHandler.sendMessage(mUiHandler.obtainMessage(
+diff --git a/services/core/java/com/android/server/am/UserSwitchingDialog.java b/services/core/java/com/android/server/am/UserSwitchingDialog.java
+index 398728918..a6af12ea3 100644
+--- a/services/core/java/com/android/server/am/UserSwitchingDialog.java
++++ b/services/core/java/com/android/server/am/UserSwitchingDialog.java
+@@ -131,16 +131,26 @@ class UserSwitchingDialog extends Dialog {
+         setCancelable(false);
+         setContentView(R.layout.user_switching_dialog);
+ 
++        final boolean concealIdentity = involvesSecureSpace();
++
+         final TextView textView = findViewById(R.id.message);
+         if (textView != null) {
+-            final String message = getTextMessage();
+-            textView.setAccessibilityPaneTitle(message);
+-            textView.setText(message);
++            if (concealIdentity) {
++                textView.setVisibility(View.GONE);
++            } else {
++                final String message = getTextMessage();
++                textView.setAccessibilityPaneTitle(message);
++                textView.setText(message);
++            }
+         }
+ 
+         final ImageView imageView = findViewById(R.id.icon);
+         if (imageView != null) {
+-            imageView.setImageBitmap(getUserIconRounded());
++            if (concealIdentity) {
++                imageView.setVisibility(View.GONE);
++            } else {
++                imageView.setImageBitmap(getUserIconRounded());
++            }
+         }
+ 
+         final ImageView progressCircular = findViewById(R.id.progress_circular);
+@@ -155,6 +165,11 @@ class UserSwitchingDialog extends Dialog {
+         }
+     }
+ 
++    private boolean involvesSecureSpace() {
++        return UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(mOldUser.userType)
++                || UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(mNewUser.userType);
++    }
++
+     private Bitmap getUserIconRounded() {
+         final String iconPath = mIsLogout ? mOldUser.iconPath : mNewUser.iconPath;
+         final Bitmap bmp = ObjectUtils.getOrElse(BitmapFactory.decodeFile(iconPath),
+diff --git a/services/core/java/com/android/server/pm/UserManagerService.java b/services/core/java/com/android/server/pm/UserManagerService.java
+index d34c9157f..307a4842f 100644
+--- a/services/core/java/com/android/server/pm/UserManagerService.java
++++ b/services/core/java/com/android/server/pm/UserManagerService.java
+@@ -3333,6 +3333,13 @@ public class UserManagerService extends IUserManager.Stub {
+ 
+     @VisibleForTesting
+     boolean isUserSwitcherEnabled(@UserIdInt int userId) {
++        synchronized (mUsersLock) {
++            UserInfo user = getUserInfoLU(userId);
++            if (user != null
++                    && UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(user.userType)) {
++                return false;
++            }
++        }
+         boolean multiUserSettingOn = Settings.Global.getInt(mContext.getContentResolver(),
+                 Settings.Global.USER_SWITCHER_ENABLED,
+                 getContextResources().getBoolean(com.android.internal
+@@ -8771,6 +8778,17 @@ public class UserManagerService extends IUserManager.Stub {
+             return UserManagerService.this.getUserIds();
+         }
+ 
++        @Override
++        public int[] getUserIdsForKeyErasure() {
++            synchronized (mUsersLock) {
++                int[] ids = new int[mUsers.size()];
++                for (int i = 0; i < ids.length; i++) {
++                    ids[i] = mUsers.keyAt(i);
++                }
++                return ids;
++            }
++        }
++
+         @Override
+         public @NonNull List<UserInfo> getUsers(boolean excludeDying) {
+             if (!android.multiuser.Flags.userFilterRefactoring()) {
+diff --git a/services/tests/servicestests/src/com/android/server/am/UserControllerTest.java b/services/tests/servicestests/src/com/android/server/am/UserControllerTest.java
+index e54bb0bad..d36890fbd 100644
+--- a/services/tests/servicestests/src/com/android/server/am/UserControllerTest.java
++++ b/services/tests/servicestests/src/com/android/server/am/UserControllerTest.java
+@@ -272,6 +272,23 @@ public class UserControllerTest {
+     }
+ 
+ 
++    @Test
++    public void switchToSecureSpace_skipsNamedDialog_butStartsNativeSwitch() {
++        setUpUser(TEST_USER_ID, DEFAULT_USER_FLAGS, false,
++                UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        mUserController.setInitialConfig(true, 3, false, -1, false, false);
++        mInjector.mHandler.mRunCallbacksImmediately = false;
++
++        assertTrue(mUserController.switchUser(TEST_USER_ID));
++
++        assertThat(mInjector.mHandler.getMessageCodes()).contains(
++                UserController.START_USER_SWITCH_FG_MSG);
++        assertThat(mInjector.mUiHandler.getMessageCodes()).doesNotContain(
++                UserController.START_USER_SWITCH_UI_MSG);
++        verify(mInjector, never()).showUserSwitchingDialog(
++                any(), any(), any(), any(), anyBoolean(), any());
++    }
++
+     @Test
+     public void testStartUser_foreground() {
+         mInjector.mHandler.mRunCallbacksImmediately = false;

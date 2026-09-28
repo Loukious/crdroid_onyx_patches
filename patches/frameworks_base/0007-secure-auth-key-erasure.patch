@@ -1,0 +1,306 @@
+diff --git a/services/core/java/com/android/server/pm/UserManagerInternal.java b/services/core/java/com/android/server/pm/UserManagerInternal.java
+index 4bf3e1660..f629f6c44 100644
+--- a/services/core/java/com/android/server/pm/UserManagerInternal.java
++++ b/services/core/java/com/android/server/pm/UserManagerInternal.java
+@@ -322,6 +322,12 @@ public abstract class UserManagerInternal {
+      */
+     public abstract int[] getUserIds();
+ 
++    /**
++     * Snapshot of every registered ID for cryptographic erasure, including partial, dying and
++     * pre-created users. Never use this for public presentation or authentication eligibility.
++     */
++    public abstract int[] getUserIdsForKeyErasure();
++
+     /**
+      * Internal implementation of getUsers does not check permissions.
+      * This improves performance for calls from inside system server which already have permissions
+diff --git a/services/core/java/com/android/server/recoverysystem/Android.bp b/services/core/java/com/android/server/recoverysystem/Android.bp
+new file mode 100644
+index 000000000..f0cddf6e2
+--- /dev/null
++++ b/services/core/java/com/android/server/recoverysystem/Android.bp
+@@ -0,0 +1,5 @@
++filegroup {
++    name: "secure-auth-key-erasure-sources",
++    srcs: ["SecureAuthKeyErasure.java"],
++    visibility: ["//frameworks/base/services/tests/secureauth"],
++}
+diff --git a/services/core/java/com/android/server/recoverysystem/SecureAuthDuressWipe.java b/services/core/java/com/android/server/recoverysystem/SecureAuthDuressWipe.java
+new file mode 100644
+index 000000000..e3e57526d
+--- /dev/null
++++ b/services/core/java/com/android/server/recoverysystem/SecureAuthDuressWipe.java
+@@ -0,0 +1,87 @@
++/* Copyright (C) 2026 The Android Open Source Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.server.recoverysystem;
++
++import android.hardware.security.secretkeeper.ISecretkeeper;
++import android.os.IVold;
++import android.os.ServiceManager;
++import android.security.AndroidKeyStoreMaintenance;
++import android.util.Slog;
++
++import com.android.server.LocalServices;
++import com.android.server.pm.UserManagerInternal;
++import com.android.server.power.PowerManagerService;
++
++import java.util.concurrent.atomic.AtomicBoolean;
++
++/** Trusted in-process entry point; no Binder API and no factory-reset substitution. */
++public final class SecureAuthDuressWipe {
++    private static final String TAG = "SecureAuthDuressWipe";
++    private static final AtomicBoolean STARTED = new AtomicBoolean();
++
++    private SecureAuthDuressWipe() {}
++
++    public static void run() {
++        if (!STARTED.compareAndSet(false, true)) {
++            return;
++        }
++        SecureAuthKeyErasure.run(new SecureAuthKeyErasure.Backend() {
++            private IVold vold() {
++                IVold service = IVold.Stub.asInterface(ServiceManager.getService("vold"));
++                if (service == null) throw new IllegalStateException("vold unavailable");
++                return service;
++            }
++
++            @Override
++            public int[] getAllUserIds() {
++                UserManagerInternal manager = LocalServices.getService(UserManagerInternal.class);
++                if (manager == null) throw new IllegalStateException("user registry unavailable");
++                return manager.getUserIdsForKeyErasure();
++            }
++
++            @Override
++            public void deleteKeystoreKeys() throws Exception {
++                AndroidKeyStoreMaintenance.deleteAllKeys();
++            }
++
++            @Override
++            public void deleteSecretkeeperSecretsIfSupported() throws Exception {
++                String name = ISecretkeeper.DESCRIPTOR + "/default";
++                if (!ServiceManager.isDeclared(name)) return;
++                // Do not wait indefinitely for an optional HAL during destruction.
++                ISecretkeeper keeper = ISecretkeeper.Stub.asInterface(
++                        ServiceManager.checkService(name));
++                if (keeper == null) throw new IllegalStateException("Secretkeeper unavailable");
++                keeper.deleteAll();
++            }
++
++            @Override
++            public void destroyUserStorageKeys(int userId) throws Exception {
++                // Evicting loaded keys before shutdown can cause slow/fatal userdata I/O.
++                vold().destroyUserStorageKeys2(userId, false);
++            }
++
++            @Override
++            public void destroySystemStorageKey() throws Exception {
++                vold().destroySystemStorageKey();
++            }
++
++            @Override
++            public void destroyMetadataKey() throws Exception {
++                vold().destroyMetadataKey("/data");
++            }
++
++            @Override
++            public void shutdown() {
++                PowerManagerService.lowLevelShutdown(null);
++            }
++
++            @Override
++            public void onFailure(String stage, Throwable failure) {
++                // Do not persist private user IDs, credential bytes, or key-directory paths.
++                Slog.e(TAG, "Key destruction stage failed: " + stage);
++            }
++        });
++    }
++}
+diff --git a/services/core/java/com/android/server/recoverysystem/SecureAuthKeyErasure.java b/services/core/java/com/android/server/recoverysystem/SecureAuthKeyErasure.java
+new file mode 100644
+index 000000000..32bc507a7
+--- /dev/null
++++ b/services/core/java/com/android/server/recoverysystem/SecureAuthKeyErasure.java
+@@ -0,0 +1,58 @@
++/* Copyright (C) 2026 The Android Open Source Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.server.recoverysystem;
++
++/** All-user cryptographic erasure ordering. Only a committed duress decision may call this. */
++final class SecureAuthKeyErasure {
++    interface Backend {
++        /** Native registry, including disabled users, profiles, and partially removed users. */
++        int[] getAllUserIds() throws Exception;
++        void deleteKeystoreKeys() throws Exception;
++        void deleteSecretkeeperSecretsIfSupported() throws Exception;
++        void destroyUserStorageKeys(int userId) throws Exception;
++        void destroySystemStorageKey() throws Exception;
++        void destroyMetadataKey() throws Exception;
++        void shutdown();
++        void onFailure(String stage, Throwable failure);
++    }
++
++    interface Operation {
++        void run() throws Exception;
++    }
++
++    static void run(Backend backend) {
++        // Snapshot before destroying keys: never enumerate a filtered public user list.
++        int[] userIds = new int[0];
++        try {
++            userIds = backend.getAllUserIds().clone();
++        } catch (Throwable failure) {
++            report(backend, "user registry", failure);
++        }
++        attempt(backend, "keystore", backend::deleteKeystoreKeys);
++        attempt(backend, "secretkeeper", backend::deleteSecretkeeperSecretsIfSupported);
++        for (int userId : userIds) {
++            attempt(backend, "user storage", () -> backend.destroyUserStorageKeys(userId));
++        }
++        attempt(backend, "system storage", backend::destroySystemStorageKey);
++        attempt(backend, "metadata", backend::destroyMetadataKey);
++        // Persisted keys are gone; loaded fscrypt keys may remain until poweroff.
++        backend.shutdown();
++    }
++
++    private static void attempt(Backend backend, String stage, Operation operation) {
++        try {
++            operation.run();
++        } catch (Throwable failure) {
++            report(backend, stage, failure);
++        }
++    }
++
++    private static void report(Backend backend, String stage, Throwable failure) {
++        try {
++            backend.onFailure(stage, failure);
++        } catch (Throwable ignored) {
++            // A broken diagnostic path must not interrupt remaining destruction or shutdown.
++        }
++    }
++}
+diff --git a/services/tests/secureauth/Android.bp b/services/tests/secureauth/Android.bp
+new file mode 100644
+index 000000000..4dcc472a4
+--- /dev/null
++++ b/services/tests/secureauth/Android.bp
+@@ -0,0 +1,10 @@
++java_test_host {
++    name: "SecureAuthKeyErasureTests",
++    srcs: [
++        ":secure-auth-key-erasure-sources",
++        "SecureAuthKeyErasureTest.java",
++    ],
++    static_libs: ["junit"],
++    test_suites: ["general-tests"],
++    test_config: "AndroidTest.xml",
++}
+diff --git a/services/tests/secureauth/AndroidTest.xml b/services/tests/secureauth/AndroidTest.xml
+new file mode 100644
+index 000000000..190b76af9
+--- /dev/null
++++ b/services/tests/secureauth/AndroidTest.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<configuration description="All-user key-erasure sequencing with an inert backend.">
++    <option name="test-suite-tag" value="general-tests" />
++    <test class="com.android.tradefed.testtype.HostTest">
++        <option name="jar" value="SecureAuthKeyErasureTests.jar" />
++        <option name="class" value="com.android.server.recoverysystem.SecureAuthKeyErasureTest" />
++    </test>
++</configuration>
+diff --git a/services/tests/secureauth/SecureAuthKeyErasureTest.java b/services/tests/secureauth/SecureAuthKeyErasureTest.java
+new file mode 100644
+index 000000000..7c78428c3
+--- /dev/null
++++ b/services/tests/secureauth/SecureAuthKeyErasureTest.java
+@@ -0,0 +1,85 @@
++/* Copyright (C) 2026 The Android Open Source Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.server.recoverysystem;
++
++import static org.junit.Assert.assertEquals;
++
++import org.junit.Test;
++
++import java.util.ArrayList;
++import java.util.List;
++
++public class SecureAuthKeyErasureTest {
++    private static final class Backend implements SecureAuthKeyErasure.Backend {
++        final List<String> events = new ArrayList<>();
++        String failAt;
++        boolean failDiagnostics;
++        int[] users = {0, 10, 11, 12, 150};
++
++        private void record(String event) {
++            events.add(event);
++            if (event.equals(failAt)) throw new IllegalStateException("simulated failure");
++        }
++
++        public int[] getAllUserIds() { record("registry"); return users; }
++        public void deleteKeystoreKeys() { record("keystore"); }
++        public void deleteSecretkeeperSecretsIfSupported() { record("secretkeeper"); }
++        public void destroyUserStorageKeys(int id) { record("user:" + id); }
++        public void destroySystemStorageKey() { record("system"); }
++        public void destroyMetadataKey() { record("metadata"); }
++        public void shutdown() { record("shutdown"); }
++        public void onFailure(String stage, Throwable failure) {
++            if (failDiagnostics) throw new IllegalStateException("diagnostic failure");
++        }
++    }
++
++    private static List<String> completeSequence() {
++        return List.of("registry", "keystore", "secretkeeper", "user:0", "user:10",
++                "user:11", "user:12", "user:150", "system", "metadata", "shutdown");
++    }
++
++    @Test
++    public void erasesEveryNativeIdentityAndFinishesWithShutdown() {
++        Backend backend = new Backend();
++        SecureAuthKeyErasure.run(backend);
++        assertEquals(completeSequence(), backend.events);
++    }
++
++    @Test
++    public void eachDestructionFailureStillAttemptsAllOtherKeysAndShutdown() {
++        for (String stage : completeSequence().subList(1, 10)) {
++            Backend backend = new Backend();
++            backend.failAt = stage;
++            SecureAuthKeyErasure.run(backend);
++            assertEquals("Failure at " + stage, completeSequence(), backend.events);
++        }
++    }
++
++    @Test
++    public void registryFailureStillDestroysGlobalKeysAndShutsDown() {
++        Backend backend = new Backend();
++        backend.failAt = "registry";
++        SecureAuthKeyErasure.run(backend);
++        assertEquals(List.of("registry", "keystore", "secretkeeper", "system", "metadata",
++                "shutdown"), backend.events);
++    }
++
++    @Test
++    public void failedDiagnosticsCannotInterruptErasure() {
++        Backend backend = new Backend();
++        backend.failAt = "keystore";
++        backend.failDiagnostics = true;
++        SecureAuthKeyErasure.run(backend);
++        assertEquals(completeSequence(), backend.events);
++    }
++
++    @Test
++    public void emptyRegistryStillErasesSystemAndMetadataKeys() {
++        Backend backend = new Backend();
++        backend.users = new int[0];
++        SecureAuthKeyErasure.run(backend);
++        assertEquals(List.of("registry", "keystore", "secretkeeper", "system", "metadata",
++                "shutdown"), backend.events);
++    }
++}

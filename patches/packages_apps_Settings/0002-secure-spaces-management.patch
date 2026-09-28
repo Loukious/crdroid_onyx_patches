@@ -1,0 +1,3014 @@
+diff --git a/res/values/secure_spaces_strings.xml b/res/values/secure_spaces_strings.xml
+new file mode 100644
+index 0000000..4797cf2
+--- /dev/null
++++ b/res/values/secure_spaces_strings.xml
+@@ -0,0 +1,46 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Copyright (C) 2026 The Evolution X Project; SPDX-License-Identifier: Apache-2.0 -->
++<resources>
++    <string name="secure_spaces_title">Secure Spaces</string>
++    <string name="secure_spaces_summary">Separate spaces for your apps, accounts, and files</string>
++    <string name="secure_spaces_description">Each space has its own apps, accounts, files, and screen lock. Set its PIN or password here before opening it to finish setup.</string>
++    <string name="secure_spaces_owner">Personal space</string>
++    <string name="secure_spaces_owner_lock">Change your personal screen lock</string>
++    <string name="secure_spaces_owner_lock_required">Set a PIN or password before managing spaces</string>
++    <string name="secure_spaces_lock_set">Screen lock configured</string>
++    <string name="secure_spaces_setup_required">Set a PIN or password before opening this space</string>
++    <string name="secure_spaces_add">Add secure space</string>
++    <string name="secure_spaces_open">Open space</string>
++    <string name="secure_spaces_rename">Rename space</string>
++    <string name="secure_spaces_remove">Remove space</string>
++    <string name="secure_spaces_remove_confirmation">Remove “%1$s”? Its apps, accounts, and files will be deleted.</string>
++    <string name="secure_spaces_name_required">Enter a name for the space</string>
++    <string name="secure_spaces_name_hint">Space name</string>
++    <string name="secure_spaces_operation_failed">The space could not be updated. Check your screen lock and user restrictions, then try again.</string>
++    <string name="secure_auth_duress_title">Duress credential</string>
++    <string name="secure_auth_duress_summary">Erase device keys with a separate PIN or password</string>
++    <string name="secure_auth_duress_description">A duress PIN or password destroys this phone’s encryption keys and shuts down the phone. Normal credentials take priority. Keep backups of data you need.</string>
++    <string name="secure_auth_duress_verify">Confirm owner to view configuration</string>
++    <string name="secure_auth_duress_enabled">Configured</string>
++    <string name="secure_auth_duress_disabled">Not configured</string>
++    <string name="secure_auth_duress_configure">Set duress PIN and password</string>
++    <string name="secure_auth_duress_remove">Remove duress credentials</string>
++    <string name="secure_auth_duress_enrollment_warning">Entering either credential on the lockscreen permanently erases access to all device data. Choose credentials different from your normal screen locks. Both must contain at least four characters.</string>
++    <string name="secure_auth_duress_pin">Duress PIN</string>
++    <string name="secure_auth_duress_pin_again">Confirm duress PIN</string>
++    <string name="secure_auth_duress_password">Duress password</string>
++    <string name="secure_auth_duress_password_again">Confirm duress password</string>
++    <string name="secure_auth_duress_invalid">Check the credential lengths and confirmation entries</string>
++    <string name="secure_auth_duress_failed">Configuration could not be verified. Confirm the owner and try again.</string>
++    <string name="secure_spaces_initial_lock_title">Set space screen lock</string>
++    <string name="secure_spaces_initial_lock_description">Set a different screen lock using the same type as your personal screen lock, then confirm your personal screen lock. Afterward, you can add a fingerprint to open this space.</string>
++    <string name="secure_spaces_set_pin">Set PIN</string>
++    <string name="secure_spaces_set_password">Set password</string>
++    <string name="secure_spaces_initial_credential">New credential</string>
++    <string name="secure_spaces_repeat_credential">Confirm credential</string>
++    <string name="secure_spaces_storage_unlock">Unlock protected data to continue moving storage</string>
++    <string name="secure_spaces_lock_and_fingerprint">Screen lock and fingerprint</string>
++    <string name="secure_spaces_set_fingerprint">Set up fingerprint</string>
++    <string name="secure_spaces_fingerprint_description">Screen lock is set. Add a fingerprint to open this space. Its screen lock is still required after a restart.</string>
++    <string name="secure_spaces_fingerprint_unlock">Unlock the space with its screen lock to continue fingerprint setup</string>
++</resources>
+diff --git a/res/xml/more_security_privacy_settings.xml b/res/xml/more_security_privacy_settings.xml
+index f437b71..b442e0d 100644
+--- a/res/xml/more_security_privacy_settings.xml
++++ b/res/xml/more_security_privacy_settings.xml
+@@ -21,6 +21,23 @@
+     android:key="more_security_privacy_settings"
+     android:title="@string/more_security_privacy_settings">
+ 
++    <!-- work profile security section. See also: security_advanced_settings.xml and
++    privacy_advanced_settings.xml. -->
++    <Preference
++        android:order="0"
++        android:key="secure_spaces"
++        android:title="@string/secure_spaces_title"
++        android:summary="@string/secure_spaces_summary"
++        android:fragment="com.android.settings.security.securespaces.SecureSpacesSettings"
++        settings:controller="com.android.settings.security.securespaces.SecureSpacesPreferenceController" />
++
++    <Preference
++        android:key="secure_auth_duress"
++        android:title="@string/secure_auth_duress_title"
++        android:summary="@string/secure_auth_duress_summary"
++        android:fragment="com.android.settings.security.securespaces.SecureAuthDuressSettings"
++        settings:controller="com.android.settings.security.securespaces.SecureAuthDuressPreferenceController" />
++
+     <!-- work profile security section. See also: security_advanced_settings.xml and
+     privacy_advanced_settings.xml. That page also has these same entries.
+      The order is -10 to make sure it is always at the top. -->
+diff --git a/res/xml/security_advanced_settings.xml b/res/xml/security_advanced_settings.xml
+index 8ef5512..b1b28d7 100644
+--- a/res/xml/security_advanced_settings.xml
++++ b/res/xml/security_advanced_settings.xml
+@@ -25,6 +25,21 @@
+         android:key="dashboard_tile_placeholder" />
+ 
+     <!-- Main security section - for trust agents added in code. -->
++    <Preference
++        android:order="200"
++        android:key="secure_spaces"
++        android:title="@string/secure_spaces_title"
++        android:summary="@string/secure_spaces_summary"
++        android:fragment="com.android.settings.security.securespaces.SecureSpacesSettings"
++        settings:controller="com.android.settings.security.securespaces.SecureSpacesPreferenceController" />
++
++    <Preference
++        android:key="secure_auth_duress"
++        android:title="@string/secure_auth_duress_title"
++        android:summary="@string/secure_auth_duress_summary"
++        android:fragment="com.android.settings.security.securespaces.SecureAuthDuressSettings"
++        settings:controller="com.android.settings.security.securespaces.SecureAuthDuressPreferenceController" />
++
+     <com.android.settingslib.widget.UntitledPreferenceCategory
+         android:order="210"
+         android:key="security_category" />
+diff --git a/res/xml/security_dashboard_settings.xml b/res/xml/security_dashboard_settings.xml
+index 3bb7d69..bff3540 100644
+--- a/res/xml/security_dashboard_settings.xml
++++ b/res/xml/security_dashboard_settings.xml
+@@ -22,6 +22,21 @@
+     android:title="@string/security_settings_title">
+ 
+     <!-- security_settings_status.xml -->
++    <Preference
++        android:order="9"
++        android:key="secure_spaces"
++        android:title="@string/secure_spaces_title"
++        android:summary="@string/secure_spaces_summary"
++        android:fragment="com.android.settings.security.securespaces.SecureSpacesSettings"
++        settings:controller="com.android.settings.security.securespaces.SecureSpacesPreferenceController" />
++
++    <Preference
++        android:key="secure_auth_duress"
++        android:title="@string/secure_auth_duress_title"
++        android:summary="@string/secure_auth_duress_summary"
++        android:fragment="com.android.settings.security.securespaces.SecureAuthDuressSettings"
++        settings:controller="com.android.settings.security.securespaces.SecureAuthDuressPreferenceController" />
++
+     <PreferenceCategory
+         android:order="-10"
+         android:key="security_status"
+@@ -71,4 +86,4 @@
+         settings:controller="com.android.settings.security.SecurityAdvancedSettingsController"
+         settings:keywords="@string/security_advanced_settings_keywords" />
+ 
+-</PreferenceScreen>
+\ No newline at end of file
++</PreferenceScreen>
+diff --git a/src/com/android/settings/Utils.java b/src/com/android/settings/Utils.java
+index 03b2aae..ebe3c13 100644
+--- a/src/com/android/settings/Utils.java
++++ b/src/com/android/settings/Utils.java
+@@ -417,9 +417,23 @@ public final class Utils extends com.android.settingslib.Utils {
+         }
+     }
+ 
++    /** Public summaries retain ordinary profiles without disclosing concealed full users. */
++    public static List<UserInfo> getPublicUsers(Context context) {
++        UserManager users = context.getSystemService(UserManager.class);
++        int currentId = context.getUserId();
++        UserInfo current = users.getUserInfo(currentId);
++        boolean concealed = current != null
++                && UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(current.userType);
++        return users.getUsers().stream().filter(user -> {
++            if (concealed) return user.id == currentId || users.isSameProfileGroup(currentId, user.id);
++            if (UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(user.userType)) return false;
++            UserInfo parent = user.isProfile() ? users.getProfileParent(user.id) : null;
++            return parent == null || !UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(parent.userType);
++        }).collect(java.util.stream.Collectors.toList());
++    }
++
+     public static boolean hasMultipleUsers(Context context) {
+-        return context.getSystemService(UserManager.class)
+-                .getUsers().size() > 1;
++        return getPublicUsers(context).size() > 1;
+     }
+ 
+     /**
+diff --git a/src/com/android/settings/applications/appinfo/AppButtonsPreferenceController.java b/src/com/android/settings/applications/appinfo/AppButtonsPreferenceController.java
+index fcaed8b..120913c 100644
+--- a/src/com/android/settings/applications/appinfo/AppButtonsPreferenceController.java
++++ b/src/com/android/settings/applications/appinfo/AppButtonsPreferenceController.java
+@@ -452,7 +452,7 @@ public class AppButtonsPreferenceController extends BasePreferenceController imp
+             enabled = handleDisableable();
+         } else {
+             if ((mPackageInfo.applicationInfo.flags & ApplicationInfo.FLAG_INSTALLED) == 0
+-                    && mUserManager.getUsers().size() >= 2) {
++                    && Utils.getPublicUsers(mContext).size() >= 2) {
+                 // When we have multiple users, there is a separate menu
+                 // to uninstall for all users.
+                 enabled = false;
+diff --git a/src/com/android/settings/applications/appinfo/AppInfoDashboardFragment.java b/src/com/android/settings/applications/appinfo/AppInfoDashboardFragment.java
+index 33f4363..3faf1af 100644
+--- a/src/com/android/settings/applications/appinfo/AppInfoDashboardFragment.java
++++ b/src/com/android/settings/applications/appinfo/AppInfoDashboardFragment.java
+@@ -63,6 +63,7 @@ import com.android.settings.applications.specialaccess.interactacrossprofiles.In
+ import com.android.settings.applications.specialaccess.pictureinpicture.PictureInPictureDetailPreferenceController;
+ import com.android.settings.core.SubSettingLauncher;
+ import com.android.settings.dashboard.DashboardFragment;
++import com.android.settings.Utils;
+ import com.android.settings.utils.HsuUtils;
+ import com.android.settingslib.RestrictedLockUtilsInternal;
+ import com.android.settingslib.applications.AppUtils;
+@@ -604,7 +605,7 @@ public class AppInfoDashboardFragment extends DashboardFragment
+             showIt = false;
+         } else if (!mUserManager.isAdminUser()) {
+             showIt = false;
+-        } else if (mUserManager.getUsers().size() < 2) {
++        } else if (Utils.getPublicUsers(getContext()).size() < 2) {
+             showIt = false;
+         } else if (getNumberOfUserWithPackageInstalled(mPackageName) < 2
+                 && (appEntry.info.flags & ApplicationInfo.FLAG_INSTALLED) != 0) {
+@@ -723,7 +724,7 @@ public class AppInfoDashboardFragment extends DashboardFragment
+ 
+     @VisibleForTesting
+     int getNumberOfUserWithPackageInstalled(String packageName) {
+-        final List<UserInfo> userInfos = mUserManager.getAliveUsers();
++        final List<UserInfo> userInfos = Utils.getPublicUsers(getContext());
+         int count = 0;
+ 
+         for (final UserInfo userInfo : userInfos) {
+diff --git a/src/com/android/settings/biometrics/BiometricEnrollIntroduction.java b/src/com/android/settings/biometrics/BiometricEnrollIntroduction.java
+index 867320a..8f2676b 100644
+--- a/src/com/android/settings/biometrics/BiometricEnrollIntroduction.java
++++ b/src/com/android/settings/biometrics/BiometricEnrollIntroduction.java
+@@ -16,12 +16,15 @@
+ 
+ package com.android.settings.biometrics;
+ 
++import android.app.KeyguardManager;
+ import android.app.admin.DevicePolicyManager;
+ import android.content.Intent;
+ import android.graphics.PorterDuff;
+ import android.graphics.PorterDuffColorFilter;
+ import android.hardware.biometrics.BiometricAuthenticator;
+ import android.os.Bundle;
++import android.os.Handler;
++import android.os.Looper;
+ import android.os.UserHandle;
+ import android.os.UserManager;
+ import android.util.Log;
+@@ -61,6 +64,8 @@ public abstract class BiometricEnrollIntroduction extends BiometricEnrollBase
+         implements LinkSpan.OnClickListener {
+ 
+     private static final String TAG = "BiometricEnrollIntroduction";
++    public static final String EXTRA_DEFER_CONFIRM_UNTIL_UNLOCKED =
++            "secure_space_defer_biometric_confirm_until_unlocked";
+ 
+     private static final String KEY_CONFIRMING_CREDENTIALS = "confirming_credentials";
+     private static final String KEY_SCROLLED_TO_BOTTOM = "scrolled";
+@@ -74,6 +79,22 @@ public abstract class BiometricEnrollIntroduction extends BiometricEnrollBase
+     protected boolean mNextClicked;
+     private boolean mParentalConsentRequired;
+     private boolean mHasScrolledToBottom = false;
++    private boolean mDeferredSecureSpaceConfirmation;
++    private final Handler mDeferredHandler = new Handler(Looper.getMainLooper());
++    private final Runnable mDeferredConfirmation = new Runnable() {
++        @Override public void run() {
++            if (!mDeferredSecureSpaceConfirmation || isFinishing() || isDestroyed()) return;
++            KeyguardManager keyguard = getSystemService(KeyguardManager.class);
++            if (keyguard == null || keyguard.isDeviceLocked(mUserId)
++                    || keyguard.isKeyguardLocked()) {
++                mDeferredHandler.postDelayed(this, 250);
++                return;
++            }
++            mDeferredSecureSpaceConfirmation = false;
++            getIntent().removeExtra(EXTRA_DEFER_CONFIRM_UNTIL_UNLOCKED);
++            launchCredentialGateIfNeeded();
++        }
++    };
+ 
+     @Nullable protected PorterDuffColorFilter mIconColorFilter;
+ 
+@@ -209,21 +230,9 @@ public abstract class BiometricEnrollIntroduction extends BiometricEnrollBase
+         mUserManager = getUserManager();
+         updatePasswordQuality();
+ 
+-        // Check isFinishing() because FaceEnrollIntroduction may finish self to launch
+-        // FaceSettings during onCreate()
+-        if (!mConfirmingCredentials && !isFinishing()) {
+-            if (!mHasPassword) {
+-                // No password registered, launch into enrollment wizard.
+-                mConfirmingCredentials = true;
+-                launchChooseLock();
+-            } else if (!BiometricUtils.containsGatekeeperPasswordHandle(getIntent())
+-                    && mToken == null) {
+-                // It's possible to have a token but mLaunchedConfirmLock == false, since
+-                // ChooseLockGeneric can pass us a token.
+-                mConfirmingCredentials = true;
+-                launchConfirmLock(getConfirmLockTitleResId());
+-            }
+-        }
++        mDeferredSecureSpaceConfirmation = intent.getBooleanExtra(
++                EXTRA_DEFER_CONFIRM_UNTIL_UNLOCKED, false) && !mConfirmingCredentials;
++        if (!mDeferredSecureSpaceConfirmation) launchCredentialGateIfNeeded();
+ 
+         final GlifLayout layout = getLayout();
+         mFooterBarMixin = layout.getMixin(FooterBarMixin.class);
+@@ -264,6 +273,19 @@ public abstract class BiometricEnrollIntroduction extends BiometricEnrollBase
+         }
+     }
+ 
++    private void launchCredentialGateIfNeeded() {
++        // Check isFinishing() because FaceEnrollIntroduction may finish itself during onCreate().
++        if (mConfirmingCredentials || isFinishing()) return;
++        if (!mHasPassword) {
++            mConfirmingCredentials = true;
++            launchChooseLock();
++        } else if (!BiometricUtils.containsGatekeeperPasswordHandle(getIntent())
++                && mToken == null) {
++            mConfirmingCredentials = true;
++            launchConfirmLock(getConfirmLockTitleResId());
++        }
++    }
++
+     @Override
+     protected void onStart() {
+         super.onStart();
+@@ -280,6 +302,10 @@ public abstract class BiometricEnrollIntroduction extends BiometricEnrollBase
+     @Override
+     protected void onResume() {
+         super.onResume();
++        if (mDeferredSecureSpaceConfirmation) {
++            mDeferredHandler.removeCallbacks(mDeferredConfirmation);
++            mDeferredHandler.post(mDeferredConfirmation);
++        }
+ 
+         //reset mNextClick to make sure introduction page would be closed correctly
+         mNextClicked = false;
+@@ -298,6 +324,12 @@ public abstract class BiometricEnrollIntroduction extends BiometricEnrollBase
+         }
+     }
+ 
++    @Override
++    protected void onPause() {
++        mDeferredHandler.removeCallbacks(mDeferredConfirmation);
++        super.onPause();
++    }
++
+     @Override
+     protected void onSaveInstanceState(Bundle outState) {
+         super.onSaveInstanceState(outState);
+@@ -307,7 +339,8 @@ public abstract class BiometricEnrollIntroduction extends BiometricEnrollBase
+ 
+     @Override
+     protected boolean shouldFinishWhenBackgrounded() {
+-        return super.shouldFinishWhenBackgrounded() && !mConfirmingCredentials && !mNextClicked;
++        return super.shouldFinishWhenBackgrounded() && !mConfirmingCredentials && !mNextClicked
++                && !mDeferredSecureSpaceConfirmation;
+     }
+ 
+     @VisibleForTesting
+diff --git a/src/com/android/settings/core/gateway/SettingsGateway.java b/src/com/android/settings/core/gateway/SettingsGateway.java
+index ec94717..0f15e1a 100644
+--- a/src/com/android/settings/core/gateway/SettingsGateway.java
++++ b/src/com/android/settings/core/gateway/SettingsGateway.java
+@@ -280,6 +280,9 @@ public class SettingsGateway {
+             PrivacyControlsFragment.class.getName(),
+             LocationServices.class.getName(),
+             SecuritySettings.class.getName(),
++            com.android.settings.security.securespaces.SecureSpacesSettings.class.getName(),
++            com.android.settings.security.securespaces.SecureAuthDuressSettings.class.getName(),
++            com.android.settings.security.securespaces.SecureSpaceLockSettings.class.getName(),
+             SecurityAdvancedSettings.class.getName(),
+             MoreSecurityPrivacyFragment.class.getName(),
+             UsageAccessDetails.class.getName(),
+diff --git a/src/com/android/settings/deviceinfo/StorageWizardMigrateConfirm.java b/src/com/android/settings/deviceinfo/StorageWizardMigrateConfirm.java
+index 0b88657..910a1da 100644
+--- a/src/com/android/settings/deviceinfo/StorageWizardMigrateConfirm.java
++++ b/src/com/android/settings/deviceinfo/StorageWizardMigrateConfirm.java
+@@ -99,8 +99,12 @@ public class StorageWizardMigrateConfirm extends StorageWizardBase {
+     public void onNavigateNext(View view) {
+         // Ensure that all users are unlocked so that we can move their data
+         final LockPatternUtils lpu = new LockPatternUtils(this);
++        final UserManager users = getSystemService(UserManager.class);
++        final UserInfo current = users.getUserInfo(android.app.ActivityManager.getCurrentUser());
++        final boolean concealed = current != null
++                && UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(current.userType);
+         if (StorageManager.isFileEncrypted()) {
+-            for (UserInfo user : getSystemService(UserManager.class).getUsers()) {
++            for (UserInfo user : users.getUsers()) {
+                 if (StorageManager.isCeStorageUnlocked(user.id)) {
+                     continue;
+                 }
+@@ -111,8 +115,11 @@ public class StorageWizardMigrateConfirm extends StorageWizardBase {
+                 } else {
+                     Log.d(TAG, "Secured user " + user.id + " is currently locked; requesting "
+                             + "manual unlock");
+-                    final CharSequence description = TextUtils.expandTemplate(
+-                            getText(R.string.storage_wizard_move_unlock), user.name);
++                    final CharSequence description =
++                            concealed || UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(user.userType)
++                            ? getText(R.string.secure_spaces_storage_unlock)
++                            : TextUtils.expandTemplate(
++                                    getText(R.string.storage_wizard_move_unlock), user.name);
+                     final ChooseLockSettingsHelper.Builder builder =
+                             new ChooseLockSettingsHelper.Builder(this);
+                     builder.setRequestCode(REQUEST_CREDENTIAL)
+diff --git a/src/com/android/settings/deviceinfo/StorageWizardMoveConfirm.java b/src/com/android/settings/deviceinfo/StorageWizardMoveConfirm.java
+index f55f822..c6be825 100644
+--- a/src/com/android/settings/deviceinfo/StorageWizardMoveConfirm.java
++++ b/src/com/android/settings/deviceinfo/StorageWizardMoveConfirm.java
+@@ -81,8 +81,12 @@ public class StorageWizardMoveConfirm extends StorageWizardBase {
+     public void onNavigateNext(View view) {
+         // Ensure that all users are unlocked so that we can move their data
+         final LockPatternUtils lpu = new LockPatternUtils(this);
++        final UserManager users = getSystemService(UserManager.class);
++        final UserInfo current = users.getUserInfo(android.app.ActivityManager.getCurrentUser());
++        final boolean concealed = current != null
++                && UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(current.userType);
+         if (StorageManager.isFileEncrypted()) {
+-            for (UserInfo user : getSystemService(UserManager.class).getUsers()) {
++            for (UserInfo user : users.getUsers()) {
+                 if (StorageManager.isCeStorageUnlocked(user.id)) {
+                     continue;
+                 }
+@@ -93,8 +97,11 @@ public class StorageWizardMoveConfirm extends StorageWizardBase {
+                 } else {
+                     Log.d(TAG, "Secured user " + user.id + " is currently locked; requesting "
+                             + "manual unlock");
+-                    final CharSequence description = TextUtils.expandTemplate(
+-                            getText(R.string.storage_wizard_move_unlock), user.name);
++                    final CharSequence description =
++                            concealed || UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(user.userType)
++                            ? getText(R.string.secure_spaces_storage_unlock)
++                            : TextUtils.expandTemplate(
++                                    getText(R.string.storage_wizard_move_unlock), user.name);
+                     final ChooseLockSettingsHelper.Builder builder =
+                             new ChooseLockSettingsHelper.Builder(this);
+                     builder.setRequestCode(REQUEST_CREDENTIAL)
+diff --git a/src/com/android/settings/deviceinfo/storage/NonCurrentUserController.java b/src/com/android/settings/deviceinfo/storage/NonCurrentUserController.java
+index b631e35..f9fd77b 100644
+--- a/src/com/android/settings/deviceinfo/storage/NonCurrentUserController.java
++++ b/src/com/android/settings/deviceinfo/storage/NonCurrentUserController.java
+@@ -71,9 +71,14 @@ public class NonCurrentUserController extends AbstractPreferenceController imple
+             Context context, UserManager userManager) {
+         int currentUserId = ActivityManager.getCurrentUser();
+         List<NonCurrentUserController> controllers = new ArrayList<>();
++        UserInfo current = userManager.getUserInfo(currentUserId);
++        if (current != null && UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(current.userType)) {
++            return controllers;
++        }
+         List<UserInfo> infos = userManager.getUsers();
+         for (UserInfo info : infos) {
+-            if (info.id == currentUserId || !info.isFull()) {
++            if (info.id == currentUserId || !info.isFull()
++                    || UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(info.userType)) {
+                 continue;
+             }
+             int[] profiles = userManager.getProfileIds(info.id, false /* enabledOnly */);
+diff --git a/src/com/android/settings/deviceinfo/storage/UserIconLoader.java b/src/com/android/settings/deviceinfo/storage/UserIconLoader.java
+index 8273e68..149c749 100644
+--- a/src/com/android/settings/deviceinfo/storage/UserIconLoader.java
++++ b/src/com/android/settings/deviceinfo/storage/UserIconLoader.java
+@@ -66,7 +66,7 @@ public class UserIconLoader extends AsyncLoaderCompat<SparseArray<Drawable>> {
+     public static SparseArray<Drawable> loadUserIconsWithContext(Context context) {
+         SparseArray<Drawable> value = new SparseArray<>();
+         UserManager um = context.getSystemService(UserManager.class);
+-        for (UserInfo userInfo : um.getUsers()) {
++        for (UserInfo userInfo : Utils.getPublicUsers(context)) {
+             value.put(userInfo.id, Utils.getUserIcon(context, um, userInfo));
+         }
+         return value;
+diff --git a/src/com/android/settings/network/VpnPreferenceController.java b/src/com/android/settings/network/VpnPreferenceController.java
+index 660fd14..afaedf0 100644
+--- a/src/com/android/settings/network/VpnPreferenceController.java
++++ b/src/com/android/settings/network/VpnPreferenceController.java
+@@ -156,7 +156,7 @@ public class VpnPreferenceController extends AbstractPreferenceController
+ 
+     protected int getNumberOfNonLegacyVpn(UserManager userManager, VpnManager vpnManager) {
+         // Converted from SystemUI::SecurityControllerImpl
+-        return (int) userManager.getUsers().stream()
++        return (int) com.android.settings.Utils.getPublicUsers(mContext).stream()
+                 .map(user -> vpnManager.getVpnConfig(user.id))
+                 .filter(cfg -> (cfg != null) && (!cfg.legacy))
+                 .count();
+diff --git a/src/com/android/settings/password/ChooseLockPassword.java b/src/com/android/settings/password/ChooseLockPassword.java
+index 8efd93c..c278311 100644
+--- a/src/com/android/settings/password/ChooseLockPassword.java
++++ b/src/com/android/settings/password/ChooseLockPassword.java
+@@ -119,6 +119,11 @@ import java.util.Map;
+ public class ChooseLockPassword extends SettingsActivity {
+     private static final String TAG = "ChooseLockPassword";
+ 
++    // Internal, non-exported credential picker. Secure configuration screens perform their
++    // own owner-authenticated native transaction after receiving the confirmed new credential.
++    public static final String EXTRA_COLLECT_CREDENTIAL = "secure_auth_collect_credential";
++    public static final String EXTRA_COLLECT_DESCRIPTION = "secure_auth_collect_description";
++
+     static final String EXTRA_KEY_MIN_METRICS = "min_metrics";
+     static final String EXTRA_KEY_MIN_COMPLEXITY = "min_complexity";
+     public static final String EXTRA_KEY_FOR_SUPERVISION_RESET = "for_supervision_reset";
+@@ -256,6 +261,8 @@ public class ChooseLockPassword extends SettingsActivity {
+ 
+         private LockscreenCredential mCurrentCredential;
+         private LockscreenCredential mChosenPassword;
++        private boolean mCollectCredential;
++        private String mCollectDescription;
+         private boolean mRequestGatekeeperPassword;
+         private boolean mRequestWriteRepairModePassword;
+ 
+@@ -538,6 +545,12 @@ public class ChooseLockPassword extends SettingsActivity {
+             }
+             // Only take this argument into account if it belongs to the current profile.
+             mUserId = Utils.getUserIdFromBundle(getActivity(), intent.getExtras());
++            mCollectCredential = intent.getBooleanExtra(EXTRA_COLLECT_CREDENTIAL, false);
++            mCollectDescription = intent.getStringExtra(EXTRA_COLLECT_DESCRIPTION);
++            if (mCollectCredential && (UserHandle.myUserId() != UserHandle.USER_SYSTEM
++                    || mUserId != UserHandle.USER_SYSTEM)) {
++                throw new SecurityException("Owner-only credential picker");
++            }
+             mProfileType = getProfileType();
+             mForFingerprint = intent.getBooleanExtra(
+                     ChooseLockSettingsHelper.EXTRA_KEY_FOR_FINGERPRINT, false);
+@@ -641,6 +654,13 @@ public class ChooseLockPassword extends SettingsActivity {
+                 passwordEntryLayout.setHintEnabled(true);
+             }
+             mPasswordEntry = view.findViewById(R.id.password_entry);
++            if (mCollectCredential) {
++                mPasswordEntry.setSaveEnabled(false);
++                mPasswordEntry.setImportantForAutofill(
++                        View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
++                mPasswordEntry.setImeOptions(mPasswordEntry.getImeOptions()
++                        | android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
++            }
+             mPasswordEntry.setOnEditorActionListener(this);
+             mPasswordEntry.addTextChangedListener(this);
+             mPasswordEntry.requestFocus();
+@@ -729,6 +749,10 @@ public class ChooseLockPassword extends SettingsActivity {
+             if (mCurrentCredential != null) {
+                 mCurrentCredential.zeroize();
+             }
++            if (mCollectCredential) {
++                if (mChosenPassword != null) mChosenPassword.zeroize();
++                if (mFirstPassword != null) mFirstPassword.zeroize();
++            }
+             // Force a garbage collection immediately to remove remnant of user password shards
+             // from memory.
+             System.gc();
+@@ -822,6 +846,8 @@ public class ChooseLockPassword extends SettingsActivity {
+         @Override
+         public void onSaveInstanceState(Bundle outState) {
+             super.onSaveInstanceState(outState);
++            // Restart collection after recreation rather than putting secrets into saved state.
++            if (mCollectCredential) return;
+             outState.putString(KEY_UI_STAGE, mUiStage.name());
+             outState.putParcelable(KEY_FIRST_PASSWORD, mFirstPassword);
+             if (mCurrentCredential != null) {
+@@ -882,7 +908,8 @@ public class ChooseLockPassword extends SettingsActivity {
+         boolean validatePassword(LockscreenCredential credential) {
+             mValidationErrors = PasswordMetrics.validateCredential(mMinMetrics, mMinComplexity,
+                     credential);
+-            if (mValidationErrors.isEmpty() && mLockPatternUtils.checkPasswordHistory(
++            if (!mCollectCredential && mValidationErrors.isEmpty()
++                    && mLockPatternUtils.checkPasswordHistory(
+                         credential.getCredential(), getPasswordHistoryHashFactor(), mUserId)) {
+                 mValidationErrors =
+                         Collections.singletonList(new PasswordValidationError(RECENTLY_USED));
+@@ -1100,6 +1127,9 @@ public class ChooseLockPassword extends SettingsActivity {
+             if (message != 0) {
+                 mMessage.setVisibility(View.VISIBLE);
+                 mMessage.setText(message);
++            } else if (mCollectCredential && mCollectDescription != null) {
++                mMessage.setVisibility(View.VISIBLE);
++                mMessage.setText(mCollectDescription);
+             } else {
+                 mMessage.setVisibility(View.INVISIBLE);
+             }
+@@ -1117,7 +1147,7 @@ public class ChooseLockPassword extends SettingsActivity {
+             if (mAutoPinConfirmOption == null) {
+                 return;
+             }
+-            if (enabled
++            if (enabled && !mCollectCredential
+                     && !mIsAlphaMode
+                     && isAutoPinConfirmPossible(length)
+                     && !isSupervisingProfile()) {
+@@ -1184,6 +1214,16 @@ public class ChooseLockPassword extends SettingsActivity {
+         }
+ 
+         private void startSaveAndFinish() {
++            if (mCollectCredential) {
++                Intent result = new Intent().putExtra(ChooseLockSettingsHelper.EXTRA_KEY_PASSWORD,
++                        mChosenPassword.duplicate());
++                getActivity().setResult(Activity.RESULT_OK, result);
++                mPasswordEntry.setText("");
++                mChosenPassword.zeroize();
++                mFirstPassword.zeroize();
++                getActivity().finish();
++                return;
++            }
+             if (mSaveAndFinishWorker != null) {
+                 Log.w(TAG, "startSaveAndFinish with an existing SaveAndFinishWorker.");
+                 return;
+diff --git a/src/com/android/settings/security/securespaces/SecureAuthDuressPreferenceController.java b/src/com/android/settings/security/securespaces/SecureAuthDuressPreferenceController.java
+new file mode 100644
+index 0000000..e1deabd
+--- /dev/null
++++ b/src/com/android/settings/security/securespaces/SecureAuthDuressPreferenceController.java
+@@ -0,0 +1,20 @@
++/* Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++import android.app.ActivityManager;
++import android.content.Context;
++import android.os.UserHandle;
++import android.os.UserManager;
++import com.android.settings.core.BasePreferenceController;
++
++/** The management entry is constant for the owner and never advertises stored configuration. */
++public final class SecureAuthDuressPreferenceController extends BasePreferenceController {
++    public SecureAuthDuressPreferenceController(Context context, String key) { super(context, key); }
++    @Override public int getAvailabilityStatus() {
++        UserManager users = mContext.getSystemService(UserManager.class);
++        return users.getUserHandle() == UserHandle.USER_SYSTEM && users.isAdminUser()
++                && ActivityManager.getCurrentUser() == UserHandle.USER_SYSTEM
++                ? AVAILABLE : DISABLED_FOR_USER;
++    }
++}
+diff --git a/src/com/android/settings/security/securespaces/SecureAuthDuressSettings.java b/src/com/android/settings/security/securespaces/SecureAuthDuressSettings.java
+new file mode 100644
+index 0000000..e762960
+--- /dev/null
++++ b/src/com/android/settings/security/securespaces/SecureAuthDuressSettings.java
+@@ -0,0 +1,233 @@
++/* Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import android.app.Activity;
++import android.app.AlertDialog;
++import android.app.settings.SettingsEnums;
++import android.content.Intent;
++import android.os.Bundle;
++import android.os.UserHandle;
++import android.view.View;
++import android.view.WindowManager;
++
++import androidx.lifecycle.ViewModelProvider;
++import androidx.preference.Preference;
++import androidx.preference.PreferenceScreen;
++
++import com.android.internal.widget.LockscreenCredential;
++import com.android.settings.R;
++import com.android.settings.SettingsPreferenceFragment;
++import com.android.settings.password.ChooseLockSettingsHelper;
++
++/** Owner-authenticated duress enrollment; this screen has no test-wipe action. */
++public final class SecureAuthDuressSettings extends SettingsPreferenceFragment {
++    private static final int CONFIRM_OWNER = 311;
++    private static final int CHOOSE_PIN = 312;
++    private static final int CHOOSE_PASSWORD = 313;
++    private LockscreenCredential mDraftPin;
++    private LockscreenCredential mDraftPassword;
++    private boolean mChoosePassword;
++    private boolean mCollecting;
++    private SecureAuthDuressViewModel mModel;
++    private AlertDialog mDialog;
++
++    @Override
++    public void onCreate(Bundle state) {
++        super.onCreate(state);
++        mModel = new ViewModelProvider(this).get(SecureAuthDuressViewModel.class);
++    }
++
++    @Override
++    public void onViewCreated(View view, Bundle state) {
++        super.onViewCreated(view, state);
++        getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
++        mModel.getState().observe(getViewLifecycleOwner(), this::render);
++    }
++
++    @Override
++    public void onResume() {
++        super.onResume();
++        if (!mModel.isOwner()) { finish(); return; }
++        mModel.onForeground();
++        if (mChoosePassword && mDraftPin != null) {
++            mChoosePassword = false;
++            chooseDuressCredential(false);
++            return;
++        }
++        if (mDraftPin != null && mDraftPassword != null) {
++            // Disclosure is revoked while the pickers run. Reauthorize at commit using a fresh
++            // native owner credential; do not restore any earlier disclosure proof.
++            if (mModel.stageEnrollment(mDraftPin, mDraftPassword)) {
++                mDraftPin = null;
++                mDraftPassword = null;
++                mCollecting = false;
++                launchConfirmation();
++            } else clearDrafts();
++            return;
++        }
++        if (mCollecting) return;
++        SecureAuthDuressViewModel.State state = mModel.getState().getValue();
++        render(state);
++        if (!state.busy && !state.authorized && !state.failed
++                && mModel.hasOwnerCredential() && mModel.stageRead()) {
++            launchConfirmation();
++        }
++    }
++
++    @Override
++    public void onStop() {
++        if (mDialog != null) mDialog.dismiss();
++        mModel.onBackground();
++        setPreferenceScreen(getPreferenceManager().createPreferenceScreen(getPrefContext()));
++        super.onStop();
++    }
++
++    @Override
++    public int getMetricsCategory() { return SettingsEnums.SECURITY; }
++
++    private void render(SecureAuthDuressViewModel.State state) {
++        if (!isAdded()) return;
++        PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(getPrefContext());
++        setPreferenceScreen(screen);
++        Preference description = new Preference(getPrefContext());
++        description.setSummary(R.string.secure_auth_duress_description);
++        description.setSelectable(false);
++        screen.addPreference(description);
++        if (!mModel.hasOwnerCredential()) {
++            description.setSummary(R.string.secure_spaces_owner_lock_required);
++            return;
++        }
++        if (!mModel.canDisclose()) {
++            if (!state.busy) {
++                Preference verify = new Preference(getPrefContext());
++                verify.setTitle(R.string.secure_auth_duress_verify);
++                if (state.failed) verify.setSummary(R.string.secure_auth_duress_failed);
++                verify.setOnPreferenceClickListener(item -> {
++                    if (mModel.stageRead()) launchConfirmation();
++                    return true;
++                });
++                screen.addPreference(verify);
++            }
++            return;
++        }
++        Preference status = new Preference(getPrefContext());
++        status.setTitle(R.string.secure_auth_duress_title);
++        status.setSummary(state.configured ? R.string.secure_auth_duress_enabled
++                : R.string.secure_auth_duress_disabled);
++        status.setSelectable(false);
++        screen.addPreference(status);
++        Preference configure = new Preference(getPrefContext());
++        configure.setTitle(R.string.secure_auth_duress_configure);
++        configure.setEnabled(mModel.hasOwnerRoutingCredential());
++        if (!mModel.hasOwnerRoutingCredential()) {
++            configure.setSummary(R.string.secure_spaces_owner_lock_required);
++        }
++        configure.setOnPreferenceClickListener(item -> { showEnrollment(); return true; });
++        screen.addPreference(configure);
++        if (state.configured) {
++            Preference remove = new Preference(getPrefContext());
++            remove.setTitle(R.string.secure_auth_duress_remove);
++            remove.setOnPreferenceClickListener(item -> {
++                if (mModel.stageDelete()) launchConfirmation();
++                return true;
++            });
++            screen.addPreference(remove);
++        }
++        screen.setEnabled(!state.busy);
++    }
++
++    private void showEnrollment() {
++        if (!mModel.canDisclose()) return;
++        AlertDialog dialog = new AlertDialog.Builder(getContext())
++                .setTitle(R.string.secure_auth_duress_configure)
++                .setMessage(R.string.secure_auth_duress_enrollment_warning)
++                .setNegativeButton(android.R.string.cancel, null)
++                .setPositiveButton(android.R.string.ok,
++                        (ignored, button) -> {
++                            if (mModel.beginEnrollment()) chooseDuressCredential(true);
++                        }).create();
++        mDialog = dialog;
++        dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
++        dialog.setOnDismissListener(ignored -> { if (mDialog == dialog) mDialog = null; });
++        dialog.show();
++    }
++
++    private void chooseDuressCredential(boolean pin) {
++        Intent intent = new com.android.settings.password.ChooseLockPassword.IntentBuilder(
++                getContext()).setUserId(UserHandle.USER_SYSTEM)
++                .setPasswordType(pin ? android.app.admin.DevicePolicyManager.PASSWORD_QUALITY_NUMERIC
++                        : android.app.admin.DevicePolicyManager.PASSWORD_QUALITY_ALPHABETIC)
++                .build();
++        intent.putExtra(com.android.settings.password.ChooseLockPassword.EXTRA_COLLECT_CREDENTIAL,
++                true);
++        intent.putExtra(com.android.settings.password.ChooseLockPassword.EXTRA_COLLECT_DESCRIPTION,
++                getString(pin ? R.string.secure_auth_duress_pin
++                        : R.string.secure_auth_duress_password));
++        mCollecting = true;
++        startActivityForResult(intent, pin ? CHOOSE_PIN : CHOOSE_PASSWORD);
++    }
++
++    private void clearDrafts() {
++        if (mDraftPin != null) mDraftPin.close();
++        if (mDraftPassword != null) mDraftPassword.close();
++        mDraftPin = null;
++        mDraftPassword = null;
++        mChoosePassword = false;
++        mCollecting = false;
++    }
++
++    @Override public void onDestroy() {
++        clearDrafts();
++        super.onDestroy();
++    }
++
++    private void launchConfirmation() {
++        boolean launched = new ChooseLockSettingsHelper.Builder(getActivity(), this)
++                .setRequestCode(CONFIRM_OWNER)
++                .setTitle(getText(R.string.secure_auth_duress_title))
++                .setUserId(UserHandle.USER_SYSTEM)
++                .setForceVerifyPath(false)
++                .setForegroundOnly(true)
++                .setReturnCredentials(true)
++                .show();
++        if (!launched) mModel.cancelPendingAction();
++    }
++
++    @Override
++    public void onActivityResult(int requestCode, int resultCode, Intent data) {
++        super.onActivityResult(requestCode, resultCode, data);
++        if (requestCode == CHOOSE_PIN || requestCode == CHOOSE_PASSWORD) {
++            LockscreenCredential chosen = data == null ? null : data.getParcelableExtra(
++                    ChooseLockSettingsHelper.EXTRA_KEY_PASSWORD, LockscreenCredential.class);
++            if (data != null) data.removeExtra(ChooseLockSettingsHelper.EXTRA_KEY_PASSWORD);
++            if (resultCode != Activity.RESULT_OK || chosen == null
++                    || (requestCode == CHOOSE_PIN ? !chosen.isPin() : !chosen.isPassword())) {
++                if (chosen != null) chosen.close();
++                clearDrafts();
++                return;
++            }
++            if (requestCode == CHOOSE_PIN) {
++                if (mDraftPin != null) mDraftPin.close();
++                mDraftPin = chosen;
++                mChoosePassword = true;
++            } else {
++                if (mDraftPassword != null) mDraftPassword.close();
++                mDraftPassword = chosen;
++            }
++            return;
++        }
++        if (requestCode != CONFIRM_OWNER) return;
++        LockscreenCredential credential = data == null ? null : data.getParcelableExtra(
++                ChooseLockSettingsHelper.EXTRA_KEY_PASSWORD, LockscreenCredential.class);
++        if (data != null) data.removeExtra(ChooseLockSettingsHelper.EXTRA_KEY_PASSWORD);
++        if (resultCode != Activity.RESULT_OK || credential == null) {
++            if (credential != null) credential.close();
++            mModel.cancelPendingAction();
++            finish();
++            return;
++        }
++        mModel.onOwnerConfirmation(credential);
++    }
++}
+diff --git a/src/com/android/settings/security/securespaces/SecureAuthDuressViewModel.java b/src/com/android/settings/security/securespaces/SecureAuthDuressViewModel.java
+new file mode 100644
+index 0000000..174daee
+--- /dev/null
++++ b/src/com/android/settings/security/securespaces/SecureAuthDuressViewModel.java
+@@ -0,0 +1,249 @@
++/* Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import android.app.Application;
++import android.os.SystemClock;
++
++import androidx.lifecycle.AndroidViewModel;
++import androidx.lifecycle.LiveData;
++import androidx.lifecycle.MutableLiveData;
++
++import com.android.internal.widget.LockPatternUtils;
++import com.android.internal.widget.LockscreenCredential;
++import com.android.settingslib.utils.ThreadUtils;
++
++import java.util.concurrent.Executor;
++import java.util.function.LongSupplier;
++
++/** In-memory configuration transaction. Credentials never enter saved state or preferences. */
++public final class SecureAuthDuressViewModel extends AndroidViewModel {
++    static final int READ = 1;
++    static final int SET = 2;
++    static final int DELETE = 3;
++    private static final long CONFIRMATION_LIFETIME = 30_000;
++
++    public static final class State {
++        final boolean busy;
++        final boolean authorized;
++        final boolean configured;
++        final boolean failed;
++
++        State(boolean busy, boolean authorized, boolean configured, boolean failed) {
++            this.busy = busy;
++            this.authorized = authorized;
++            this.configured = configured;
++            this.failed = failed;
++        }
++    }
++
++    private final SecureSpaceRepository mRepository;
++    interface Backend {
++        boolean hasCredentials(LockscreenCredential owner);
++        void setCredentials(LockscreenCredential owner, LockscreenCredential pin,
++                LockscreenCredential password);
++    }
++
++    private final Backend mBackend;
++    private final Executor mBackground;
++    private final Executor mMain;
++    private final LongSupplier mClock;
++    private final MutableLiveData<State> mState =
++            new MutableLiveData<>(new State(false, false, false, false));
++    private boolean mForeground;
++    private boolean mWaitingForConfirmation;
++    private int mPurpose;
++    private long mGeneration;
++    private long mRunningGeneration;
++    private long mConfirmedAt;
++    private boolean mEnrollmentStarted;
++    private long mEnrollmentStartedAt;
++    private LockscreenCredential mOwnerCredential;
++    private LockscreenCredential mPin;
++    private LockscreenCredential mPassword;
++
++    public SecureAuthDuressViewModel(Application application) {
++        this(application, new SecureSpaceRepository(application), nativeBackend(application),
++                ThreadUtils::postOnBackgroundThread, ThreadUtils::postOnMainThread,
++                SystemClock::elapsedRealtime);
++    }
++
++    SecureAuthDuressViewModel(Application application, SecureSpaceRepository repository,
++            Backend backend, Executor background, Executor main, LongSupplier clock) {
++        super(application);
++        mRepository = repository;
++        mBackend = backend;
++        mBackground = background;
++        mMain = main;
++        mClock = clock;
++    }
++
++    private static Backend nativeBackend(Application application) {
++        LockPatternUtils locks = new LockPatternUtils(application);
++        return new Backend() {
++            public boolean hasCredentials(LockscreenCredential owner) {
++                return locks.hasSecureAuthDuressCredentials(owner);
++            }
++            public void setCredentials(LockscreenCredential owner, LockscreenCredential pin,
++                    LockscreenCredential password) {
++                locks.setSecureAuthDuressCredentials(owner, pin, password);
++            }
++        };
++    }
++
++    LiveData<State> getState() { return mState; }
++    boolean isOwner() { return mRepository.isOwner(); }
++    boolean hasOwnerCredential() { return mRepository.hasOwnerCredential(); }
++    boolean hasOwnerRoutingCredential() { return mRepository.hasOwnerRoutingCredential(); }
++    boolean canDisclose() { return mForeground && mState.getValue().authorized; }
++
++    void onForeground() {
++        mForeground = true;
++        dispatchConfirmedAction();
++    }
++
++    void onBackground() {
++        mForeground = false;
++        ++mGeneration;
++        State state = mState.getValue();
++        mState.setValue(new State(state.busy, false, false, state.failed));
++        // A returned proof cannot be carried through another background transition.
++        if (mOwnerCredential != null) cancelPendingAction();
++    }
++
++    boolean stageRead() { return stage(READ, null, null); }
++
++    /** Takes ownership of the two credentials only on success. */
++    boolean stageSet(LockscreenCredential pin, LockscreenCredential password) {
++        return stage(SET, pin, password);
++    }
++
++    boolean beginEnrollment() {
++        if (!canDisclose() || mState.getValue().busy) return false;
++        mEnrollmentStarted = true;
++        mEnrollmentStartedAt = mClock.getAsLong();
++        return true;
++    }
++
++    /** Collecting new secrets is not authentication; commit still needs fresh native owner proof. */
++    boolean stageEnrollment(LockscreenCredential pin, LockscreenCredential password) {
++        long now = mClock.getAsLong();
++        if (!mEnrollmentStarted || now < mEnrollmentStartedAt
++                || now - mEnrollmentStartedAt >= 300_000 || pin == null || !pin.isPin()
++                || password == null || !password.isPassword()) return false;
++        boolean staged = stage(SET, pin, password, true);
++        if (staged) mEnrollmentStarted = false;
++        return staged;
++    }
++
++    boolean stageDelete() { return stage(DELETE, null, null); }
++
++    private boolean stage(int purpose, LockscreenCredential pin, LockscreenCredential password) {
++        return stage(purpose, pin, password, false);
++    }
++
++    private boolean stage(int purpose, LockscreenCredential pin, LockscreenCredential password,
++            boolean enrollment) {
++        if (!mForeground || mState.getValue().busy || !isOwner() || !hasOwnerCredential()
++                || (purpose != READ && !canDisclose() && !enrollment)) return false;
++        mPurpose = purpose;
++        mPin = pin;
++        mPassword = password;
++        mWaitingForConfirmation = true;
++        State state = mState.getValue();
++        mState.setValue(new State(true, state.authorized, state.configured, false));
++        return true;
++    }
++
++    void onOwnerConfirmation(LockscreenCredential credential) {
++        if (!mWaitingForConfirmation || credential == null || credential.isNone()) {
++            close(credential);
++            if (mWaitingForConfirmation) cancelPendingAction();
++            return;
++        }
++        mWaitingForConfirmation = false;
++        mOwnerCredential = credential;
++        mConfirmedAt = mClock.getAsLong();
++        dispatchConfirmedAction();
++    }
++
++    private void dispatchConfirmedAction() {
++        if (!mForeground || mOwnerCredential == null) return;
++        long now = mClock.getAsLong();
++        if (now < mConfirmedAt || now - mConfirmedAt >= CONFIRMATION_LIFETIME
++                || !isOwner()) {
++            cancelPendingAction();
++            return;
++        }
++        final int purpose = mPurpose;
++        final LockscreenCredential owner = mOwnerCredential;
++        final LockscreenCredential pin = mPin;
++        final LockscreenCredential password = mPassword;
++        mOwnerCredential = null;
++        mPin = null;
++        mPassword = null;
++        mPurpose = 0;
++        final long generation = ++mGeneration;
++        mRunningGeneration = generation;
++        mBackground.execute(() -> {
++            boolean configured = false;
++            boolean failed = false;
++            try {
++                if (purpose == READ) {
++                    configured = mBackend.hasCredentials(owner);
++                } else if (purpose == SET) {
++                    mBackend.setCredentials(owner, pin, password);
++                    configured = true;
++                } else if (purpose == DELETE) {
++                    try (LockscreenCredential nonePin = LockscreenCredential.createNone();
++                            LockscreenCredential nonePassword = LockscreenCredential.createNone()) {
++                        mBackend.setCredentials(owner, nonePin, nonePassword);
++                    }
++                } else {
++                    throw new IllegalStateException("Missing configuration action");
++                }
++            } catch (RuntimeException error) {
++                failed = true;
++            } finally {
++                close(owner);
++                close(pin);
++                close(password);
++            }
++            final boolean result = configured;
++            final boolean error = failed;
++            mMain.execute(() -> {
++                if (mRunningGeneration != generation) return;
++                mRunningGeneration = 0;
++                boolean current = mForeground && generation == mGeneration && isOwner();
++                // Never restore protected status from a completion queued before onStop.
++                mState.setValue(new State(false, current && !error,
++                        current && !error && result, current && error));
++            });
++        });
++    }
++
++    void cancelPendingAction() {
++        mEnrollmentStarted = false;
++        close(mOwnerCredential);
++        close(mPin);
++        close(mPassword);
++        mOwnerCredential = null;
++        mPin = null;
++        mPassword = null;
++        mPurpose = 0;
++        mWaitingForConfirmation = false;
++        ++mGeneration;
++        mState.setValue(new State(mRunningGeneration != 0, false, false, false));
++    }
++
++    private static void close(LockscreenCredential credential) {
++        if (credential != null) credential.close();
++    }
++
++    @Override
++    protected void onCleared() {
++        mForeground = false;
++        cancelPendingAction();
++    }
++}
+diff --git a/src/com/android/settings/security/securespaces/SecureSpaceLockSettings.java b/src/com/android/settings/security/securespaces/SecureSpaceLockSettings.java
+new file mode 100644
+index 0000000..40ee371
+--- /dev/null
++++ b/src/com/android/settings/security/securespaces/SecureSpaceLockSettings.java
+@@ -0,0 +1,186 @@
++/* Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import android.app.Activity;
++import android.app.admin.DevicePolicyManager;
++import android.app.settings.SettingsEnums;
++import android.content.Intent;
++import android.content.pm.UserInfo;
++import android.os.Bundle;
++import android.os.UserHandle;
++import android.os.UserManager;
++import android.view.View;
++import android.view.WindowManager;
++import android.widget.Toast;
++import androidx.lifecycle.ViewModelProvider;
++import androidx.preference.Preference;
++import androidx.preference.PreferenceScreen;
++import com.android.internal.widget.LockPatternUtils;
++import com.android.internal.widget.LockscreenCredential;
++import com.android.settings.R;
++import com.android.settings.SettingsPreferenceFragment;
++import com.android.settings.Utils;
++import com.android.settings.password.ChooseLockPassword;
++import com.android.settings.password.ChooseLockSettingsHelper;
++
++/** Xiaomi-style lock-then-fingerprint setup using the ROM's native credential screens. */
++public final class SecureSpaceLockSettings extends SettingsPreferenceFragment {
++    public static final String ARG_USER_ID = "secure_space_user_id";
++    public static final String ARG_SERIAL = "secure_space_serial";
++    private static final int CONFIRM_OWNER = 321;
++    private static final int CHOOSE_CREDENTIAL = 322;
++    private static final int CONFIRM_FINGERPRINT = 323;
++    private static final int CONFIRM_OPEN = 324;
++    private SecureSpaceLockViewModel mModel;
++    private LockscreenCredential mPendingCredential;
++    private int mPendingOpen;
++    private long mPendingOpenAt;
++    private int mUserId;
++    private int mSerial;
++
++    @Override public void onCreate(Bundle state) {
++        super.onCreate(state);
++        mModel = new ViewModelProvider(this).get(SecureSpaceLockViewModel.class);
++        Bundle args = getArguments();
++        mUserId = args == null ? -1 : args.getInt(ARG_USER_ID, -1);
++        mSerial = args == null ? -1 : args.getInt(ARG_SERIAL, -1);
++        try { mModel.setIdentity(mUserId, mSerial); }
++        catch (IllegalArgumentException invalid) { finish(); }
++    }
++    @Override public void onViewCreated(View view, Bundle state) {
++        super.onViewCreated(view, state);
++        getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
++        mModel.getState().observe(getViewLifecycleOwner(), this::render);
++    }
++    @Override public void onResume() {
++        super.onResume();
++        getActivity().setTitle(getText(R.string.secure_spaces_lock_and_fingerprint));
++        if (!mModel.isOwner()) { finish(); return; }
++        mModel.onForeground();
++        if (mPendingCredential != null) {
++            LockscreenCredential credential = mPendingCredential;
++            mPendingCredential = null;
++            if (mModel.stage(credential)) launchConfirmation(CONFIRM_OWNER, true);
++            else {
++                credential.close();
++                Toast.makeText(getContext(), R.string.secure_spaces_operation_failed,
++                        Toast.LENGTH_SHORT).show();
++            }
++        }
++        if (mPendingOpen != 0) {
++            int action = mPendingOpen;
++            mPendingOpen = 0;
++            long age = android.os.SystemClock.elapsedRealtime() - mPendingOpenAt;
++            if (age >= 0 && age < 30_000) openSpace(action == CONFIRM_FINGERPRINT);
++        }
++        render(mModel.getState().getValue());
++    }
++    @Override public void onStop() {
++        mModel.onBackground();
++        setPreferenceScreen(getPreferenceManager().createPreferenceScreen(getPrefContext()));
++        super.onStop();
++    }
++    @Override public void onDestroy() {
++        if (mPendingCredential != null) mPendingCredential.close();
++        super.onDestroy();
++    }
++    @Override public int getMetricsCategory() { return SettingsEnums.SECURITY; }
++    private void render(SecureSpaceLockViewModel.State state) {
++        if (!isAdded()) return;
++        PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(getPrefContext());
++        setPreferenceScreen(screen);
++        Preference description = new Preference(getPrefContext());
++        description.setSelectable(false);
++        description.setSummary(mModel.isConfigured() ? R.string.secure_spaces_fingerprint_description
++                : mModel.canConfigure() ? R.string.secure_spaces_initial_lock_description
++                : R.string.secure_spaces_owner_lock_required);
++        screen.addPreference(description);
++        if (!mModel.canConfigure()) return;
++        if (mModel.isConfigured()) {
++            if (Utils.hasFingerprintHardware(getContext())) {
++                addAction(screen, R.string.secure_spaces_set_fingerprint,
++                        () -> launchConfirmation(CONFIRM_FINGERPRINT, false));
++            }
++            addAction(screen, R.string.secure_spaces_open,
++                    () -> launchConfirmation(CONFIRM_OPEN, false));
++        } else {
++            boolean pin = mModel.getOwnerCredentialType() == LockPatternUtils.CREDENTIAL_TYPE_PIN;
++            addAction(screen, pin ? R.string.secure_spaces_set_pin
++                    : R.string.secure_spaces_set_password, () -> chooseCredential(pin));
++        }
++        if (state.failed) {
++            Preference error = new Preference(getPrefContext());
++            error.setSummary(R.string.secure_spaces_operation_failed);
++            error.setSelectable(false);
++            screen.addPreference(error);
++        }
++        screen.setEnabled(!state.busy);
++    }
++    private void addAction(PreferenceScreen screen, int title, Runnable action) {
++        Preference choice = new Preference(getPrefContext());
++        choice.setTitle(title);
++        choice.setOnPreferenceClickListener(ignored -> { action.run(); return true; });
++        screen.addPreference(choice);
++    }
++    private void chooseCredential(boolean pin) {
++        if (!mModel.canConfigure() || mModel.getState().getValue().busy) return;
++        Intent intent = new ChooseLockPassword.IntentBuilder(getContext())
++                .setUserId(UserHandle.USER_SYSTEM)
++                .setPasswordType(pin ? DevicePolicyManager.PASSWORD_QUALITY_NUMERIC
++                        : DevicePolicyManager.PASSWORD_QUALITY_ALPHABETIC).build();
++        intent.putExtra(ChooseLockPassword.EXTRA_COLLECT_CREDENTIAL, true);
++        intent.putExtra(ChooseLockPassword.EXTRA_COLLECT_DESCRIPTION,
++                getString(R.string.secure_spaces_initial_lock_description));
++        startActivityForResult(intent, CHOOSE_CREDENTIAL);
++    }
++    private void launchConfirmation(int request, boolean returnCredential) {
++        boolean launched = new ChooseLockSettingsHelper.Builder(getActivity(), this)
++                .setRequestCode(request)
++                .setTitle(getText(R.string.secure_spaces_initial_lock_title))
++                .setUserId(UserHandle.USER_SYSTEM).setForceVerifyPath(false)
++                .setForegroundOnly(true).setReturnCredentials(returnCredential).show();
++        if (!launched) mModel.cancel();
++    }
++    private void openSpace(boolean fingerprint) {
++        try {
++            UserInfo target = getContext().getSystemService(UserManager.class).getUserInfo(mUserId);
++            if (target == null || target.serialNumber != mSerial) {
++                throw new IllegalStateException("Space identity changed");
++            }
++            SecureSpaceRepository repository = new SecureSpaceRepository(getContext());
++            if (fingerprint) {
++                Toast.makeText(getContext(), R.string.secure_spaces_fingerprint_unlock,
++                        Toast.LENGTH_LONG).show();
++                repository.switchToSpaceAndEnrollFingerprint(getContext(), target);
++            } else repository.switchToSpace(target);
++        } catch (RuntimeException failure) {
++            Toast.makeText(getContext(), R.string.secure_spaces_operation_failed,
++                    Toast.LENGTH_SHORT).show();
++        }
++    }
++    @Override public void onActivityResult(int requestCode, int resultCode, Intent data) {
++        super.onActivityResult(requestCode, resultCode, data);
++        if (requestCode == CONFIRM_FINGERPRINT || requestCode == CONFIRM_OPEN) {
++            if (resultCode == Activity.RESULT_OK) {
++                mPendingOpen = requestCode;
++                mPendingOpenAt = android.os.SystemClock.elapsedRealtime();
++            }
++            return;
++        }
++        if (requestCode != CONFIRM_OWNER && requestCode != CHOOSE_CREDENTIAL) return;
++        LockscreenCredential credential = data == null ? null : data.getParcelableExtra(
++                ChooseLockSettingsHelper.EXTRA_KEY_PASSWORD, LockscreenCredential.class);
++        if (data != null) data.removeExtra(ChooseLockSettingsHelper.EXTRA_KEY_PASSWORD);
++        if (resultCode != Activity.RESULT_OK || credential == null) {
++            if (credential != null) credential.close();
++            mModel.cancel();
++            return;
++        }
++        if (requestCode == CHOOSE_CREDENTIAL) {
++            if (mPendingCredential != null) mPendingCredential.close();
++            mPendingCredential = credential;
++        } else mModel.onOwnerConfirmation(credential);
++    }
++}
+diff --git a/src/com/android/settings/security/securespaces/SecureSpaceLockViewModel.java b/src/com/android/settings/security/securespaces/SecureSpaceLockViewModel.java
+new file mode 100644
+index 0000000..b803b3b
+--- /dev/null
++++ b/src/com/android/settings/security/securespaces/SecureSpaceLockViewModel.java
+@@ -0,0 +1,151 @@
++/* Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import android.app.Application;
++import android.os.SystemClock;
++import androidx.lifecycle.AndroidViewModel;
++import androidx.lifecycle.LiveData;
++import androidx.lifecycle.MutableLiveData;
++import com.android.internal.widget.LockPatternUtils;
++import com.android.internal.widget.LockscreenCredential;
++import com.android.settingslib.utils.ThreadUtils;
++import java.util.concurrent.Executor;
++import java.util.function.LongSupplier;
++
++/** One owner-confirmed initial credential transaction, held only in memory. */
++public final class SecureSpaceLockViewModel extends AndroidViewModel {
++    static final class State {
++        final boolean busy;
++        final boolean finished;
++        final boolean failed;
++        State(boolean busy, boolean finished, boolean failed) {
++            this.busy = busy;
++            this.finished = finished;
++            this.failed = failed;
++        }
++    }
++    interface Backend {
++        boolean setInitial(LockscreenCredential owner, LockscreenCredential credential,
++                int userId, int serial);
++    }
++    private final SecureSpaceRepository mRepository;
++    private final Backend mBackend;
++    private final Executor mBackground;
++    private final Executor mMain;
++    private final LongSupplier mClock;
++    private final MutableLiveData<State> mState =
++            new MutableLiveData<>(new State(false, false, false));
++    private int mUserId = -1;
++    private int mSerial = -1;
++    private boolean mForeground;
++    private boolean mWaiting;
++    private long mGeneration;
++    private long mRunning;
++    private long mConfirmedAt;
++    private LockscreenCredential mCredential;
++    private LockscreenCredential mOwner;
++
++    public SecureSpaceLockViewModel(Application application) {
++        this(application, new SecureSpaceRepository(application),
++                new LockPatternUtils(application)::setInitialSecureSpaceCredential,
++                ThreadUtils::postOnBackgroundThread, ThreadUtils::postOnMainThread,
++                SystemClock::elapsedRealtime);
++    }
++    SecureSpaceLockViewModel(Application app, SecureSpaceRepository repository,
++            Backend backend, Executor background, Executor main, LongSupplier clock) {
++        super(app);
++        mRepository = repository;
++        mBackend = backend;
++        mBackground = background;
++        mMain = main;
++        mClock = clock;
++    }
++    void setIdentity(int userId, int serial) {
++        if (userId <= 0 || serial < 0
++                || (mUserId != -1 && (mUserId != userId || mSerial != serial))) {
++            throw new IllegalArgumentException("Invalid initial Space identity");
++        }
++        mUserId = userId;
++        mSerial = serial;
++    }
++    LiveData<State> getState() { return mState; }
++    boolean isOwner() { return mRepository.isOwner(); }
++    int getOwnerCredentialType() { return mRepository.getOwnerCredentialType(); }
++    boolean isConfigured() { return mUserId > 0 && mRepository.hasCredential(mUserId); }
++    boolean canConfigure() { return isOwner() && mRepository.hasOwnerRoutingCredential(); }
++    void onForeground() { mForeground = true; dispatch(); }
++    void onBackground() {
++        mForeground = false;
++        ++mGeneration;
++        if (mOwner != null) cancel();
++        State state = mState.getValue();
++        mState.setValue(new State(state.busy, false, false));
++    }
++    /** Takes ownership only if the action can be staged. */
++    boolean stage(LockscreenCredential credential) {
++        if (!mForeground || !canConfigure() || mUserId <= 0 || mState.getValue().busy
++                || credential == null || (!credential.isPin() && !credential.isPassword())
++                || credential.getType() != getOwnerCredentialType()) {
++            return false;
++        }
++        mCredential = credential;
++        mWaiting = true;
++        mState.setValue(new State(true, false, false));
++        return true;
++    }
++    void onOwnerConfirmation(LockscreenCredential owner) {
++        if (!mWaiting || owner == null || owner.isNone()) {
++            close(owner);
++            if (mWaiting) cancel();
++            return;
++        }
++        mWaiting = false;
++        mOwner = owner;
++        mConfirmedAt = mClock.getAsLong();
++        dispatch();
++    }
++    private void dispatch() {
++        if (!mForeground || mOwner == null) return;
++        long now = mClock.getAsLong();
++        if (!canConfigure() || now < mConfirmedAt || now - mConfirmedAt >= 30_000) {
++            cancel();
++            return;
++        }
++        LockscreenCredential owner = mOwner;
++        LockscreenCredential credential = mCredential;
++        mOwner = null;
++        mCredential = null;
++        int userId = mUserId;
++        int serial = mSerial;
++        long generation = ++mGeneration;
++        mRunning = generation;
++        mBackground.execute(() -> {
++            boolean success = false;
++            try { success = mBackend.setInitial(owner, credential, userId, serial); }
++            catch (RuntimeException rejected) { /* Return generic failure, never private details. */ }
++            finally { close(owner); close(credential); }
++            final boolean result = success;
++            mMain.execute(() -> {
++                if (mRunning != generation) return;
++                mRunning = 0;
++                boolean current = mForeground && mGeneration == generation && isOwner();
++                mState.setValue(new State(false, current && result, current && !result));
++            });
++        });
++    }
++    void cancel() {
++        close(mOwner);
++        close(mCredential);
++        mOwner = null;
++        mCredential = null;
++        mWaiting = false;
++        ++mGeneration;
++        mState.setValue(new State(mRunning != 0, false, false));
++    }
++    private static void close(LockscreenCredential credential) {
++        if (credential != null) credential.close();
++    }
++    @Override protected void onCleared() { mForeground = false; cancel(); }
++}
+diff --git a/src/com/android/settings/security/securespaces/SecureSpaceRepository.java b/src/com/android/settings/security/securespaces/SecureSpaceRepository.java
+new file mode 100644
+index 0000000..33e540a
+--- /dev/null
++++ b/src/com/android/settings/security/securespaces/SecureSpaceRepository.java
+@@ -0,0 +1,233 @@
++/*
++ * Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import android.app.ActivityManager;
++import android.content.ContentResolver;
++import android.content.Context;
++import android.content.Intent;
++import android.os.Handler;
++import android.os.Looper;
++import android.os.SystemClock;
++import android.content.pm.UserInfo;
++import android.os.UserHandle;
++import android.os.UserManager;
++import android.provider.Settings;
++
++import com.android.internal.widget.LockPatternUtils;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.function.IntSupplier;
++
++/** Uses UserManager's persisted user type as the authoritative Secure Spaces registry. */
++public final class SecureSpaceRepository {
++    private final UserManager mUsers;
++    private final LockPatternUtils mLockPatternUtils;
++    private final IntSupplier mForegroundUser;
++    private final ContentResolver mResolver;
++
++    public SecureSpaceRepository(Context context) {
++        this(context.getSystemService(UserManager.class), new LockPatternUtils(context),
++                ActivityManager::getCurrentUser, context.getContentResolver());
++    }
++
++    SecureSpaceRepository(UserManager users, LockPatternUtils lockPatternUtils,
++            IntSupplier foregroundUser) {
++        this(users, lockPatternUtils, foregroundUser, null);
++    }
++
++    SecureSpaceRepository(UserManager users, LockPatternUtils lockPatternUtils,
++            IntSupplier foregroundUser, ContentResolver resolver) {
++        mUsers = users;
++        mLockPatternUtils = lockPatternUtils;
++        mForegroundUser = foregroundUser;
++        mResolver = resolver;
++    }
++
++    public boolean isOwner() {
++        return mUsers.getUserHandle() == UserHandle.USER_SYSTEM
++                && mForegroundUser.getAsInt() == UserHandle.USER_SYSTEM
++                && mUsers.isAdminUser();
++    }
++
++    public boolean hasOwnerCredential() {
++        return mLockPatternUtils.isSecure(UserHandle.USER_SYSTEM);
++    }
++
++    public int getOwnerCredentialType() {
++        return mLockPatternUtils.getCredentialTypeForUser(UserHandle.USER_SYSTEM);
++    }
++
++    public boolean hasOwnerRoutingCredential() {
++        return hasRoutingCredential(UserHandle.USER_SYSTEM);
++    }
++
++    private boolean hasRoutingCredential(int userId) {
++        int type = mLockPatternUtils.getCredentialTypeForUser(userId);
++        return mLockPatternUtils.isSecure(userId)
++                && (type == LockPatternUtils.CREDENTIAL_TYPE_PIN
++                    || type == LockPatternUtils.CREDENTIAL_TYPE_PASSWORD);
++    }
++
++    public boolean canCreateSpace() {
++        return isOwner() && hasOwnerRoutingCredential()
++                && !mUsers.hasUserRestriction(UserManager.DISALLOW_ADD_USER)
++                && mUsers.canAddMoreUsers(UserManager.USER_TYPE_FULL_SECURE_SPACE);
++    }
++
++    public List<UserInfo> getSpaces() {
++        List<UserInfo> result = new ArrayList<>();
++        for (UserInfo user : mUsers.getAliveUsers()) {
++            if (isSpace(user)) {
++                result.add(user);
++            }
++        }
++        return result;
++    }
++
++    public boolean hasCredential(int userId) {
++        return hasRoutingCredential(userId);
++    }
++
++    /** Eligible identities only; this method never verifies or stores a credential. */
++    public List<UserInfo> getRoutingCandidates() {
++        List<UserInfo> result = new ArrayList<>();
++        for (UserInfo user : mUsers.getAliveUsers()) {
++            if ((user.id == UserHandle.USER_SYSTEM || isSpace(user))
++                    && !user.partial && !user.preCreated && user.isFull()
++                    && user.isEnabled() && user.isInitialized()
++                    && mLockPatternUtils.isSecure(user.id)) {
++                result.add(user);
++            }
++        }
++        return result;
++    }
++
++    public UserInfo createSpace(String name) {
++        enforceOwner();
++        if (!canCreateSpace()) {
++            throw new IllegalStateException("Secure Space creation is unavailable");
++        }
++        UserInfo user = mUsers.createUser(validateName(name),
++                UserManager.USER_TYPE_FULL_SECURE_SPACE, UserInfo.FLAG_INITIALIZED);
++        if (user == null) {
++            throw new IllegalStateException("UserManager could not create the Secure Space");
++        }
++        // Secure Spaces have their own guided credential/fingerprint setup. Do not launch the
++        // generic secondary-user Setup Wizard when the space is first opened. Xiaomi's Second
++        // Space initialization likewise marks the destination user setup-complete before entry.
++        if (mResolver != null && !Settings.Secure.putIntForUser(mResolver,
++                Settings.Secure.USER_SETUP_COMPLETE, 1, user.id)) {
++            mUsers.removeUserWhenPossible(user.getUserHandle(), false);
++            throw new IllegalStateException("Secure Space could not be initialized");
++        }
++        return user;
++    }
++
++    public void renameSpace(UserInfo identity, String name) {
++        enforceOwner();
++        requireSpace(identity);
++        mUsers.setUserName(identity.id, validateName(name));
++    }
++
++    public void removeSpace(UserInfo identity) {
++        enforceOwner();
++        requireSpace(identity);
++        if (mUsers.hasUserRestriction(UserManager.DISALLOW_REMOVE_USER)) {
++            throw new SecurityException("User removal is restricted");
++        }
++        if (!UserManager.isRemoveResultSuccessful(
++                mUsers.removeUserWhenPossible(UserHandle.of(identity.id), false))) {
++            throw new IllegalStateException("UserManager could not remove the Secure Space");
++        }
++    }
++
++    public void switchToSpace(UserInfo identity) {
++        enforceOwner();
++        UserInfo user = requireSpace(identity);
++        if (!hasOwnerRoutingCredential() || !hasRoutingCredential(user.id)
++                || !user.isEnabled() || !user.supportsSwitchTo()
++                || mUsers.hasUserRestriction(UserManager.DISALLOW_USER_SWITCH)) {
++            throw new SecurityException("User switching is unavailable");
++        }
++        try {
++            if (!ActivityManager.getService().switchUser(user.id)) {
++                throw new IllegalStateException("User switch failed");
++            }
++        } catch (android.os.RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    /** Enroll as the destination user, after its first primary unlock, never as owner UID. */
++    public void switchToSpaceAndEnrollFingerprint(Context context, UserInfo identity) {
++        enforceOwner();
++        UserInfo target = requireSpace(identity);
++        Context application = context.getApplicationContext();
++        Handler main = new Handler(Looper.getMainLooper());
++        long deadline = SystemClock.elapsedRealtime() + 120_000;
++        switchToSpace(target);
++        main.post(new Runnable() {
++            private boolean sawDestination;
++            @Override public void run() {
++                if (SystemClock.elapsedRealtime() >= deadline) return;
++                UserInfo current = mUsers.getUserInfo(target.id);
++                if (!isSpace(current) || current.serialNumber != target.serialNumber
++                        || !current.isEnabled()) return;
++                int foreground = ActivityManager.getCurrentUser();
++                if (foreground == target.id) sawDestination = true;
++                else if (sawDestination || foreground != UserHandle.USER_SYSTEM) return;
++                if (foreground == target.id
++                        && mUsers.isUserUnlocked(UserHandle.of(target.id))) {
++                    Intent enroll = new Intent(application,
++                            com.android.settings.biometrics.fingerprint.
++                                    FingerprintEnrollIntroduction.class);
++                    enroll.putExtra(Intent.EXTRA_USER_ID, target.id);
++                    enroll.putExtra(com.android.settings.biometrics.BiometricEnrollIntroduction
++                            .EXTRA_DEFER_CONFIRM_UNTIL_UNLOCKED, true);
++                    enroll.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
++                            | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
++                    try { application.startActivityAsUser(enroll, UserHandle.of(target.id)); }
++                    catch (RuntimeException unavailable) {
++                        // The space remains usable; enrollment can be opened in its Settings.
++                        android.util.Log.w("SecureSpaceRepository",
++                                "Fingerprint setup could not be opened");
++                    }
++                    return;
++                }
++                main.postDelayed(this, 250);
++            }
++        });
++    }
++
++    private void enforceOwner() {
++        if (!isOwner() || !hasOwnerCredential()) {
++            throw new SecurityException("A credential-protected foreground owner is required");
++        }
++    }
++
++    private UserInfo requireSpace(UserInfo identity) {
++        UserInfo user = mUsers.getUserInfo(identity.id);
++        if (!isSpace(user) || user.serialNumber != identity.serialNumber) {
++            throw new IllegalArgumentException("Secure Space identity is no longer valid");
++        }
++        return user;
++    }
++
++    private static boolean isSpace(UserInfo user) {
++        return user != null && user.id != UserHandle.USER_SYSTEM && user.isFull()
++                && !user.partial && !user.preCreated
++                && UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(user.userType);
++    }
++
++    private static String validateName(String name) {
++        if (name == null || name.trim().isEmpty()
++                || name.trim().length() > UserManager.MAX_USER_NAME_LENGTH) {
++            throw new IllegalArgumentException("Invalid Secure Space name");
++        }
++        return name.trim();
++    }
++}
+diff --git a/src/com/android/settings/security/securespaces/SecureSpacesPreferenceController.java b/src/com/android/settings/security/securespaces/SecureSpacesPreferenceController.java
+new file mode 100644
+index 0000000..5a5d522
+--- /dev/null
++++ b/src/com/android/settings/security/securespaces/SecureSpacesPreferenceController.java
+@@ -0,0 +1,25 @@
++/*
++ * Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import android.content.Context;
++import android.os.UserHandle;
++import android.os.UserManager;
++
++import com.android.settings.core.BasePreferenceController;
++
++public class SecureSpacesPreferenceController extends BasePreferenceController {
++    public SecureSpacesPreferenceController(Context context, String key) {
++        super(context, key);
++    }
++
++    @Override
++    public int getAvailabilityStatus() {
++        UserManager users = mContext.getSystemService(UserManager.class);
++        return users.getUserHandle() == UserHandle.USER_SYSTEM && users.isAdminUser()
++                && users.isUserTypeEnabled(UserManager.USER_TYPE_FULL_SECURE_SPACE)
++                ? AVAILABLE : DISABLED_FOR_USER;
++    }
++}
+diff --git a/src/com/android/settings/security/securespaces/SecureSpacesSettings.java b/src/com/android/settings/security/securespaces/SecureSpacesSettings.java
+new file mode 100644
+index 0000000..081d46b
+--- /dev/null
++++ b/src/com/android/settings/security/securespaces/SecureSpacesSettings.java
+@@ -0,0 +1,287 @@
++/*
++ * Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import android.app.Activity;
++import android.app.AlertDialog;
++import android.app.settings.SettingsEnums;
++import android.content.Intent;
++import android.content.pm.UserInfo;
++import android.os.Bundle;
++import android.os.UserHandle;
++import android.os.UserManager;
++import android.text.InputFilter;
++import android.text.InputType;
++import android.view.LayoutInflater;
++import android.view.View;
++import android.widget.EditText;
++import android.widget.Toast;
++
++import androidx.lifecycle.ViewModelProvider;
++import androidx.preference.Preference;
++import androidx.preference.PreferenceCategory;
++import androidx.preference.PreferenceScreen;
++
++import com.android.settings.R;
++import com.android.settings.core.SubSettingLauncher;
++import com.android.settings.SettingsPreferenceFragment;
++import com.android.settings.password.ChooseLockGeneric;
++import com.android.settings.password.ChooseLockSettingsHelper;
++
++/** Owner-only management of full Android Secure Space users. */
++public class SecureSpacesSettings extends SettingsPreferenceFragment {
++    private static final int CONFIRM_OWNER = 301;
++    private static final int CONFIRM_DISCLOSURE = 302;
++    private SecureSpacesViewModel mModel;
++    private AlertDialog mPrivateDialog;
++
++    @Override
++    public void onCreate(Bundle state) {
++        super.onCreate(state);
++        mModel = new ViewModelProvider(this).get(SecureSpacesViewModel.class);
++    }
++
++    @Override
++    public void onViewCreated(android.view.View view, Bundle state) {
++        super.onViewCreated(view, state);
++        // This SubSettings page contains private user names after confirmation.
++        getActivity().getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
++        mModel.getState().observe(getViewLifecycleOwner(), this::render);
++    }
++
++    @Override
++    public void onResume() {
++        super.onResume();
++        getActivity().setTitle(getText(R.string.secure_spaces_title));
++        mModel.onForeground();
++        render(mModel.getState().getValue());
++        SecureSpacesViewModel.State state = mModel.getState().getValue();
++        SecureSpaceRepository repository = mModel.getRepository();
++        if (!getActivity().isFinishing() && !state.ownerConfirmed && !state.busy
++                && repository.isOwner()
++                && repository.hasOwnerCredential() && mModel.stageDisclosureConfirmation()) {
++            if (!launchOwnerConfirmation(CONFIRM_DISCLOSURE)) {
++                mModel.onDisclosureConfirmationResult(false);
++                finish();
++            }
++        }
++    }
++
++    @Override
++    public void onStop() {
++        if (mPrivateDialog != null) {
++            mPrivateDialog.dismiss();
++        }
++        if (!getActivity().isChangingConfigurations()) {
++            mModel.revokeDisclosure();
++            // LiveData observers are inactive on stop; clear rendered names synchronously too.
++            setPreferenceScreen(getPreferenceManager().createPreferenceScreen(getPrefContext()));
++        }
++        super.onStop();
++    }
++
++    @Override
++    public int getMetricsCategory() {
++        return SettingsEnums.SECURITY;
++    }
++
++    private void render(SecureSpacesViewModel.State state) {
++        if (!isAdded()) {
++            return;
++        }
++        SecureSpaceRepository repository = mModel.getRepository();
++        if (!repository.isOwner()) {
++            finish();
++            return;
++        }
++        PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(getPrefContext());
++        setPreferenceScreen(screen);
++
++        Preference description = new Preference(getPrefContext());
++        description.setSummary(R.string.secure_spaces_description);
++        description.setSelectable(false);
++        screen.addPreference(description);
++
++        Preference owner = new Preference(getPrefContext());
++        owner.setKey("secure_spaces_owner");
++        owner.setTitle(R.string.secure_spaces_owner);
++        owner.setSummary(repository.hasOwnerRoutingCredential()
++                ? R.string.secure_spaces_owner_lock : R.string.secure_spaces_owner_lock_required);
++        owner.setOnPreferenceClickListener(preference -> {
++            startActivity(new Intent(getContext(), ChooseLockGeneric.class));
++            return true;
++        });
++        screen.addPreference(owner);
++
++        if (!mModel.canDisclose() || !repository.hasOwnerCredential()) {
++            return; // Never enumerate spaces, counts, or capacity before fresh owner confirmation.
++        }
++
++        PreferenceCategory spaces = new PreferenceCategory(getPrefContext());
++        spaces.setTitle(R.string.secure_spaces_title);
++        screen.addPreference(spaces);
++        for (UserInfo user : repository.getSpaces()) {
++            Preference entry = new Preference(getPrefContext());
++            entry.setKey("secure_space_" + user.serialNumber);
++            entry.setTitle(user.name);
++            entry.setSummary(repository.hasCredential(user.id)
++                    ? R.string.secure_spaces_lock_set : R.string.secure_spaces_setup_required);
++            entry.setOnPreferenceClickListener(preference -> {
++                showSpaceActions(user);
++                return true;
++            });
++            spaces.addPreference(entry);
++        }
++
++        Preference add = new Preference(getPrefContext());
++        add.setKey("secure_spaces_add");
++        add.setTitle(R.string.secure_spaces_add);
++        add.setEnabled(repository.canCreateSpace());
++        add.setOnPreferenceClickListener(preference -> {
++            showNameDialog(null);
++            return true;
++        });
++        screen.addPreference(add);
++        if (state.failed) {
++            Preference error = new Preference(getPrefContext());
++            error.setSummary(R.string.secure_spaces_operation_failed);
++            error.setSelectable(false);
++            screen.addPreference(error);
++        }
++        screen.setEnabled(!state.busy);
++    }
++
++    private void showSpaceActions(UserInfo user) {
++        if (!mModel.canDisclose()) return;
++        final boolean configured = mModel.getRepository().hasCredential(user.id);
++        final CharSequence[] actions = configured
++                ? new CharSequence[] {getText(R.string.secure_spaces_open),
++                        getText(R.string.secure_spaces_set_fingerprint),
++                        getText(R.string.secure_spaces_rename),
++                        getText(R.string.secure_spaces_remove)}
++                : new CharSequence[] {getText(R.string.secure_spaces_initial_lock_title),
++                        getText(R.string.secure_spaces_rename),
++                        getText(R.string.secure_spaces_remove)};
++        showPrivateDialog(new AlertDialog.Builder(getContext())
++                .setTitle(user.name)
++                .setItems(actions, (dialog, which) -> {
++                            if (which == 0) {
++                                if (configured) {
++                                    confirm(() -> mModel.getRepository().switchToSpace(user));
++                                } else {
++                                    launchSpaceSecurity(user,
++                                            R.string.secure_spaces_initial_lock_title);
++                                }
++                            } else if (configured && which == 1) {
++                                launchSpaceSecurity(user,
++                                        R.string.secure_spaces_set_fingerprint);
++                            } else if (which == (configured ? 2 : 1)) {
++                                showNameDialog(user);
++                            } else {
++                                showPrivateDialog(new AlertDialog.Builder(getContext())
++                                        .setTitle(R.string.secure_spaces_remove)
++                                        .setMessage(getString(
++                                                R.string.secure_spaces_remove_confirmation,
++                                                user.name))
++                                        .setNegativeButton(android.R.string.cancel, null)
++                                        .setPositiveButton(R.string.secure_spaces_remove,
++                                                (confirmation, button) -> confirm(
++                                                        () -> mModel.getRepository()
++                                                                .removeSpace(user)))
++                                        .create());
++                            }
++                        }).create());
++    }
++
++    private void launchSpaceSecurity(UserInfo user, int title) {
++        Bundle args = new Bundle();
++        args.putInt(SecureSpaceLockSettings.ARG_USER_ID, user.id);
++        args.putInt(SecureSpaceLockSettings.ARG_SERIAL, user.serialNumber);
++        new SubSettingLauncher(getContext())
++                .setDestination(SecureSpaceLockSettings.class.getName())
++                .setArguments(args)
++                .setSourceMetricsCategory(getMetricsCategory())
++                .setTitleText(getText(title))
++                .launch();
++    }
++
++    private void showNameDialog(UserInfo user) {
++        if (!mModel.canDisclose()) return;
++        View content = LayoutInflater.from(getContext()).inflate(R.layout.dialog_edittext, null);
++        EditText input = content.findViewById(R.id.edittext);
++        input.setSingleLine(true);
++        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
++        input.setFilters(new InputFilter[] {
++                new InputFilter.LengthFilter(UserManager.MAX_USER_NAME_LENGTH)});
++        input.setHint(R.string.secure_spaces_name_hint);
++        if (user != null) {
++            input.setText(user.name);
++            input.selectAll();
++        }
++        showPrivateDialog(new AlertDialog.Builder(getContext())
++                .setTitle(user == null ? R.string.secure_spaces_add : R.string.secure_spaces_rename)
++                .setView(content)
++                .setNegativeButton(android.R.string.cancel, null)
++                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
++                    String name = input.getText().toString().trim();
++                    if (name.isEmpty()) {
++                        Toast.makeText(getContext(), R.string.secure_spaces_name_required,
++                                Toast.LENGTH_SHORT).show();
++                        return;
++                    }
++                    confirm(() -> {
++                        if (user == null) {
++                            mModel.getRepository().createSpace(name);
++                        } else {
++                            mModel.getRepository().renameSpace(user, name);
++                        }
++                    });
++                }).create());
++    }
++
++    private void showPrivateDialog(AlertDialog dialog) {
++        if (mPrivateDialog != null) mPrivateDialog.dismiss();
++        mPrivateDialog = dialog;
++        dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
++        dialog.setOnDismissListener(dismissed -> {
++            if (mPrivateDialog == dialog) mPrivateDialog = null;
++        });
++        dialog.show();
++    }
++
++    private void confirm(Runnable action) {
++        if (!mModel.stageAction(action)) {
++            return;
++        }
++        boolean launched = launchOwnerConfirmation(CONFIRM_OWNER);
++        // An absent credential or unavailable confirmation UI must never approve a mutation.
++        if (!launched) {
++            mModel.onConfirmationResult(false);
++        }
++    }
++
++    private boolean launchOwnerConfirmation(int requestCode) {
++        return new ChooseLockSettingsHelper.Builder(getActivity(), this)
++                .setRequestCode(requestCode)
++                .setTitle(getText(R.string.secure_spaces_title))
++                .setUserId(UserHandle.USER_SYSTEM)
++                .setForceVerifyPath(true)
++                .setForegroundOnly(true)
++                .setReturnCredentials(false)
++                .show();
++    }
++
++    @Override
++    public void onActivityResult(int requestCode, int resultCode, Intent data) {
++        super.onActivityResult(requestCode, resultCode, data);
++        if (requestCode == CONFIRM_DISCLOSURE) {
++            mModel.onDisclosureConfirmationResult(resultCode == Activity.RESULT_OK);
++            if (resultCode != Activity.RESULT_OK) finish();
++        } else if (requestCode == CONFIRM_OWNER) {
++            mModel.onConfirmationResult(resultCode == Activity.RESULT_OK);
++            if (resultCode != Activity.RESULT_OK) finish();
++        }
++    }
++}
+diff --git a/src/com/android/settings/security/securespaces/SecureSpacesViewModel.java b/src/com/android/settings/security/securespaces/SecureSpacesViewModel.java
+new file mode 100644
+index 0000000..297d885
+--- /dev/null
++++ b/src/com/android/settings/security/securespaces/SecureSpacesViewModel.java
+@@ -0,0 +1,162 @@
++/*
++ * Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import android.app.Application;
++import android.util.Log;
++import android.os.SystemClock;
++
++import androidx.lifecycle.AndroidViewModel;
++import androidx.lifecycle.LiveData;
++import androidx.lifecycle.MutableLiveData;
++
++import com.android.settingslib.utils.ThreadUtils;
++
++import java.util.function.Consumer;
++import java.util.function.LongSupplier;
++
++/** Keeps a pending confirmation and background operation across screen rotation. */
++public class SecureSpacesViewModel extends AndroidViewModel {
++    public static final class State {
++        public final boolean busy;
++        public final boolean failed;
++        public final boolean ownerConfirmed;
++
++        State(boolean busy, boolean failed, boolean ownerConfirmed) {
++            this.busy = busy;
++            this.failed = failed;
++            this.ownerConfirmed = ownerConfirmed;
++        }
++    }
++
++    private final SecureSpaceRepository mRepository;
++    private final Consumer<Runnable> mBackgroundExecutor;
++    private final Consumer<Runnable> mMainExecutor;
++    private final LongSupplier mClock;
++    private boolean mConfirmationAwaitingForeground;
++    private long mConfirmedAt;
++    private final MutableLiveData<State> mState =
++            new MutableLiveData<>(new State(false, false, false));
++    private Runnable mPendingAction;
++    private boolean mDisclosureConfirmationPending;
++    // In-memory foreground-page permission, never saved to a Bundle or disk.
++    private boolean mOwnerConfirmed;
++
++    public SecureSpacesViewModel(Application application) {
++        this(application, new SecureSpaceRepository(application));
++    }
++
++    SecureSpacesViewModel(Application application, SecureSpaceRepository repository) {
++        this(application, repository, ThreadUtils::postOnBackgroundThread,
++                ThreadUtils::postOnMainThread);
++    }
++
++    SecureSpacesViewModel(Application application, SecureSpaceRepository repository,
++            Consumer<Runnable> backgroundExecutor, Consumer<Runnable> mainExecutor) {
++        this(application, repository, backgroundExecutor, mainExecutor, SystemClock::elapsedRealtime);
++    }
++
++    SecureSpacesViewModel(Application application, SecureSpaceRepository repository,
++            Consumer<Runnable> backgroundExecutor, Consumer<Runnable> mainExecutor,
++            LongSupplier clock) {
++        super(application);
++        mRepository = repository;
++        mBackgroundExecutor = backgroundExecutor;
++        mMainExecutor = mainExecutor;
++        mClock = clock;
++    }
++
++    public SecureSpaceRepository getRepository() {
++        return mRepository;
++    }
++
++    public LiveData<State> getState() {
++        return mState;
++    }
++
++    public boolean stageDisclosureConfirmation() {
++        if (mState.getValue().busy || mOwnerConfirmed) {
++            return false;
++        }
++        mDisclosureConfirmationPending = true;
++        mState.setValue(new State(true, false, false));
++        return true;
++    }
++
++    public void onDisclosureConfirmationResult(boolean confirmed) {
++        if (!mDisclosureConfirmationPending) {
++            return;
++        }
++        mDisclosureConfirmationPending = false;
++        mOwnerConfirmed = confirmed;
++        mConfirmationAwaitingForeground = confirmed;
++        mConfirmedAt = confirmed ? mClock.getAsLong() : 0;
++        mState.setValue(new State(false, false, mOwnerConfirmed));
++    }
++
++    public boolean canDisclose() {
++        if (!mOwnerConfirmed) return false;
++        if (!mConfirmationAwaitingForeground) return true;
++        long now = mClock.getAsLong();
++        return now >= mConfirmedAt && now - mConfirmedAt < 30_000;
++    }
++
++    public void onForeground() {
++        // Activity results can arrive while stopped. A delayed return must request fresh proof.
++        if (mConfirmationAwaitingForeground) {
++            if (!canDisclose()) {
++                revokeDisclosure();
++            }
++            mConfirmationAwaitingForeground = false;
++        }
++    }
++
++    public void revokeDisclosure() {
++        mOwnerConfirmed = false;
++        mConfirmationAwaitingForeground = false;
++        mConfirmedAt = 0;
++        State previous = mState.getValue();
++        mState.setValue(new State(previous.busy, previous.failed, false));
++    }
++
++    public boolean stageAction(Runnable action) {
++        if (mState.getValue().busy || !canDisclose()) {
++            return false;
++        }
++        mPendingAction = action;
++        mState.setValue(new State(true, false, mOwnerConfirmed));
++        return true;
++    }
++
++    public void onConfirmationResult(boolean confirmed) {
++        Runnable action = mPendingAction;
++        mPendingAction = null;
++        if (action == null) {
++            return;
++        }
++        if (!confirmed) {
++            mState.setValue(new State(false, false, mOwnerConfirmed));
++            return;
++        }
++        // This is a fresh owner confirmation too, so it can reopen the foreground list.
++        mOwnerConfirmed = true;
++        mConfirmationAwaitingForeground = true;
++        mConfirmedAt = mClock.getAsLong();
++        mState.setValue(new State(true, false, true));
++        mBackgroundExecutor.accept(() -> {
++            boolean failed = false;
++            try {
++                action.run();
++            } catch (RuntimeException e) {
++                Log.e("SecureSpaces", "Secure Space operation failed", e);
++                failed = true;
++            }
++            final boolean operationFailed = failed;
++            // Read the permission on the main thread: a queued completion must not undo onStop.
++            mMainExecutor.accept(() -> mState.setValue(
++                    new State(false, operationFailed, mOwnerConfirmed)));
++        });
++    }
++}
+diff --git a/src/com/android/settings/users/MultiUserPreferenceController.java b/src/com/android/settings/users/MultiUserPreferenceController.java
+index 2eb57ec..c01d0e8 100644
+--- a/src/com/android/settings/users/MultiUserPreferenceController.java
++++ b/src/com/android/settings/users/MultiUserPreferenceController.java
+@@ -33,6 +33,12 @@ public class MultiUserPreferenceController extends BasePreferenceController {
+ 
+     @Override
+     public int getAvailabilityStatus() {
++        UserManager users = mContext.getSystemService(UserManager.class);
++        UserInfo current = users.getUserInfo(UserHandle.myUserId());
++        if (current != null
++                && UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(current.userType)) {
++            return UNSUPPORTED_ON_DEVICE;
++        }
+         return (UserHandle.MU_ENABLED && UserManager.supportsMultipleUsers()
+                 && !Utils.isMonkeyRunning()) ? AVAILABLE : UNSUPPORTED_ON_DEVICE;
+     }
+diff --git a/src/com/android/settings/users/UserCapabilities.java b/src/com/android/settings/users/UserCapabilities.java
+index 1c4dd8a..45c79f0 100644
+--- a/src/com/android/settings/users/UserCapabilities.java
++++ b/src/com/android/settings/users/UserCapabilities.java
+@@ -66,6 +66,11 @@ public class UserCapabilities {
+         }
+ 
+         final UserInfo myUserInfo = userManager.getUserInfo(UserHandle.myUserId());
++        if (myUserInfo != null
++                && UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(myUserInfo.userType)) {
++            caps.mEnabled = false;
++            return caps;
++        }
+         caps.mIsGuest = myUserInfo.isGuest();
+         caps.mIsAdmin = myUserInfo.isAdmin();
+         caps.mIsMain = myUserInfo.isMain();
+diff --git a/src/com/android/settings/users/UserSettings.java b/src/com/android/settings/users/UserSettings.java
+index 6a9bff3..7286960 100644
+--- a/src/com/android/settings/users/UserSettings.java
++++ b/src/com/android/settings/users/UserSettings.java
+@@ -399,6 +399,8 @@ public class UserSettings extends SettingsPreferenceFragment
+         mUserCaps = UserCapabilities.create(activity);
+         mUserManager = (UserManager) activity.getSystemService(Context.USER_SERVICE);
+         if (!mUserCaps.mEnabled) {
++            getPreferenceScreen().removeAll();
++            finish();
+             return;
+         }
+ 
+@@ -1787,7 +1789,8 @@ public class UserSettings extends SettingsPreferenceFragment
+     int getRealUsersCount() {
+         return (int) mUserManager.getUsers()
+                 .stream()
+-                .filter(user -> !user.isGuest() && !user.isProfile())
++                .filter(user -> !user.isGuest() && !user.isProfile()
++                        && user.isUiSwitchableHumanUser())
+                 .count();
+     }
+ 
+diff --git a/tests/robotests/Android.bp b/tests/robotests/Android.bp
+index 4ebee9e..ab436d6 100644
+--- a/tests/robotests/Android.bp
++++ b/tests/robotests/Android.bp
+@@ -11,6 +11,9 @@ package {
+ // Build SettingsRoboTestStub.apk which includes test-only resources.
+ android_app {
+     name: "SettingsRoboTestStub",
++    // Host runtime is API 35; do not inherit the production APK minimum SDK.
++    min_sdk_version: "35",
++    dont_merge_manifests: true,
+     defaults: [
+         "SettingsLib-search-defaults",
+         "SettingsLibDefaults",
+@@ -44,6 +47,14 @@ android_app {
+ }
+ 
+ // Settings Robolectric test target.
++android_robolectric_test {
++    name: "SecureSpaceRepositoryRoboTests",
++    srcs: ["src/com/android/settings/security/securespaces/*Test.java"],
++    associates: ["Settings-core"],
++    instrumentation_for: "SettingsRoboTestStub",
++    strict_mode: false,
++}
++
+ android_robolectric_test {
+     name: "SettingsRoboTests",
+     srcs: [
+diff --git a/tests/robotests/src/com/android/settings/security/securespaces/SecureAuthDuressViewModelTest.java b/tests/robotests/src/com/android/settings/security/securespaces/SecureAuthDuressViewModelTest.java
+new file mode 100644
+index 0000000..b31fe3b
+--- /dev/null
++++ b/tests/robotests/src/com/android/settings/security/securespaces/SecureAuthDuressViewModelTest.java
+@@ -0,0 +1,224 @@
++/* Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import static com.google.common.truth.Truth.assertThat;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.verifyNoInteractions;
++import static org.mockito.Mockito.when;
++
++import android.os.UserManager;
++
++import com.android.internal.widget.LockPatternUtils;
++import com.android.internal.widget.LockscreenCredential;
++
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.RuntimeEnvironment;
++import org.robolectric.annotation.Config;
++
++import java.util.ArrayDeque;
++import java.util.concurrent.atomic.AtomicLong;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 35, manifest = Config.NONE, application = android.app.Application.class)
++public class SecureAuthDuressViewModelTest {
++    private final ArrayDeque<Runnable> mBackground = new ArrayDeque<>();
++    private final ArrayDeque<Runnable> mMain = new ArrayDeque<>();
++    private final AtomicLong mClock = new AtomicLong(1);
++    private final java.util.concurrent.atomic.AtomicInteger mUser =
++            new java.util.concurrent.atomic.AtomicInteger();
++    private SecureSpaceRepository mRepository;
++    private SecureAuthDuressViewModel.Backend mBackend;
++    private SecureAuthDuressViewModel mModel;
++
++    @Before
++    public void setUp() {
++        UserManager users = mock(UserManager.class);
++        when(users.getUserHandle()).thenReturn(0);
++        when(users.isAdminUser()).thenReturn(true);
++        LockPatternUtils locks = mock(LockPatternUtils.class);
++        when(locks.isSecure(0)).thenReturn(true);
++        mRepository = new SecureSpaceRepository(users, locks, mUser::get);
++        mBackend = mock(SecureAuthDuressViewModel.Backend.class);
++        when(mBackend.hasCredentials(any())).thenReturn(true);
++        mModel = new SecureAuthDuressViewModel(RuntimeEnvironment.getApplication(),
++                mRepository, mBackend, mBackground::add, mMain::add, mClock::get);
++        mModel.onForeground();
++    }
++
++    @Test
++    public void unsolicitedOwnerProof_isClosedAndDoesNotAuthorize() {
++        LockscreenCredential owner = LockscreenCredential.createPin("1234");
++        mModel.onOwnerConfirmation(owner);
++        assertClosed(owner);
++        assertThat(mModel.canDisclose()).isFalse();
++        assertThat(mBackground).isEmpty();
++        verifyNoInteractions(mBackend);
++    }
++
++    @Test
++    public void nativeRead_isRequiredBeforeDisclosureAndProofIsClosed() {
++        LockscreenCredential owner = queueRead();
++        assertThat(mModel.canDisclose()).isFalse();
++        mBackground.remove().run();
++        verify(mBackend).hasCredentials(owner);
++        assertClosed(owner);
++        assertThat(mModel.canDisclose()).isFalse();
++        mMain.remove().run();
++        assertThat(mModel.canDisclose()).isTrue();
++        assertThat(mModel.getState().getValue().configured).isTrue();
++    }
++
++    @Test
++    public void backgroundBeforeCompletion_neverRestoresProtectedStatus() {
++        queueRead();
++        mBackground.remove().run();
++        mModel.onBackground();
++        mModel.onForeground();
++        mMain.remove().run();
++        assertThat(mModel.canDisclose()).isFalse();
++        assertThat(mModel.getState().getValue().configured).isFalse();
++    }
++
++    @Test
++    public void changedOwnerBeforeCompletion_neverDiscloses() {
++        queueRead();
++        mBackground.remove().run();
++        mUser.set(10);
++        mMain.remove().run();
++        assertThat(mModel.canDisclose()).isFalse();
++    }
++
++    @Test
++    public void cancellationDuringNativeWork_keepsBusyUntilOwnedCompletion() {
++        queueRead();
++        mModel.cancelPendingAction();
++        assertThat(mModel.stageRead()).isFalse();
++        mBackground.remove().run();
++        mMain.remove().run();
++        assertThat(mModel.canDisclose()).isFalse();
++        assertThat(mModel.stageRead()).isTrue();
++    }
++
++    @Test
++    public void expiredProofReturnedWhileBackgrounded_isClosedWithoutNativeCall() {
++        assertThat(mModel.stageRead()).isTrue();
++        mModel.onBackground();
++        LockscreenCredential owner = LockscreenCredential.createPin("1234");
++        mModel.onOwnerConfirmation(owner);
++        mClock.addAndGet(30_000);
++        mModel.onForeground();
++        assertClosed(owner);
++        verifyNoInteractions(mBackend);
++        assertThat(mBackground).isEmpty();
++    }
++
++    @Test
++    public void cancelledEnrollment_closesBothSecretsWithoutSaving() {
++        authorize();
++        LockscreenCredential pin = LockscreenCredential.createPin("6789");
++        LockscreenCredential password = LockscreenCredential.createPassword("duress secret");
++        assertThat(mModel.stageSet(pin, password)).isTrue();
++        mModel.cancelPendingAction();
++        assertClosed(pin);
++        assertClosed(password);
++        assertThat(mBackground).isEmpty();
++    }
++
++    @Test
++    public void enrollment_requiresFreshProofAndClosesEveryCredential() {
++        authorize();
++        LockscreenCredential pin = LockscreenCredential.createPin("6789");
++        LockscreenCredential password = LockscreenCredential.createPassword("duress secret");
++        assertThat(mModel.stageSet(pin, password)).isTrue();
++        assertThat(mBackground).isEmpty();
++        LockscreenCredential owner = LockscreenCredential.createPin("1234");
++        mModel.onOwnerConfirmation(owner);
++        mBackground.remove().run();
++        verify(mBackend).setCredentials(owner, pin, password);
++        assertClosed(owner);
++        assertClosed(pin);
++        assertClosed(password);
++        mMain.remove().run();
++        assertThat(mModel.getState().getValue().configured).isTrue();
++    }
++
++    @Test public void collectedSecretsRequireAuthorizedStartAndFreshCommitProof() {
++        assertThat(mModel.beginEnrollment()).isFalse();
++        authorize();
++        assertThat(mModel.beginEnrollment()).isTrue();
++        mModel.onBackground();
++        mModel.onForeground();
++        assertThat(mModel.canDisclose()).isFalse();
++        LockscreenCredential pin = LockscreenCredential.createPin("6789");
++        LockscreenCredential password = LockscreenCredential.createPassword("duress secret");
++        assertThat(mModel.stageEnrollment(pin, password)).isTrue();
++        assertThat(mBackground).isEmpty();
++        LockscreenCredential owner = LockscreenCredential.createPin("1234");
++        mModel.onOwnerConfirmation(owner);
++        mBackground.remove().run();
++        verify(mBackend).setCredentials(owner, pin, password);
++        assertClosed(owner);
++        assertClosed(pin);
++        assertClosed(password);
++        mMain.remove().run();
++        assertThat(mModel.getState().getValue().configured).isTrue();
++    }
++    @Test public void enrollmentWithoutAuthorizedStartCannotStage() {
++        try (LockscreenCredential pin = LockscreenCredential.createPin("6789");
++                LockscreenCredential password = LockscreenCredential.createPassword("duress secret")) {
++            assertThat(mModel.stageEnrollment(pin, password)).isFalse();
++        }
++        verifyNoInteractions(mBackend);
++    }
++    @Test public void expiredCollectionDoesNotRetainSecretsOrCallBackend() {
++        authorize();
++        assertThat(mModel.beginEnrollment()).isTrue();
++        mClock.addAndGet(300_000);
++        try (LockscreenCredential pin = LockscreenCredential.createPin("6789");
++                LockscreenCredential password = LockscreenCredential.createPassword("duress secret")) {
++            assertThat(mModel.stageEnrollment(pin, password)).isFalse();
++            assertThat(pin.getCredential()).isNotEmpty();
++        }
++        verify(mBackend, never()).setCredentials(any(), any(), any());
++    }
++    @Test public void cancellingCollectionRevokesPermissionToStage() {
++        authorize();
++        assertThat(mModel.beginEnrollment()).isTrue();
++        mModel.cancelPendingAction();
++        try (LockscreenCredential pin = LockscreenCredential.createPin("6789");
++                LockscreenCredential password = LockscreenCredential.createPassword("duress secret")) {
++            assertThat(mModel.stageEnrollment(pin, password)).isFalse();
++        }
++        verify(mBackend, never()).setCredentials(any(), any(), any());
++    }
++
++    private LockscreenCredential queueRead() {
++        assertThat(mModel.stageRead()).isTrue();
++        LockscreenCredential owner = LockscreenCredential.createPin("1234");
++        mModel.onOwnerConfirmation(owner);
++        return owner;
++    }
++
++    private void authorize() {
++        queueRead();
++        mBackground.remove().run();
++        mMain.remove().run();
++    }
++
++    private static void assertClosed(LockscreenCredential credential) {
++        try {
++            credential.getCredential();
++            throw new AssertionError("Credential was not cleared");
++        } catch (IllegalStateException expected) {
++            // Native credential buffers must be unusable after ownership ends.
++        }
++    }
++}
+diff --git a/tests/robotests/src/com/android/settings/security/securespaces/SecureSpaceLockViewModelTest.java b/tests/robotests/src/com/android/settings/security/securespaces/SecureSpaceLockViewModelTest.java
+new file mode 100644
+index 0000000..98efdaa
+--- /dev/null
++++ b/tests/robotests/src/com/android/settings/security/securespaces/SecureSpaceLockViewModelTest.java
+@@ -0,0 +1,163 @@
++/* Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import static com.google.common.truth.Truth.assertThat;
++import static org.junit.Assert.assertThrows;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.ArgumentMatchers.eq;
++import static org.mockito.Mockito.*;
++import com.android.internal.widget.LockscreenCredential;
++import com.android.internal.widget.LockPatternUtils;
++import android.os.UserManager;
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.RuntimeEnvironment;
++import org.robolectric.annotation.Config;
++import java.util.ArrayDeque;
++import java.util.concurrent.atomic.AtomicLong;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 35, manifest = Config.NONE, application = android.app.Application.class)
++public class SecureSpaceLockViewModelTest {
++    private final ArrayDeque<Runnable> mBackground = new ArrayDeque<>();
++    private final ArrayDeque<Runnable> mMain = new ArrayDeque<>();
++    private final AtomicLong mClock = new AtomicLong(1);
++    private SecureSpaceRepository mRepository;
++    private UserManager mUsers;
++    private LockPatternUtils mLocks;
++    private SecureSpaceLockViewModel.Backend mBackend;
++    private SecureSpaceLockViewModel mModel;
++    @Before public void setUp() {
++        mUsers = mock(UserManager.class);
++        when(mUsers.getUserHandle()).thenReturn(0);
++        when(mUsers.isAdminUser()).thenReturn(true);
++        mLocks = mock(LockPatternUtils.class);
++        when(mLocks.isSecure(0)).thenReturn(true);
++        when(mLocks.getCredentialTypeForUser(0)).thenReturn(LockPatternUtils.CREDENTIAL_TYPE_PIN);
++        mRepository = new SecureSpaceRepository(mUsers, mLocks, () -> 0);
++        mBackend = mock(SecureSpaceLockViewModel.Backend.class);
++        when(mBackend.setInitial(any(), any(), eq(10), eq(7))).thenReturn(true);
++        mModel = new SecureSpaceLockViewModel(RuntimeEnvironment.getApplication(), mRepository,
++                mBackend, mBackground::add, mMain::add, mClock::get);
++        mModel.setIdentity(10, 7);
++        mModel.onForeground();
++    }
++    private LockscreenCredential stage() {
++        LockscreenCredential credential = LockscreenCredential.createPin("5678");
++        assertThat(mModel.stage(credential)).isTrue();
++        return credential;
++    }
++    private static void closed(LockscreenCredential credential) {
++        assertThrows(IllegalStateException.class, credential::getCredential);
++    }
++    @Test public void identityCannotBeRetargetedAfterFragmentRecreation() {
++        mModel.setIdentity(10, 7);
++        assertThrows(IllegalArgumentException.class, () -> mModel.setIdentity(10, 8));
++        assertThrows(IllegalArgumentException.class, () -> mModel.setIdentity(11, 7));
++    }
++    @Test public void stagingDoesNotSetCredentialWithoutOwnerProof() {
++        LockscreenCredential credential = stage();
++        assertThat(mBackground).isEmpty();
++        verifyNoInteractions(mBackend);
++        mModel.cancel();
++        closed(credential);
++    }
++    @Test public void nativeSetterReceivesExactSerialAndClosesBothCredentials() {
++        LockscreenCredential credential = stage();
++        LockscreenCredential owner = LockscreenCredential.createPin("1234");
++        mModel.onOwnerConfirmation(owner);
++        mBackground.remove().run();
++        verify(mBackend).setInitial(owner, credential, 10, 7);
++        closed(owner);
++        closed(credential);
++        assertThat(mModel.getState().getValue().finished).isFalse();
++        mMain.remove().run();
++        assertThat(mModel.getState().getValue().finished).isTrue();
++    }
++    @Test public void unsolicitedProofIsClosedWithoutCallingBackend() {
++        LockscreenCredential owner = LockscreenCredential.createPin("1234");
++        mModel.onOwnerConfirmation(owner);
++        closed(owner);
++        verifyNoInteractions(mBackend);
++    }
++    @Test public void ownerChangeBeforeDispatchCancelsAndClosesStagedSecrets() {
++        LockscreenCredential credential = stage();
++        when(mUsers.isAdminUser()).thenReturn(false);
++        LockscreenCredential owner = LockscreenCredential.createPin("1234");
++        mModel.onOwnerConfirmation(owner);
++        closed(owner);
++        closed(credential);
++        assertThat(mBackground).isEmpty();
++    }
++    @Test public void expiredReturnedProofCannotBeCarriedBackToForeground() {
++        LockscreenCredential credential = stage();
++        mModel.onBackground();
++        LockscreenCredential owner = LockscreenCredential.createPin("1234");
++        mModel.onOwnerConfirmation(owner);
++        mClock.addAndGet(30_000);
++        mModel.onForeground();
++        closed(owner);
++        closed(credential);
++        verifyNoInteractions(mBackend);
++    }
++    @Test public void backgroundCompletionDoesNotRestorePrivateResult() {
++        stage();
++        mModel.onOwnerConfirmation(LockscreenCredential.createPin("1234"));
++        mBackground.remove().run();
++        mModel.onBackground();
++        mModel.onForeground();
++        mMain.remove().run();
++        assertThat(mModel.getState().getValue().finished).isFalse();
++        assertThat(mModel.getState().getValue().failed).isFalse();
++        assertThat(mModel.getState().getValue().busy).isFalse();
++    }
++    @Test public void nativeRejectionDoesNotOpenSpaceAndClosesCredentials() {
++        when(mBackend.setInitial(any(), any(), eq(10), eq(7))).thenReturn(false);
++        LockscreenCredential credential = stage();
++        LockscreenCredential owner = LockscreenCredential.createPin("1234");
++        mModel.onOwnerConfirmation(owner);
++        mBackground.remove().run();
++        mMain.remove().run();
++        closed(owner);
++        closed(credential);
++        assertThat(mModel.getState().getValue().failed).isTrue();
++        assertThat(mModel.getState().getValue().finished).isFalse();
++    }
++    @Test public void patternOwnerCannotStageInitialSpaceCredential() {
++        when(mLocks.getCredentialTypeForUser(0)).thenReturn(LockPatternUtils.CREDENTIAL_TYPE_PATTERN);
++        try (LockscreenCredential credential = LockscreenCredential.createPin("5678")) {
++            assertThat(mModel.stage(credential)).isFalse();
++            assertThat(credential.getCredential()).isNotEmpty();
++        }
++        verifyNoInteractions(mBackend);
++    }
++    @Test public void pinOwnerCannotCreatePasswordSpace() {
++        try (LockscreenCredential credential = LockscreenCredential.createPassword("new secret")) {
++            assertThat(mModel.stage(credential)).isFalse();
++            assertThat(credential.getCredential()).isNotEmpty();
++        }
++        verifyNoInteractions(mBackend);
++    }
++    @Test public void passwordOwnerCannotCreatePinSpace() {
++        when(mLocks.getCredentialTypeForUser(0)).thenReturn(LockPatternUtils.CREDENTIAL_TYPE_PASSWORD);
++        try (LockscreenCredential credential = LockscreenCredential.createPin("5678")) {
++            assertThat(mModel.stage(credential)).isFalse();
++        }
++        verifyNoInteractions(mBackend);
++    }
++    @Test public void passwordOwnerCanCreatePasswordSpaceAfterFreshProof() {
++        when(mLocks.getCredentialTypeForUser(0)).thenReturn(LockPatternUtils.CREDENTIAL_TYPE_PASSWORD);
++        LockscreenCredential credential = LockscreenCredential.createPassword("space secret");
++        assertThat(mModel.stage(credential)).isTrue();
++        mModel.onOwnerConfirmation(LockscreenCredential.createPassword("owner secret"));
++        mBackground.remove().run();
++        mMain.remove().run();
++        assertThat(mModel.getState().getValue().finished).isTrue();
++        closed(credential);
++    }
++
++}
+diff --git a/tests/robotests/src/com/android/settings/security/securespaces/SecureSpaceRepositoryTest.java b/tests/robotests/src/com/android/settings/security/securespaces/SecureSpaceRepositoryTest.java
+new file mode 100644
+index 0000000..7d39c44
+--- /dev/null
++++ b/tests/robotests/src/com/android/settings/security/securespaces/SecureSpaceRepositoryTest.java
+@@ -0,0 +1,172 @@
++/*
++ * Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import static com.google.common.truth.Truth.assertThat;
++import static org.junit.Assert.assertThrows;
++import static org.mockito.ArgumentMatchers.anyInt;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.when;
++
++import android.content.pm.UserInfo;
++import android.os.UserHandle;
++import android.os.UserManager;
++
++import com.android.internal.widget.LockPatternUtils;
++
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.mockito.Mock;
++import org.mockito.MockitoAnnotations;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++
++import java.util.List;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 35, manifest = Config.NONE, application = android.app.Application.class)
++public class SecureSpaceRepositoryTest {
++    @Mock private UserManager mUsers;
++    @Mock private LockPatternUtils mLocks;
++    private SecureSpaceRepository mRepository;
++    private int mForegroundUser;
++
++    @Before
++    public void setUp() {
++        MockitoAnnotations.initMocks(this);
++        when(mUsers.getUserHandle()).thenReturn(UserHandle.USER_SYSTEM);
++        when(mUsers.isAdminUser()).thenReturn(true);
++        when(mLocks.isSecure(anyInt())).thenReturn(true);
++        when(mLocks.getCredentialTypeForUser(anyInt())).thenReturn(LockPatternUtils.CREDENTIAL_TYPE_PIN);
++        when(mUsers.canAddMoreUsers(UserManager.USER_TYPE_FULL_SECURE_SPACE)).thenReturn(true);
++        mRepository = new SecureSpaceRepository(mUsers, mLocks, () -> mForegroundUser);
++    }
++
++    @Test
++    public void listSpaces_excludesOtherUserTypesAndIncompleteUsers() {
++        UserInfo owner = user(0, UserManager.USER_TYPE_FULL_SYSTEM);
++        UserInfo ordinary = user(10, UserManager.USER_TYPE_FULL_SECONDARY);
++        UserInfo space = user(11, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        UserInfo partial = user(12, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        partial.partial = true;
++        UserInfo preCreated = user(13, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        preCreated.preCreated = true;
++        when(mUsers.getAliveUsers()).thenReturn(
++                List.of(owner, ordinary, space, partial, preCreated));
++
++        assertThat(mRepository.getSpaces()).containsExactly(space);
++    }
++
++    @Test
++    public void routingCandidates_requireInitializedEnabledCredentialProtectedFullUsers() {
++        UserInfo owner = user(0, UserManager.USER_TYPE_FULL_SYSTEM);
++        UserInfo secured = user(10, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        UserInfo unsecured = user(11, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        UserInfo disabled = user(12, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        disabled.flags |= UserInfo.FLAG_DISABLED;
++        UserInfo unfinished = user(13, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        unfinished.flags &= ~UserInfo.FLAG_INITIALIZED;
++        UserInfo ordinary = user(14, UserManager.USER_TYPE_FULL_SECONDARY);
++        when(mLocks.isSecure(11)).thenReturn(false);
++        when(mUsers.getAliveUsers()).thenReturn(
++                List.of(owner, secured, unsecured, disabled, unfinished, ordinary));
++
++        assertThat(mRepository.getRoutingCandidates()).containsExactly(owner, secured);
++    }
++
++    @Test
++    public void patternOwnerCannotCreateConcealedSpace() {
++        when(mLocks.getCredentialTypeForUser(0)).thenReturn(LockPatternUtils.CREDENTIAL_TYPE_PATTERN);
++        assertThat(mRepository.canCreateSpace()).isFalse();
++        assertThrows(IllegalStateException.class, () -> mRepository.createSpace("Private"));
++        verify(mUsers, never()).createUser(org.mockito.ArgumentMatchers.anyString(),
++                org.mockito.ArgumentMatchers.anyString(), anyInt());
++    }
++
++    @Test
++    public void unconfiguredSpaceCannotBeOpenedBeforeNativeCredentialSetup() {
++        UserInfo space = user(10, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        when(mUsers.getUserInfo(10)).thenReturn(space);
++        when(mLocks.getCredentialTypeForUser(10)).thenReturn(LockPatternUtils.CREDENTIAL_TYPE_NONE);
++        assertThrows(SecurityException.class, () -> mRepository.switchToSpace(space));
++    }
++
++    @Test
++    public void createSpace_usesDedicatedFullUserType() {
++        UserInfo space = user(10, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        when(mUsers.createUser("Private", UserManager.USER_TYPE_FULL_SECURE_SPACE,
++                UserInfo.FLAG_INITIALIZED))
++                .thenReturn(space);
++
++        assertThat(mRepository.createSpace(" Private ")).isSameInstanceAs(space);
++        verify(mUsers).createUser("Private", UserManager.USER_TYPE_FULL_SECURE_SPACE,
++                UserInfo.FLAG_INITIALIZED);
++    }
++
++    @Test
++    public void createSpace_rejectsNonOwnerAndForegroundUserChange() {
++        mForegroundUser = 10;
++        assertThrows(SecurityException.class, () -> mRepository.createSpace("Private"));
++        mForegroundUser = 0;
++        when(mUsers.getUserHandle()).thenReturn(10);
++        assertThrows(SecurityException.class, () -> mRepository.createSpace("Private"));
++    }
++
++    @Test
++    public void createSpace_requiresOwnerCredentialAndRespectsCreationRestrictions() {
++        when(mLocks.isSecure(0)).thenReturn(false);
++        assertThrows(SecurityException.class, () -> mRepository.createSpace("Private"));
++        when(mLocks.isSecure(0)).thenReturn(true);
++        when(mUsers.hasUserRestriction(UserManager.DISALLOW_ADD_USER)).thenReturn(true);
++        assertThrows(IllegalStateException.class, () -> mRepository.createSpace("Private"));
++        assertThat(mRepository.canCreateSpace()).isFalse();
++    }
++
++    @Test
++    public void renameSpace_rejectsRecycledUserId() {
++        UserInfo original = user(10, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        UserInfo replacement = user(10, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        replacement.serialNumber = original.serialNumber + 1;
++        when(mUsers.getUserInfo(10)).thenReturn(replacement);
++
++        assertThrows(IllegalArgumentException.class,
++                () -> mRepository.renameSpace(original, "Renamed"));
++        verify(mUsers, never()).setUserName(10, "Renamed");
++    }
++
++    @Test
++    public void removeSpace_cannotRemoveOwnerOrOrdinaryUser() {
++        UserInfo owner = user(0, UserManager.USER_TYPE_FULL_SYSTEM);
++        UserInfo ordinary = user(10, UserManager.USER_TYPE_FULL_SECONDARY);
++        when(mUsers.getUserInfo(0)).thenReturn(owner);
++        when(mUsers.getUserInfo(10)).thenReturn(ordinary);
++
++        assertThrows(IllegalArgumentException.class, () -> mRepository.removeSpace(owner));
++        assertThrows(IllegalArgumentException.class, () -> mRepository.removeSpace(ordinary));
++    }
++
++    @Test
++    public void removeSpace_respectsDevicePolicyWithoutOverride() {
++        UserInfo space = user(10, UserManager.USER_TYPE_FULL_SECURE_SPACE);
++        when(mUsers.getUserInfo(10)).thenReturn(space);
++        when(mUsers.hasUserRestriction(UserManager.DISALLOW_REMOVE_USER)).thenReturn(true);
++        assertThrows(SecurityException.class, () -> mRepository.removeSpace(space));
++
++        when(mUsers.hasUserRestriction(UserManager.DISALLOW_REMOVE_USER)).thenReturn(false);
++        when(mUsers.removeUserWhenPossible(UserHandle.of(10), false))
++                .thenReturn(UserManager.REMOVE_RESULT_REMOVED);
++        mRepository.removeSpace(space);
++        verify(mUsers).removeUserWhenPossible(UserHandle.of(10), false);
++    }
++
++    private static UserInfo user(int id, String type) {
++        UserInfo user = new UserInfo(id, "User " + id, null,
++                UserInfo.FLAG_FULL | UserInfo.FLAG_INITIALIZED, type);
++        user.serialNumber = 100 + id;
++        return user;
++    }
++}
+diff --git a/tests/robotests/src/com/android/settings/security/securespaces/SecureSpacesViewModelTest.java b/tests/robotests/src/com/android/settings/security/securespaces/SecureSpacesViewModelTest.java
+new file mode 100644
+index 0000000..60fa6a3
+--- /dev/null
++++ b/tests/robotests/src/com/android/settings/security/securespaces/SecureSpacesViewModelTest.java
+@@ -0,0 +1,161 @@
++/*
++ * Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.settings.security.securespaces;
++
++import static com.google.common.truth.Truth.assertThat;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.verify;
++
++import android.os.UserManager;
++
++import com.android.internal.widget.LockPatternUtils;
++
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.RuntimeEnvironment;
++import org.robolectric.annotation.Config;
++
++import java.util.ArrayDeque;
++import java.util.concurrent.atomic.AtomicLong;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 35, manifest = Config.NONE, application = android.app.Application.class)
++public class SecureSpacesViewModelTest {
++    private SecureSpacesViewModel mModel;
++    private Runnable mAction;
++
++    @Before
++    public void setUp() {
++        mModel = new SecureSpacesViewModel(RuntimeEnvironment.getApplication(),
++                new SecureSpaceRepository(mock(UserManager.class), mock(LockPatternUtils.class),
++                        () -> 0));
++        mAction = mock(Runnable.class);
++    }
++
++    @Test
++    public void cancelledConfirmation_neverRunsPendingMutation() {
++        confirmOwnerForDisclosure();
++        assertThat(mModel.stageAction(mAction)).isTrue();
++        assertThat(mModel.getState().getValue().busy).isTrue();
++
++        mModel.onConfirmationResult(false);
++
++        verify(mAction, never()).run();
++        assertThat(mModel.getState().getValue().busy).isFalse();
++    }
++
++    @Test
++    public void noPendingOperation_confirmationDoesNotAuthorizeNewAction() {
++        mModel.onConfirmationResult(true);
++
++        verify(mAction, never()).run();
++        assertThat(mModel.getState().getValue().busy).isFalse();
++    }
++
++    @Test
++    public void whileWaitingForConfirmation_cannotReplacePendingAction() {
++        confirmOwnerForDisclosure();
++        Runnable replacement = mock(Runnable.class);
++        assertThat(mModel.stageAction(mAction)).isTrue();
++
++        assertThat(mModel.stageAction(replacement)).isFalse();
++        mModel.onConfirmationResult(false);
++
++        verify(mAction, never()).run();
++        verify(replacement, never()).run();
++    }
++
++    private void confirmOwnerForDisclosure() {
++        assertThat(mModel.stageDisclosureConfirmation()).isTrue();
++        mModel.onDisclosureConfirmationResult(true);
++    }
++
++    @Test
++    public void beforeConfirmation_disclosureAndMutationsDenied() {
++        assertThat(mModel.getState().getValue().ownerConfirmed).isFalse();
++        assertThat(mModel.stageAction(mAction)).isFalse();
++        verify(mAction, never()).run();
++    }
++
++    @Test
++    public void confirmedDisclosure_doesNotExecuteMutation() {
++        confirmOwnerForDisclosure();
++        assertThat(mModel.getState().getValue().ownerConfirmed).isTrue();
++        assertThat(mModel.getState().getValue().busy).isFalse();
++        verify(mAction, never()).run();
++    }
++
++    @Test
++    public void cancelledDisclosure_keepsListPrivate() {
++        assertThat(mModel.stageDisclosureConfirmation()).isTrue();
++        mModel.onDisclosureConfirmationResult(false);
++        assertThat(mModel.getState().getValue().ownerConfirmed).isFalse();
++        assertThat(mModel.stageAction(mAction)).isFalse();
++    }
++
++    @Test
++    public void unsolicitedSuccessfulResult_cannotRevealList() {
++        mModel.onDisclosureConfirmationResult(true);
++        mModel.onConfirmationResult(true);
++        assertThat(mModel.getState().getValue().ownerConfirmed).isFalse();
++        assertThat(mModel.stageAction(mAction)).isFalse();
++    }
++
++    @Test
++    public void leavingForeground_revokesReadAndMutationPermission() {
++        confirmOwnerForDisclosure();
++        mModel.revokeDisclosure();
++        assertThat(mModel.getState().getValue().ownerConfirmed).isFalse();
++        assertThat(mModel.stageAction(mAction)).isFalse();
++        confirmOwnerForDisclosure();
++        assertThat(mModel.getState().getValue().ownerConfirmed).isTrue();
++    }
++
++    @Test
++    public void disclosureConfirmationCannotBeReplacedByMutation() {
++        assertThat(mModel.stageDisclosureConfirmation()).isTrue();
++        assertThat(mModel.stageDisclosureConfirmation()).isFalse();
++        assertThat(mModel.stageAction(mAction)).isFalse();
++        mModel.onConfirmationResult(true);
++        assertThat(mModel.getState().getValue().ownerConfirmed).isFalse();
++        assertThat(mModel.getState().getValue().busy).isTrue();
++    }
++
++    @Test
++    public void queuedMutationCompletion_cannotRestoreBackgroundDisclosure() {
++        ArrayDeque<Runnable> background = new ArrayDeque<>();
++        ArrayDeque<Runnable> main = new ArrayDeque<>();
++        mModel = new SecureSpacesViewModel(RuntimeEnvironment.getApplication(),
++                new SecureSpaceRepository(mock(UserManager.class), mock(LockPatternUtils.class),
++                        () -> 0), background::add, main::add);
++        confirmOwnerForDisclosure();
++        assertThat(mModel.stageAction(mAction)).isTrue();
++        mModel.onConfirmationResult(true);
++        background.remove().run(); // Operation completed; UI completion is still queued.
++        mModel.revokeDisclosure();
++        main.remove().run();
++        verify(mAction).run();
++        assertThat(mModel.getState().getValue().busy).isFalse();
++        assertThat(mModel.getState().getValue().ownerConfirmed).isFalse();
++    }
++
++    @Test
++    public void delayedConfirmationReturn_requiresNewOwnerProof() {
++        AtomicLong clock = new AtomicLong(100);
++        mModel = new SecureSpacesViewModel(RuntimeEnvironment.getApplication(),
++                new SecureSpaceRepository(mock(UserManager.class), mock(LockPatternUtils.class),
++                        () -> 0), Runnable::run, Runnable::run, clock::get);
++        confirmOwnerForDisclosure();
++        clock.set(30_100);
++        assertThat(mModel.canDisclose()).isFalse();
++        assertThat(mModel.stageAction(mAction)).isFalse();
++        mModel.onForeground();
++        assertThat(mModel.getState().getValue().ownerConfirmed).isFalse();
++        assertThat(mModel.stageAction(mAction)).isFalse();
++    }
++}

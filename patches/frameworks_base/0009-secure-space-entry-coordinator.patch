@@ -1,0 +1,2797 @@
+diff --git a/Android.bp b/Android.bp
+index 3d03e9000..1a7653812 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -804,3 +804,13 @@ filegroup {
+         "docs/docs-samples-redirect.html",
+     ],
+ }
++
++// Custom platform protocol classes needed by the focused Robolectric tests' stable SDK jar.
++java_library {
++    name: "SecureSpaceClientProtocolRoboLib",
++    srcs: [
++        "core/java/com/android/internal/widget/SecureSpaceCredentialResponse.java",
++        "core/java/com/android/internal/widget/ISecureSpaceCredentialAttempt.aidl",
++    ],
++    visibility: ["//frameworks/base/packages/SystemUI:__pkg__"],
++}
+diff --git a/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt b/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt
+index eb5000541..f867083a1 100644
+--- a/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt
++++ b/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt
+@@ -27,8 +27,13 @@ import androidx.compose.foundation.layout.union
+ import androidx.compose.foundation.layout.windowInsetsPadding
+ import androidx.compose.foundation.overscroll
+ import androidx.compose.material3.MaterialTheme
++import androidx.compose.runtime.collectAsState
++import androidx.compose.runtime.getValue
++import androidx.compose.ui.zIndex
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.DisposableEffect
++import androidx.compose.ui.viewinterop.AndroidView
++import androidx.constraintlayout.widget.ConstraintLayout
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.graphics.Color
+ import androidx.compose.ui.graphics.RectangleShape
+@@ -105,6 +110,7 @@ private fun ContentScope.BouncerOverlay(
+     modifier: Modifier = Modifier,
+ ) {
+     val backgroundColor = viewModel.backgroundColor
++    val secondaryPolicyVisible by viewModel.secondaryPolicyVisible.collectAsState()
+ 
+     DisposableEffect(Unit) { onDispose { viewModel.onUiDestroyed() } }
+     val containerLayout = calculateContainerLayout()
+@@ -149,6 +155,15 @@ private fun ContentScope.BouncerOverlay(
+                     // No-op if containerization is enabled as insets will be already consumed.
+                     .windowInsetsPadding(insets),
+             )
++            // The native DPC SurfaceView needs a visible parent in the Scene bouncer window.
++            AndroidView(
++                factory = { context ->
++                    ConstraintLayout(context).also { viewModel.registerSecondaryPolicyHost(it) }
++                },
++                modifier = Modifier.fillMaxSize().zIndex(if (secondaryPolicyVisible) 1f else -1f),
++                onRelease = { viewModel.unregisterSecondaryPolicyHost(it) },
++                update = { viewModel.registerSecondaryPolicyHost(it) },
++            )
+         }
+     }
+ }
+diff --git a/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java b/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java
+index 58bbdeb35..6b529f0a4 100644
+--- a/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java
++++ b/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java
+@@ -59,64 +59,77 @@ public class AdminSecondaryLockScreenController {
+     private static final int REMOTE_CONTENT_READY_TIMEOUT_MILLIS = 500;
+     private final KeyguardUpdateMonitor mUpdateMonitor;
+     private final Context mContext;
+-    private final ConstraintLayout mParent;
++    private ConstraintLayout mParent;
++    private final ConstraintLayout mDefaultParent;
++    private long mGeneration;
++    private int mTargetUser = UserHandle.USER_NULL;
+     private AdminSecurityView mView;
+     private Handler mHandler;
+     private IKeyguardClient mClient;
+     private KeyguardSecurityCallback mKeyguardCallback;
+     private SelectedUserInteractor mSelectedUserInteractor;
+ 
+-    private final ServiceConnection mConnection = new ServiceConnection() {
+-        @Override
+-        public void onServiceConnected(ComponentName className, IBinder service) {
+-            mClient = IKeyguardClient.Stub.asInterface(service);
+-            if (mView.isAttachedToWindow() && mClient != null) {
+-                onSurfaceReady();
++    private ServiceConnection mConnection;
++    private boolean mBound;
+ 
+-                try {
+-                    service.linkToDeath(mKeyguardClientDeathRecipient, 0);
+-                } catch (RemoteException e) {
+-                    // Failed to link to death, just dismiss and unbind the service for now.
+-                    Log.e(TAG, "Lost connection to secondary lockscreen service", e);
+-                    dismiss(mSelectedUserInteractor.getSelectedUserId());
++    private ServiceConnection connectionForCurrentRequest() {
++        final long generation = mGeneration;
++        final int targetUser = mTargetUser;
++        return new ServiceConnection() {
++            @Override
++            public void onServiceConnected(ComponentName className, IBinder service) {
++                if (generation != mGeneration || !mBound || targetUser != mTargetUser) return;
++                mClient = IKeyguardClient.Stub.asInterface(service);
++                if (mView.isAttachedToWindow() && mClient != null) {
++                    onSurfaceReady();
++                    try {
++                        service.linkToDeath(mKeyguardClientDeathRecipient, 0);
++                    } catch (RemoteException e) {
++                        dismiss(targetUser);
++                    }
+                 }
+             }
+-        }
+-
+-        @Override
+-        public void onServiceDisconnected(ComponentName className) {
+-            mClient = null;
+-        }
+-    };
++            @Override
++            public void onServiceDisconnected(ComponentName className) {
++                if (generation == mGeneration) mClient = null;
++            }
++        };
++    }
+ 
+     private final IBinder.DeathRecipient mKeyguardClientDeathRecipient = () -> {
+         hide(); // hide also takes care of unlinking to death.
+         Log.d(TAG, "KeyguardClient service died");
+     };
+ 
+-    private final IKeyguardCallback mCallback = new IKeyguardCallback.Stub() {
+-        @Override
+-        public void onDismiss() {
+-            mHandler.post(() -> {
+-                dismiss(UserHandle.getCallingUserId());
+-            });
+-        }
+-
+-        @Override
+-        public void onRemoteContentReady(
+-                @Nullable SurfaceControlViewHost.SurfacePackage surfacePackage) {
+-            if (mHandler != null) {
+-                mHandler.removeCallbacksAndMessages(null);
++    private IKeyguardCallback callbackForCurrentRequest() {
++        final long generation = mGeneration;
++        final int targetUser = mTargetUser;
++        return new IKeyguardCallback.Stub() {
++            @Override
++            public void onDismiss() {
++                final int callingUser = UserHandle.getCallingUserId();
++                mHandler.post(() -> {
++                    if (generation == mGeneration && callingUser == targetUser) dismiss(targetUser);
++                });
+             }
+-            if (surfacePackage != null) {
+-                mView.setChildSurfacePackage(surfacePackage);
+-            } else {
++
++            @Override
++            public void onRemoteContentReady(
++                    @Nullable SurfaceControlViewHost.SurfacePackage surfacePackage) {
++                final int callingUser = UserHandle.getCallingUserId();
+                 mHandler.post(() -> {
+-                    dismiss(mSelectedUserInteractor.getSelectedUserId());
++                    if (generation != mGeneration || callingUser != targetUser
++                            || !mView.isAttachedToWindow()) {
++                        if (surfacePackage != null) surfacePackage.release();
++                        return;
++                    }
++                    mHandler.removeCallbacksAndMessages(null);
++                    if (surfacePackage != null) mView.setChildSurfacePackage(surfacePackage);
++                    else dismiss(targetUser);
+                 });
+             }
+-        }
+-    };
++        };
++    }
+ 
+     private final KeyguardUpdateMonitorCallback mUpdateCallback =
+             new KeyguardUpdateMonitorCallback() {
+@@ -164,6 +177,7 @@ public class AdminSecondaryLockScreenController {
+         mContext = context;
+         mHandler = handler;
+         mParent = parent;
++        mDefaultParent = parent;
+         mUpdateMonitor = updateMonitor;
+         mKeyguardCallback = callback;
+         mView = new AdminSecurityView(mContext, mSurfaceHolderCallback);
+@@ -174,9 +188,24 @@ public class AdminSecondaryLockScreenController {
+     /**
+      * Displays the Admin security Surface view.
+      */
++    public void setParent(ConstraintLayout parent) {
++        if (mParent == parent) return;
++        hide();
++        mParent = parent;
++    }
++
+     public void show(Intent serviceIntent) {
+-        if (mClient == null) {
+-            mContext.bindService(serviceIntent, mConnection, Context.BIND_AUTO_CREATE);
++        if (!mView.isAttachedToWindow()) {
++            mGeneration++;
++            mTargetUser = mSelectedUserInteractor.getSelectedUserId();
++        }
++        if (mParent.getWindowInsetsController() != null) {
++            mParent.getWindowInsetsController().hide(android.view.WindowInsets.Type.ime());
++        }
++        if (!mBound) {
++            mConnection = connectionForCurrentRequest();
++            mBound = mContext.bindServiceAsUser(serviceIntent, mConnection, Context.BIND_AUTO_CREATE,
++                    UserHandle.of(mTargetUser));
+         }
+         if (!mView.isAttachedToWindow()) {
+             mParent.addView(mView);
+@@ -196,6 +225,9 @@ public class AdminSecondaryLockScreenController {
+      * Hides the Admin security Surface view.
+      */
+     public void hide() {
++        mGeneration++;
++        mTargetUser = UserHandle.USER_NULL;
++        mHandler.removeCallbacksAndMessages(null);
+         if (mView.isAttachedToWindow()) {
+             mParent.removeView(mView);
+         }
+@@ -205,9 +237,13 @@ public class AdminSecondaryLockScreenController {
+             } catch (NoSuchElementException e) {
+                 Log.w(TAG, "IKeyguardClient death recipient already released");
+             }
+-            mContext.unbindService(mConnection);
+             mClient = null;
+         }
++        if (mBound) {
++            mContext.unbindService(mConnection);
++            mBound = false;
++        }
++        mParent = mDefaultParent;
+     }
+ 
+     private void onSurfaceReady() {
+@@ -215,7 +251,7 @@ public class AdminSecondaryLockScreenController {
+             IBinder hostToken = mView.getHostToken();
+             // Should never be null when SurfaceView is attached to window.
+             if (hostToken != null) {
+-                mClient.onCreateKeyguardSurface(hostToken, mCallback);
++                mClient.onCreateKeyguardSurface(hostToken, callbackForCurrentRequest());
+             } else {
+                 hide();
+             }
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardInputViewController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardInputViewController.java
+index 9ebe2f8c4..ac0842096 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardInputViewController.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardInputViewController.java
+@@ -216,6 +216,20 @@ public abstract class KeyguardInputViewController<T extends KeyguardInputView>
+ 
+     /** Factory for a {@link KeyguardInputViewController}. */
+     public static class Factory {
++        private com.android.systemui.securespaces.SecureSpaceEntryCoordinator mSecureSpaceEntry;
++
++        @Inject
++        void setSecureSpaceEntryCoordinator(
++                com.android.systemui.securespaces.SecureSpaceEntryCoordinator coordinator) {
++            mSecureSpaceEntry = coordinator;
++        }
++
++        private <V extends KeyguardAbsKeyInputView> KeyguardAbsKeyInputViewController<V>
++                configureSecureEntry(KeyguardAbsKeyInputViewController<V> controller) {
++            controller.setSecureSpaceEntryCoordinator(mSecureSpaceEntry);
++            return controller;
++        }
++
+         private final SecureLockDeviceBiometricAuthContentViewModel.Factory
+                 mSecureLockDeviceViewModelFactory;
+         private final KeyguardUpdateMonitor mKeyguardUpdateMonitor;
+@@ -312,23 +326,23 @@ public abstract class KeyguardInputViewController<T extends KeyguardInputView>
+                         mDevicePostureController, mFeatureFlags, mSelectedUserInteractor,
+                         mBouncerHapticPlayer, mUiLatencyStatsManager);
+             } else if (keyguardInputView instanceof KeyguardPasswordView) {
+-                return new KeyguardPasswordViewController((KeyguardPasswordView) keyguardInputView,
++                return configureSecureEntry(new KeyguardPasswordViewController((KeyguardPasswordView) keyguardInputView,
+                         mKeyguardUpdateMonitor, securityMode, mLockPatternUtils,
+                         keyguardSecurityCallback, mMessageAreaControllerFactory, mLatencyTracker,
+                         mInputMethodManager, emergencyButtonController, mMainExecutor, mResources,
+                         mFalsingCollector, mKeyguardViewController,
+                         mDevicePostureController, mFeatureFlags, mSelectedUserInteractor,
+                         mKeyguardKeyboardInteractor, mBouncerHapticPlayer, mUserActivityNotifier,
+-                        mLockPatternCheckerWrapper, mUiLatencyStatsManager);
++                        mLockPatternCheckerWrapper, mUiLatencyStatsManager));
+             } else if (keyguardInputView instanceof KeyguardPINView) {
+-                return new KeyguardPinViewController((KeyguardPINView) keyguardInputView,
++                return configureSecureEntry(new KeyguardPinViewController((KeyguardPINView) keyguardInputView,
+                         mKeyguardUpdateMonitor, securityMode, mLockPatternUtils,
+                         keyguardSecurityCallback, mMessageAreaControllerFactory, mLatencyTracker,
+                         emergencyButtonController, mFalsingCollector,
+                         mDevicePostureController, mFeatureFlags, mSelectedUserInteractor,
+                         mUiEventLogger, mKeyguardKeyboardInteractor, mBouncerHapticPlayer,
+                         mUserActivityNotifier, mInputManager, mLockPatternCheckerWrapper,
+-                        mUiLatencyStatsManager);
++                        mUiLatencyStatsManager));
+             } else if (keyguardInputView instanceof KeyguardSimPinView) {
+                 return new KeyguardSimPinViewController((KeyguardSimPinView) keyguardInputView,
+                         mKeyguardUpdateMonitor, securityMode, mLockPatternUtils,
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java
+index c7d93d79d..127afbbf5 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java
+@@ -88,6 +88,7 @@ import com.android.systemui.classifier.FalsingA11yDelegate;
+ import com.android.systemui.classifier.FalsingCollector;
+ import com.android.systemui.dagger.qualifiers.Background;
+ import com.android.systemui.deviceentry.domain.interactor.DeviceEntryFaceAuthInteractor;
++import com.android.systemui.deviceentry.domain.interactor.DeviceEntryHapticsInteractor;
+ import com.android.systemui.deviceentry.domain.interactor.DeviceEntryInteractor;
+ import com.android.systemui.flags.FeatureFlags;
+ import com.android.systemui.keyguard.KeyguardWmStateRefactor;
+@@ -250,6 +251,7 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+         @Override
+         public boolean dismiss(boolean authenticated, int targetId,
+                 boolean bypassSecondaryLockScreen, SecurityMode expectedSecurityMode) {
++        if (mSecureSpaceEntry != null && mSecureSpaceEntry.isErasurePending()) return false;
+             return showNextSecurityScreenOrFinish(
+                     authenticated, targetId, bypassSecondaryLockScreen, expectedSecurityMode);
+         }
+@@ -338,6 +340,7 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+ 
+         @Override
+         public void onCancelClicked() {
++            if (mSecureSpaceEntry != null) mSecureSpaceEntry.cancel();
+             mViewMediatorCallback.onCancelClicked();
+         }
+ 
+@@ -350,6 +353,23 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+          */
+         @Override
+         public void finish(int targetUserId) {
++            if (mSecureSpaceEntry != null && mSecureSpaceEntry.isErasurePending()) return;
++            if (mRoutedPrimaryUser != -1 && (mSecureSpaceEntry == null
++                    || !mSecureSpaceEntry.isPublishedAuthenticationCurrent(
++                            mRoutedPrimaryUser, mRoutedPrimarySerial))) return;
++            if (mSecureSpaceEntry != null && mSecureSpaceEntry.isAwaitingPolicy()
++                    && !mRoutedPolicyAllowsFinish) return;
++            if (mRoutedPrimaryUser != -1 && (!mRoutedPolicyAllowsFinish
++                    || targetUserId != mRoutedPrimaryUser
++                    || mSelectedUserInteractor.getSelectedUserId() != targetUserId)) return;
++            if (mRoutedBiometric && !mRoutedBiometricReported) {
++                mRoutedBiometricReported = true;
++                mUpdateMonitor.reportSecureSpaceFingerprintAccepted(targetUserId,
++                        mRoutedStrongBiometric);
++                if (mDeviceEntryHapticsInteractor != null) {
++                    mDeviceEntryHapticsInteractor.onRoutedFingerprintAuthenticated();
++                }
++            }
+             if (!SceneContainerFlag.isEnabled()) {
+                 // If there's a pending runnable because the user interacted with a widget
+                 // and we're leaving keyguard, then run it.
+@@ -487,6 +507,115 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+     private final Provider<DeviceEntryInteractor> mDeviceEntryInteractor;
+     private final Provider<JavaAdapter> mJavaAdapter;
+     private final DeviceProvisionedController mDeviceProvisionedController;
++    private com.android.systemui.securespaces.SecureSpaceEntryCoordinator mSecureSpaceEntry;
++    private DeviceEntryHapticsInteractor mDeviceEntryHapticsInteractor;
++    private int mRoutedPrimaryUser = -1;
++    private int mRoutedPrimarySerial = -1;
++    private boolean mRoutedPolicyAllowsFinish;
++    private boolean mRoutedSecondaryRequested;
++    private boolean mRoutedBiometric;
++    private boolean mRoutedStrongBiometric;
++    private boolean mRoutedBiometricReported;
++    private dagger.Lazy<com.android.systemui.scene.domain.interactor.SceneInteractor>
++            mSecureSpaceSceneInteractor;
++
++    @Inject
++    void setSecureSpaceSceneInteractor(
++            dagger.Lazy<com.android.systemui.scene.domain.interactor.SceneInteractor> scenes) {
++        mSecureSpaceSceneInteractor = scenes;
++    }
++    private boolean mCompletingRoutedSecondary;
++    private final com.android.systemui.securespaces.SecureSpaceEntryCoordinator.Host
++            mSecureSpaceHost = new com.android.systemui.securespaces.SecureSpaceEntryCoordinator.Host() {
++        @Override
++        public boolean isReady(int userId, int serialNumber) {
++            if (mSelectedUserInteractor.getSelectedUserId() != userId
++                    || !mView.isAttachedToWindow()) return false;
++            if (!mUpdateMonitor.refreshSecondaryLockscreenRequirementForSecureEntry(userId)) {
++                return false;
++            }
++            if (SceneContainerFlag.isEnabled()
++                    && mUpdateMonitor.getSecondaryLockscreenRequirement(userId) != null) {
++                androidx.constraintlayout.widget.ConstraintLayout parent =
++                        mSecureSpaceEntry.getSecondaryPolicyHost();
++                if (parent == null) {
++                    if (mSecureSpaceSceneInteractor != null) {
++                        mSecureSpaceSceneInteractor.get().showOverlay(
++                                com.android.systemui.scene.shared.model.Overlays.Bouncer,
++                                "secondary lockscreen policy");
++                    }
++                    return false;
++                }
++                mAdminSecondaryLockScreenController.setParent(parent);
++            }
++            SecurityMode mode = mSecurityModel.getSecurityMode(userId);
++            if (mode != PIN && mode != Password) return false;
++            if (getCurrentSecurityMode() != mode) {
++                showPrimarySecurityScreen(false);
++                return false;
++            }
++            return true;
++        }
++        @Override
++        public void onPrimaryAuthenticationRevoked(int userId, int serialNumber) {
++            boolean revokesCurrentRoute = mRoutedPrimaryUser == userId
++                    && mRoutedPrimarySerial == serialNumber;
++            if (revokesCurrentRoute) {
++                mRoutedPrimaryUser = -1;
++                mRoutedPrimarySerial = -1;
++                mRoutedPolicyAllowsFinish = false;
++                mRoutedSecondaryRequested = false;
++                mRoutedBiometric = false;
++                mAdminSecondaryLockScreenController.hide();
++            }
++            if (mSelectedUserInteractor.getSelectedUserId() != userId
++                    || !mView.isAttachedToWindow()) return;
++            // A routed result can be revoked after the legacy bouncer has already started its
++            // disappear animation. onPause() clears the routed fields as the bouncer hides, so
++            // cleanup must also run when those fields no longer identify the published proof.
++            // PrimaryBouncerInteractor deliberately blocks future shows while that animation is
++            // pending; hide() clears it and restores the normal lockscreen -> bouncer path.
++            if (!SceneContainerFlag.isEnabled()) mPrimaryBouncerInteractor.get().hide();
++            showPrimarySecurityScreen(false);
++        }
++        @Override
++        public void completePrimaryAuthentication(int userId, int serialNumber) {
++            if (!isReady(userId, serialNumber)) return;
++            mRoutedPrimaryUser = userId;
++            mRoutedPrimarySerial = serialNumber;
++            mRoutedPolicyAllowsFinish = false;
++            mRoutedSecondaryRequested = false;
++            mRoutedBiometric = false;
++            mKeyguardSecurityCallback.reportUnlockAttempt(userId, true, Duration.ZERO, false);
++            showNextSecurityScreenOrFinish(true, userId, false, getCurrentSecurityMode());
++        }
++        @Override
++        public void completeBiometricAuthentication(int userId, int serialNumber, boolean strong) {
++            if (!isReady(userId, serialNumber)) return;
++            mRoutedPrimaryUser = userId;
++            mRoutedPrimarySerial = serialNumber;
++            mRoutedPolicyAllowsFinish = false;
++            mRoutedSecondaryRequested = false;
++            mRoutedBiometric = true;
++            mRoutedStrongBiometric = strong;
++            mRoutedBiometricReported = false;
++            // The consumed native grant drives policy. Do not install provisional global
++            // biometric success or report a primary credential before admin/SIM acceptance.
++            showNextSecurityScreenOrFinish(false, userId, false, getCurrentSecurityMode());
++        }
++    };
++
++    @Inject
++    void setSecureSpaceEntryCoordinator(
++            com.android.systemui.securespaces.SecureSpaceEntryCoordinator coordinator) {
++        mSecureSpaceEntry = coordinator;
++    }
++
++    @Inject
++    void setDeviceEntryHapticsInteractor(DeviceEntryHapticsInteractor interactor) {
++        mDeviceEntryHapticsInteractor = interactor;
++    }
++
+     private final Lazy<PrimaryBouncerInteractor> mPrimaryBouncerInteractor;
+     private final Lazy<BouncerInteractor> mBouncerInteractor;
+     private final Executor mBgExecutor;
+@@ -542,7 +671,24 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+         mKeyguardStateController = keyguardStateController;
+         mSecurityViewFlipperController = securityViewFlipperController;
+         mAdminSecondaryLockScreenController = adminSecondaryLockScreenControllerFactory.create(
+-                mKeyguardSecurityCallback);
++                new KeyguardSecurityCallback() {
++                    @Override
++                    public boolean dismiss(boolean authenticated, int targetId,
++                            boolean bypassSecondary, SecurityMode expectedMode) {
++                        if (mRoutedPrimaryUser == -1) {
++                            return mKeyguardSecurityCallback.dismiss(authenticated, targetId,
++                                    bypassSecondary, expectedMode);
++                        }
++                        if (!mRoutedSecondaryRequested || !authenticated
++                                || targetId != mRoutedPrimaryUser) return false;
++                        mCompletingRoutedSecondary = true;
++                        try {
++                            return showNextSecurityScreenOrFinish(true, targetId, true, expectedMode);
++                        } finally {
++                            mCompletingRoutedSecondary = false;
++                        }
++                    }
++                });
+         mSecureLockDeviceInteractor = secureLockDeviceInteractor;
+         mConfigurationController = configurationController;
+         mLastOrientation = getResources().getConfiguration().orientation;
+@@ -591,6 +737,7 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+         mView.setOnKeyListener(mOnKeyListener);
+ 
+         showPrimarySecurityScreen(false);
++        if (mSecureSpaceEntry != null) mSecureSpaceEntry.registerHost(mSecureSpaceHost);
+ 
+         if (SceneContainerFlag.isEnabled()) {
+             // When the scene framework says that the lockscreen has been dismissed, dismiss the
+@@ -639,6 +786,7 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+ 
+     @Override
+     protected void onViewDetached() {
++        if (mSecureSpaceEntry != null) mSecureSpaceEntry.unregisterHost(mSecureSpaceHost);
+         mUpdateMonitor.removeCallback(mKeyguardUpdateMonitorCallback);
+         mConfigurationController.removeCallback(mConfigurationListener);
+         mView.removeMotionEventListener(mGlobalTouchListener);
+@@ -657,6 +805,12 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+ 
+     /**  */
+     public void onPause() {
++        if (mSecureSpaceEntry != null) mSecureSpaceEntry.onSourcePaused();
++        mRoutedPrimaryUser = -1;
++        mRoutedPrimarySerial = -1;
++        mRoutedPolicyAllowsFinish = false;
++        mRoutedSecondaryRequested = false;
++        mRoutedBiometric = false;
+         if (DEBUG) {
+             Log.d(TAG, String.format("screen off, instance %s at %s",
+                     Integer.toHexString(hashCode()), SystemClock.uptimeMillis()));
+@@ -942,6 +1096,18 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+      */
+     public boolean showNextSecurityScreenOrFinish(boolean authenticated, int targetUserId,
+             boolean bypassSecondaryLockScreen, SecurityMode expectedSecurityMode) {
++        if (mSecureSpaceEntry != null && mSecureSpaceEntry.isErasurePending()) return false;
++        if (mSecureSpaceEntry != null && mSecureSpaceEntry.isAwaitingPolicy()
++                && mRoutedPrimaryUser == -1) return false;
++        if (mRoutedPrimaryUser != -1) {
++            if (bypassSecondaryLockScreen && !mCompletingRoutedSecondary
++                    && !mRoutedPolicyAllowsFinish) return false;
++            android.content.pm.UserInfo user = getContext().getSystemService(
++                    android.os.UserManager.class).getUserInfo(targetUserId);
++            if (targetUserId != mRoutedPrimaryUser
++                    || mSelectedUserInteractor.getSelectedUserId() != targetUserId
++                    || user == null || user.serialNumber != mRoutedPrimarySerial) return false;
++        }
+         if (DEBUG) Log.d(TAG, "showNextSecurityScreenOrFinish(" + authenticated + ")");
+         if (expectedSecurityMode != SecurityMode.Invalid
+                 && expectedSecurityMode != getCurrentSecurityMode()) {
+@@ -962,7 +1128,7 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+             finish = true;
+             eventSubtype = BOUNCER_DISMISS_EXTENDED_ACCESS;
+             uiEvent = BouncerUiEvent.BOUNCER_DISMISS_EXTENDED_ACCESS;
+-        } else if (mUpdateMonitor.getUserUnlockedWithBiometric(targetUserId)) {
++        } else if (mRoutedBiometric || mUpdateMonitor.getUserUnlockedWithBiometric(targetUserId)) {
+             finish = true;
+             eventSubtype = BOUNCER_DISMISS_BIOMETRIC;
+             uiEvent = BouncerUiEvent.BOUNCER_DISMISS_BIOMETRIC;
+@@ -1039,6 +1205,10 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+             Intent secondaryLockscreenIntent =
+                     mUpdateMonitor.getSecondaryLockscreenRequirement(targetUserId);
+             if (secondaryLockscreenIntent != null) {
++                if (mRoutedPrimaryUser != -1) mRoutedSecondaryRequested = true;
++                if (mSecureSpaceEntry != null && SceneContainerFlag.isEnabled()) {
++                    mSecureSpaceEntry.setSecondaryPolicyVisible(true);
++                }
+                 mAdminSecondaryLockScreenController.show(secondaryLockscreenIntent);
+                 return false;
+             }
+@@ -1051,11 +1221,20 @@ public class KeyguardSecurityContainerController extends ViewController<Keyguard
+             mUiEventLogger.log(uiEvent, getSessionId());
+         }
+ 
++        boolean completingRoutedPrimary = finish && mRoutedPrimaryUser != -1
++                && !mRoutedPolicyAllowsFinish;
++        if (completingRoutedPrimary) {
++            if (mSecureSpaceEntry == null || !mSecureSpaceEntry.publishPrimaryAuthentication(
++                    targetUserId, mRoutedPrimarySerial)) return false;
++            mRoutedPolicyAllowsFinish = true;
++            mSecureSpaceEntry.setSecondaryPolicyVisible(false);
++        }
++
+         if (SceneContainerFlag.isEnabled()) {
+-            if (authenticatedWithPrimaryAuth) {
++            if (authenticatedWithPrimaryAuth && !completingRoutedPrimary) {
+                 mPrimaryBouncerInteractor.get()
+                         .notifyKeyguardAuthenticatedPrimaryAuth(targetUserId);
+-            } else if (finish) {
++            } else if (finish && !completingRoutedPrimary) {
+                 mPrimaryBouncerInteractor.get().notifyUserRequestedBouncerWhenAlreadyAuthenticated(
+                         targetUserId);
+             }
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityModel.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityModel.java
+index 4b5d89753..e92342a2e 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityModel.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityModel.java
+@@ -20,9 +20,13 @@ import static android.security.Flags.secureLockDevice;
+ import static com.android.systemui.DejankUtils.whitelistIpcs;
+ 
+ import android.content.res.Resources;
++import android.os.RemoteException;
++import android.os.ServiceManager;
+ import android.telephony.SubscriptionManager;
+ import android.telephony.TelephonyManager;
++import android.util.Log;
+ 
++import com.android.internal.widget.ILockSettings;
+ import com.android.internal.widget.LockPatternUtils;
+ import com.android.systemui.dagger.SysUISingleton;
+ import com.android.systemui.dagger.qualifiers.Main;
+@@ -36,6 +40,8 @@ import javax.inject.Provider;
+ 
+ @SysUISingleton
+ public class KeyguardSecurityModel {
++    private static final String TAG = "KeyguardSecurityModel";
++
+     /**
+      * The different types of security available.
+      * @see KeyguardSecurityContainerController#showSecurityScreen
+@@ -52,6 +58,14 @@ public class KeyguardSecurityModel {
+         SecureLockDeviceBiometricAuth // Unlock by authenticating biometric for secure lock device
+     }
+ 
++    private com.android.systemui.securespaces.SecureSpaceEntryCoordinator mSecureSpaceEntry;
++
++    @Inject
++    void setSecureSpaceEntryCoordinator(
++            com.android.systemui.securespaces.SecureSpaceEntryCoordinator coordinator) {
++        mSecureSpaceEntry = coordinator;
++    }
++
+     private final boolean mIsPukScreenAvailable;
+     private boolean mRequiresBiometricForSecureLockDevice;
+     private boolean mAuthenticatedInSecureLockDevice;
+@@ -124,8 +138,34 @@ public class KeyguardSecurityModel {
+             return SecurityMode.SimPin;
+         }
+ 
+-        final int credentialType = whitelistIpcs(() ->
+-                mLockPatternUtils.getCredentialTypeForUser(userId));
++        final int credentialType = whitelistIpcs(() -> {
++            // Keyguard must reflect the authoritative native credential type. The
++            // LockPatternUtils client cache can be populated before LockSettings has finished
++            // resolving legacy PASSWORD_OR_PIN metadata during boot, leaving SystemUI with a
++            // stale Password result for a real PIN until the cache is invalidated.
++            final ILockSettings lockSettings = ILockSettings.Stub.asInterface(
++                    ServiceManager.getService("lock_settings"));
++            if (lockSettings != null) {
++                try {
++                    final int directCredentialType = lockSettings.getCredentialType(userId);
++                    final int cachedCredentialType =
++                            mLockPatternUtils.getCredentialTypeForUser(userId);
++                    Log.w(TAG, "SecureAuth getSecurityMode userId=" + userId
++                            + " directCredentialType=" + directCredentialType
++                            + " cachedCredentialType=" + cachedCredentialType);
++                    return directCredentialType;
++                } catch (RemoteException ignored) {
++                    // Fall back to the normal cached API if system_server is momentarily
++                    // unavailable; authentication itself still remains fail-closed elsewhere.
++                }
++            }
++            final int cachedCredentialType = mLockPatternUtils.getCredentialTypeForUser(userId);
++            Log.w(TAG, "SecureAuth getSecurityMode fallback userId=" + userId
++                    + " cachedCredentialType=" + cachedCredentialType);
++            return cachedCredentialType;
++        });
++        Log.w(TAG, "SecureAuth getSecurityMode selecting userId=" + userId
++                + " credentialType=" + credentialType);
+         switch (credentialType) {
+             case LockPatternUtils.CREDENTIAL_TYPE_PIN:
+                 return SecurityMode.PIN;
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java b/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
+index ff3767b32..51ed6a5b7 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
+@@ -1112,6 +1112,10 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+ 
+     private void handleFingerprintError(int msgId, String errString) {
+         Assert.isMainThread();
++        final boolean retryConcealedFingerprint =
++                msgId == FingerprintManager.FINGERPRINT_ERROR_CANCELED
++                        && mKeyguardShowing && !mKeyguardGoingAway
++                        && canRouteSecureSpaceFingerprint();
+         if (mHandler.hasCallbacks(mFpCancelNotReceived)) {
+             mHandler.removeCallbacks(mFpCancelNotReceived);
+         }
+@@ -1127,6 +1131,11 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+             setFingerprintRunningState(BIOMETRIC_STATE_STOPPED);
+         }
+ 
++        if (retryConcealedFingerprint) {
++            mHandler.postDelayed(() -> updateFingerprintListeningState(BIOMETRIC_ACTION_UPDATE),
++                    150);
++        }
++
+         if (msgId == FingerprintManager.FINGERPRINT_ERROR_HW_UNAVAILABLE) {
+             mLogger.logRetryAfterFpErrorWithDelay(msgId, errString, HAL_ERROR_RETRY_TIMEOUT);
+             mHandler.postDelayed(mRetryFingerprintAuthenticationAfterHwUnavailable,
+@@ -1552,11 +1561,16 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+     }
+ 
+     private void updateSecondaryLockscreenRequirement(int userId) {
++        refreshSecondaryLockscreenRequirementForSecureEntry(userId);
++    }
++
++    /** Re-resolves the destination user's administrator policy before a routed dismissal. */
++    boolean refreshSecondaryLockscreenRequirementForSecureEntry(int userId) {
++        Assert.isMainThread();
+         Intent oldIntent = mSecondaryLockscreenRequirement.get(userId);
+         boolean enabled = mDevicePolicyManager.isSecondaryLockscreenEnabled(UserHandle.of(userId));
+-        boolean changed = false;
+-
+-        if (enabled && (oldIntent == null)) {
++        Intent newIntent = null;
++        if (enabled) {
+             ComponentName supervisorComponent =
+                     mDevicePolicyManager.getProfileOwnerOrDeviceOwnerSupervisionComponent(
+                             UserHandle.of(userId));
+@@ -1566,26 +1580,23 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+                 Intent intent =
+                         new Intent(DevicePolicyManager.ACTION_BIND_SECONDARY_LOCKSCREEN_SERVICE)
+                                 .setPackage(supervisorComponent.getPackageName());
+-                ResolveInfo resolveInfo = mPackageManager.resolveService(intent, 0);
++                ResolveInfo resolveInfo = mPackageManager.resolveServiceAsUser(intent, 0, userId);
+                 if (resolveInfo != null && resolveInfo.serviceInfo != null) {
+-                    Intent launchIntent =
+-                            new Intent().setComponent(resolveInfo.serviceInfo.getComponentName());
+-                    mSecondaryLockscreenRequirement.put(userId, launchIntent);
+-                    changed = true;
++                    newIntent = new Intent().setComponent(resolveInfo.serviceInfo.getComponentName());
+                 }
+             }
+-        } else if (!enabled && (oldIntent != null)) {
+-            mSecondaryLockscreenRequirement.put(userId, null);
+-            changed = true;
+         }
+-        if (changed) {
++        ComponentName oldComponent = oldIntent == null ? null : oldIntent.getComponent();
++        ComponentName newComponent = newIntent == null ? null : newIntent.getComponent();
++        if (!java.util.Objects.equals(oldComponent, newComponent)) {
++            mSecondaryLockscreenRequirement.put(userId, newIntent);
+             for (int i = 0; i < mCallbacks.size(); i++) {
+-                KeyguardUpdateMonitorCallback cb = mCallbacks.get(i).get();
+-                if (cb != null) {
+-                    cb.onSecondaryLockscreenRequirementChanged(userId);
+-                }
++                KeyguardUpdateMonitorCallback callback = mCallbacks.get(i).get();
++                if (callback != null) callback.onSecondaryLockscreenRequirementChanged(userId);
+             }
+         }
++        // An enabled policy with a missing service cannot authorize routed authentication.
++        return !enabled || newIntent != null;
+     }
+ 
+     /**
+@@ -1887,6 +1898,109 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+         mFingerprintAuthenticationCallback.onUdfpsPointerUp(sensorId);
+     }
+ 
++    private com.android.systemui.securespaces.SecureSpaceEntryCoordinator mSecureSpaceEntry;
++    private volatile long mFingerprintSourceGeneration;
++    private boolean mSecureSpaceFingerprintCandidate;
++    private boolean mSecureSpaceFingerprintAvailabilityKnown;
++    private boolean mSecureSpaceFingerprintQueryPending;
++    private long mSecureSpaceFingerprintQueryAt;
++
++    private boolean canRouteSecureSpaceFingerprint() {
++        return mSecureSpaceFingerprintCandidate && mSecureSpaceEntry != null
++                && mKeyguardShowing && !mKeyguardGoingAway && !mBiometricPromptShowing
++                && !isFingerprintLockedOut();
++    }
++
++    private void refreshSecureSpaceFingerprintAvailability() {
++        if (mFpm == null || mSecureSpaceEntry == null || mSecureSpaceFingerprintQueryPending) return;
++        long now = android.os.SystemClock.elapsedRealtime();
++        if (now - mSecureSpaceFingerprintQueryAt < 2_000) return;
++        mSecureSpaceFingerprintQueryAt = now;
++        mSecureSpaceFingerprintQueryPending = true;
++        mBackgroundExecutor.execute(() -> {
++            boolean available = mFpm.hasSecureSpaceRoutingCandidate();
++            mHandler.post(() -> {
++                mSecureSpaceFingerprintQueryPending = false;
++                boolean changed = available != mSecureSpaceFingerprintCandidate;
++                mSecureSpaceFingerprintCandidate = available;
++                boolean wasKnown = mSecureSpaceFingerprintAvailabilityKnown;
++                mSecureSpaceFingerprintAvailabilityKnown = true;
++                if (changed || !wasKnown) {
++                    updateFingerprintListeningState(BIOMETRIC_ACTION_UPDATE);
++                }
++            });
++        });
++    }
++
++    @Inject
++    void setSecureSpaceEntryCoordinator(
++            com.android.systemui.securespaces.SecureSpaceEntryCoordinator coordinator) {
++        mSecureSpaceEntry = coordinator;
++        // Method injection happens after KeyguardUpdateMonitor's initial biometric setup. Do not
++        // leave an ordinary fingerprint client running in that window: it cannot receive the
++        // opaque Secure Space handoff callback. Force an immediate routing-capability refresh and
++        // re-evaluate listening once the answer arrives.
++        mSecureSpaceFingerprintAvailabilityKnown = false;
++        mSecureSpaceFingerprintQueryAt = 0;
++        mHandler.post(() -> updateFingerprintListeningState(BIOMETRIC_ACTION_UPDATE));
++    }
++
++    public boolean isAuthorizedSecureSpaceSwitchTo(int userId) {
++        return mSecureSpaceEntry != null && mSecureSpaceEntry.isAuthorizedSwitchTo(userId);
++    }
++
++    public void reportSecureSpaceFingerprintAccepted(int userId, boolean strong) {
++        Assert.isMainThread();
++        mUserFingerprintAuthenticated.put(userId, new BiometricAuthenticated(true, strong));
++        mTrustManager.unlockedByBiometricForUser(userId, FINGERPRINT);
++        reportSuccessfulBiometricUnlock(strong, userId);
++        // Dismissal and Scene proof delivery are owned by the policy coordinator.
++    }
++
++    private FingerprintManager.AuthenticationCallback fingerprintCallbackForGeneration(long scan) {
++        return new AuthenticationCallback() {
++            private boolean current() { return scan == mFingerprintSourceGeneration; }
++            @Override public void onAuthenticationFailed() {
++                if (current()) mFingerprintAuthenticationCallback.onAuthenticationFailed();
++            }
++            @Override public void onAuthenticationSucceeded(AuthenticationResult result) {
++                if (current()) mFingerprintAuthenticationCallback.onAuthenticationSucceeded(result);
++            }
++            @Override public void onAuthenticationHelp(int id, CharSequence text) {
++                if (current()) mFingerprintAuthenticationCallback.onAuthenticationHelp(id, text);
++            }
++            @Override public void onAuthenticationError(int id, CharSequence text) {
++                // Cancellation errors finish the existing native lifecycle and trigger restart.
++                mFingerprintAuthenticationCallback.onAuthenticationError(id, text);
++            }
++            @Override public void onAuthenticationAcquired(int id) {
++                if (current()) mFingerprintAuthenticationCallback.onAuthenticationAcquired(id);
++            }
++            @Override public void onSecureSpaceAuthenticationSucceeded(android.os.IBinder token,
++                    int origin, int originSerial, int destination, int destinationSerial,
++                    boolean strong) {
++                if (!current() || mSecureSpaceEntry == null || !mKeyguardShowing
++                        || mKeyguardGoingAway) {
++                    mBackgroundExecutor.execute(() ->
++                            mLockPatternUtils.cancelSecureSpaceCredentialHandoff(token));
++                    return;
++                }
++                mFingerprintCancelSignal = null;
++                mHandler.removeCallbacks(mFpCancelNotReceived);
++                mSecureSpaceEntry.acceptFingerprint(token, origin, originSerial, destination,
++                        destinationSerial, strong,
++                        new com.android.systemui.securespaces.SecureSpaceEntryCoordinator.Callback() {
++                            @Override public boolean isActive() {
++                                return current() && mKeyguardShowing && !mKeyguardGoingAway;
++                            }
++                            @Override public void onRejected(
++                                    com.android.internal.widget.SecureSpaceCredentialResponse ignored) {}
++                        });
++                setFingerprintRunningState(BIOMETRIC_STATE_STOPPED);
++            }
++        };
++    }
++
+     @VisibleForTesting
+     final FingerprintManager.AuthenticationCallback mFingerprintAuthenticationCallback
+             = new AuthenticationCallback() {
+@@ -2805,6 +2919,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+     }
+ 
+     private void updateFingerprintListeningState(int action) {
++        refreshSecureSpaceFingerprintAvailability();
+         // If this message exists, we should not authenticate again until this message is
+         // consumed by the handler
+         if (mHandler.hasMessages(MSG_BIOMETRIC_AUTHENTICATION_CONTINUE)) {
+@@ -2821,7 +2936,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+         final boolean running = mFingerprintRunningState == BIOMETRIC_STATE_RUNNING;
+         final boolean runningOrRestarting = running
+                 || mFingerprintRunningState == BIOMETRIC_STATE_CANCELLING_RESTARTING;
+-        final boolean runDetect = !isUnlockingWithFingerprintAllowed();
++        final boolean runDetect = !canRouteSecureSpaceFingerprint() && !isUnlockingWithFingerprintAllowed();
+ 
+         if (runningOrRestarting && !shouldListenForFingerprint) {
+             if (action == BIOMETRIC_ACTION_START) {
+@@ -3145,7 +3260,11 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+ 
+     @VisibleForTesting
+     protected boolean shouldListenForFingerprint(boolean isUdfps) {
++        if (mSecureSpaceEntry != null && !mSecureSpaceFingerprintAvailabilityKnown) return false;
++        if (mSecureSpaceEntry != null && mSecureSpaceEntry.isSwitchInProgress()) return false;
++        if (mSecureSpaceEntry != null && mSecureSpaceEntry.isAwaitingPolicy()) return false;
+         final int user = mSelectedUserInteractor.getSelectedUserId();
++        final boolean routing = canRouteSecureSpaceFingerprint();
+         final boolean userDoesNotHaveTrust = !getUserHasTrust(user);
+         final boolean shouldListenForFingerprintAssistant = shouldListenForFingerprintAssistant();
+         final boolean shouldListenKeyguardState =
+@@ -3170,12 +3289,12 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+         final boolean fingerprintDisabledForUser = isFingerprintDisabled(user);
+         final boolean shouldListenUserState =
+                 !mSwitchingUser
+-                        && !fingerprintDisabledForUser
++                        && (routing || !fingerprintDisabledForUser)
+                         && (!mKeyguardGoingAway || !mDeviceInteractive)
+                         && mIsSystemUser
+-                        && biometricEnabledForUser
+-                        && !isUserInLockdown(user);
+-        final boolean strongerAuthRequired = !isUnlockingWithFingerprintAllowed();
++                        && (routing || biometricEnabledForUser)
++                        && (routing || !isUserInLockdown(user));
++        final boolean strongerAuthRequired = !routing && !isUnlockingWithFingerprintAllowed();
+         final boolean shouldListenBouncerState =
+                 !strongerAuthRequired || !isPrimaryBouncerShowingOrWillBeShowing();
+         final boolean isUdfpsAuthRequiredOnCommunal =
+@@ -3250,8 +3369,13 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+     }
+ 
+     private void startListeningForFingerprint(boolean runDetect) {
++        if (mSecureSpaceEntry != null && mSecureSpaceEntry.isSwitchInProgress()) {
++            mLogger.v("Ignoring startListeningForFingerprint() during secure-space switch");
++            return;
++        }
+         final int userId = mSelectedUserInteractor.getSelectedUserId();
+-        final boolean unlockPossible = isUnlockWithFingerprintPossible(userId);
++        final boolean unlockPossible = isUnlockWithFingerprintPossible(userId)
++                || (canRouteSecureSpaceFingerprint() && !mFingerprintSensorProperties.isEmpty());
+         if (mFingerprintCancelSignal != null) {
+             mLogger.logUnexpectedFpCancellationSignalState(
+                     mFingerprintRunningState,
+@@ -3289,7 +3413,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+             } else {
+                 mLogger.v("startListeningForFingerprint");
+                 mFpm.authenticate(null /* crypto */, mFingerprintCancelSignal,
+-                        mFingerprintAuthenticationCallback,
++                        fingerprintCallbackForGeneration(++mFingerprintSourceGeneration),
+                         null /* handler */,
+                         fingerprintAuthenticateOptions);
+                 mFingerprintDetectRunning = false;
+@@ -3373,6 +3497,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+     }
+ 
+     private void stopListeningForFingerprint() {
++        mFingerprintSourceGeneration++;
+         mLogger.v("stopListeningForFingerprint()");
+         if (mFingerprintRunningState == BIOMETRIC_STATE_RUNNING) {
+             if (mFingerprintCancelSignal != null) {
+diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/data/repository/KeyguardBouncerRepository.kt b/packages/SystemUI/src/com/android/systemui/bouncer/data/repository/KeyguardBouncerRepository.kt
+index 47a03754d..c4ee8c193 100644
+--- a/packages/SystemUI/src/com/android/systemui/bouncer/data/repository/KeyguardBouncerRepository.kt
++++ b/packages/SystemUI/src/com/android/systemui/bouncer/data/repository/KeyguardBouncerRepository.kt
+@@ -153,14 +153,10 @@ constructor(
+     @SuppressLint("SharedFlowCreation")
+     override val primaryBouncerStartingDisappearAnimation =
+         MutableSharedFlow<Runnable?>(extraBufferCapacity = 2, replay = 1)
++    @Volatile private var primaryBouncerDisappearAnimationPending = false
+ 
+     override fun isPrimaryBouncerStartingDisappearAnimation(): Boolean {
+-        val replayCache = primaryBouncerStartingDisappearAnimation.replayCache
+-        return if (!replayCache.isEmpty()) {
+-            replayCache.last() != null
+-        } else {
+-            false
+-        }
++        return primaryBouncerDisappearAnimationPending
+     }
+ 
+     /** Determines if we want to instantaneously show the primary bouncer instead of translating. */
+@@ -244,7 +240,13 @@ constructor(
+     }
+ 
+     override fun setPrimaryStartDisappearAnimation(runnable: Runnable?) {
+-        primaryBouncerStartingDisappearAnimation.tryEmit(runnable)
++        if (runnable == null) {
++            primaryBouncerDisappearAnimationPending = false
++            primaryBouncerStartingDisappearAnimation.tryEmit(null)
++            return
++        }
++        primaryBouncerDisappearAnimationPending =
++            primaryBouncerStartingDisappearAnimation.tryEmit(runnable)
+     }
+ 
+     override fun setPanelExpansion(panelExpansion: Float) {
+diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerInteractor.kt b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerInteractor.kt
+index 9cc689c53..6297f24c0 100644
+--- a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerInteractor.kt
+@@ -52,11 +52,13 @@ import com.android.systemui.scene.shared.model.Scenes
+ import com.android.systemui.shade.ShadeDisplayAware
+ import com.android.systemui.utils.coroutines.flow.flatMapLatestConflated
+ import com.android.text.flags.Flags as TextFlags
++import com.android.systemui.securespaces.SecureSpaceEntryCoordinator
+ import javax.inject.Inject
+ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.flow.Flow
+ import kotlinx.coroutines.flow.MutableSharedFlow
+ import kotlinx.coroutines.flow.SharedFlow
++import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.flow.StateFlow
+ import kotlinx.coroutines.flow.asStateFlow
+ import kotlinx.coroutines.flow.combine
+@@ -86,6 +88,31 @@ constructor(
+     private val _onIncorrectBouncerInput = MutableSharedFlow<Unit>()
+     val onIncorrectBouncerInput: SharedFlow<Unit> = _onIncorrectBouncerInput
+ 
++    private var secureSpaceEntry: SecureSpaceEntryCoordinator? = null
++    private val _secondaryPolicyVisible = MutableStateFlow(false)
++    val secondaryPolicyVisible: StateFlow<Boolean> = _secondaryPolicyVisible.asStateFlow()
++    private val secondaryPolicyListener = java.util.function.Consumer<Boolean> {
++        _secondaryPolicyVisible.value = it
++    }
++
++
++    @Inject
++    fun setSecureSpaceEntryCoordinator(coordinator: SecureSpaceEntryCoordinator) {
++        secureSpaceEntry?.removeSecondaryPolicyListener(secondaryPolicyListener)
++        secureSpaceEntry = coordinator
++        coordinator.addSecondaryPolicyListener(secondaryPolicyListener)
++    }
++
++    fun registerSecondaryPolicyHost(host: androidx.constraintlayout.widget.ConstraintLayout) {
++        secureSpaceEntry?.registerSecondaryPolicyHost(host)
++    }
++    fun unregisterSecondaryPolicyHost(host: androidx.constraintlayout.widget.ConstraintLayout) {
++        secureSpaceEntry?.unregisterSecondaryPolicyHost(host)
++    }
++
++    fun cancelSecureSpaceEntry() { secureSpaceEntry?.cancel() }
++    fun onSecureSpaceSourcePaused() { secureSpaceEntry?.onSourcePaused() }
++
+     /** Whether the auto confirm feature is enabled for the currently-selected user. */
+     val isAutoConfirmEnabled: StateFlow<Boolean> = authenticationInteractor.isAutoConfirmEnabled
+ 
+@@ -250,6 +277,7 @@ constructor(
+      * user's pocket or by the user's face while holding their device up to their ear.
+      */
+     fun onIntentionalUserInput() {
++        secureSpaceEntry?.cancel()
+         deviceEntryFaceAuthInteractor.onPrimaryBouncerUserInput()
+         powerInteractor.onUserTouch()
+         falsingInteractor.updateFalseConfidence(FalsingClassifier.Result.passed(0.6))
+@@ -377,6 +405,7 @@ constructor(
+ 
+     /** Notifies that the input method editor (software keyboard) has been hidden by the user. */
+     suspend fun onImeHiddenByUser() {
++        secureSpaceEntry?.cancel()
+         _onImeHiddenByUser.emit(Unit)
+     }
+ 
+diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/PrimaryBouncerInteractor.kt b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/PrimaryBouncerInteractor.kt
+index 86903ca1b..b70289502 100644
+--- a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/PrimaryBouncerInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/PrimaryBouncerInteractor.kt
+@@ -141,6 +141,14 @@ constructor(
+         // SceneInteractor#changeScene(Scenes.Bouncer, ...).
+         SceneContainerFlag.assertInLegacyMode()
+ 
++        Log.i(
++            TAG,
++            "show entry reason=$reason showing=${isBouncerShowing()} showingSoon=" +
++                repository.primaryBouncerShowingSoon.value + " delegate=" +
++                (primaryBouncerView.delegate != null) + " animatingAway=" +
++                repository.isPrimaryBouncerStartingDisappearAnimation(),
++        )
++
+         if (primaryBouncerView.delegate == null && !Flags.composeBouncer()) {
+             Log.d(
+                 TAG,
+diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/AuthMethodBouncerViewModel.kt b/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/AuthMethodBouncerViewModel.kt
+index b5df2382f..b3a6756ac 100644
+--- a/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/AuthMethodBouncerViewModel.kt
++++ b/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/AuthMethodBouncerViewModel.kt
+@@ -101,6 +101,10 @@ sealed class AuthMethodBouncerViewModel(
+                         tryAutoConfirm = request.useAutoConfirm,
+                     )
+ 
++                if (authenticationResult == AuthenticationResult.HANDOFF_PENDING) {
++                    clearInput()
++                    return@collectLatest
++                }
+                 if (
+                     authenticationResult == AuthenticationResult.SKIPPED && request.useAutoConfirm
+                 ) {
+@@ -118,6 +122,7 @@ sealed class AuthMethodBouncerViewModel(
+             }
+             awaitCancellation()
+         } finally {
++            interactor.onSecureSpaceSourcePaused()
+             // reset whenever the view model is "deactivated"
+             wasSuccessfullyAuthenticated = false
+         }
+diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/BouncerOverlayContentViewModel.kt b/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/BouncerOverlayContentViewModel.kt
+index fd8d7d44c..b800c9568 100644
+--- a/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/BouncerOverlayContentViewModel.kt
++++ b/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/BouncerOverlayContentViewModel.kt
+@@ -16,6 +16,7 @@
+ 
+ package com.android.systemui.bouncer.ui.viewmodel
+ 
++import com.android.compose.animation.scene.ObservableTransitionState
+ import android.app.admin.DevicePolicyManager
+ import android.app.admin.DevicePolicyResources
+ import android.content.Context
+@@ -246,6 +247,18 @@ constructor(
+     override suspend fun onActivated(): Nothing {
+         bouncerInteractor.resetScale()
+         coroutineScope {
++            launch {
++                sceneInteractor.transitionStateFlow.collectLatest { transition ->
++                    if (transition is ObservableTransitionState.Transition
++                        && transition.fromContent == Overlays.Bouncer
++                        && transition.toContent != Overlays.Bouncer
++                        && transition.isInitiatedByUserInput) {
++                        transition.progress.collect { progress ->
++                            if (progress > 0f) bouncerInteractor.cancelSecureSpaceEntry()
++                        }
++                    }
++                }
++            }
+             launch { message.activate() }
+             launch {
+                 snapshotFlow { authMethodViewModel }
+@@ -535,6 +548,15 @@ constructor(
+     /**
+      * Notifies that the bouncer UI has been destroyed (e.g. the composable left the composition).
+      */
++    val secondaryPolicyVisible = bouncerInteractor.secondaryPolicyVisible
++
++    fun registerSecondaryPolicyHost(host: androidx.constraintlayout.widget.ConstraintLayout) {
++        bouncerInteractor.registerSecondaryPolicyHost(host)
++    }
++    fun unregisterSecondaryPolicyHost(host: androidx.constraintlayout.widget.ConstraintLayout) {
++        bouncerInteractor.unregisterSecondaryPolicyHost(host)
++    }
++
+     fun onUiDestroyed() {
+         keyguardDismissActionInteractor.clearDismissAction()
+     }
+@@ -544,6 +566,7 @@ constructor(
+      * `shouldSignOutOnGoBack()`.
+      */
+     fun onGoBack() {
++        bouncerInteractor.cancelSecureSpaceEntry()
+         enqueueOnActivatedScope {
+             if (shouldSignOutOnGoBack()) {
+                 userLogoutInteractor.logOutToSystemUser()
+diff --git a/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractor.kt b/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractor.kt
+index 450fe513a..a2beddcb9 100644
+--- a/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractor.kt
+@@ -51,6 +51,9 @@ import com.android.systemui.shared.settings.data.repository.SecureSettingsReposi
+ import com.android.systemui.user.data.repository.UserSwitcherRepository
+ import com.android.systemui.utils.coroutines.flow.flatMapLatestConflated
+ import dagger.Lazy
++import com.android.systemui.securespaces.SecureSpaceEntryCoordinator
++import com.android.systemui.securespaces.primaryAuthenticationProofs
++import kotlinx.coroutines.flow.MutableStateFlow
+ import javax.inject.Inject
+ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.channels.Channel
+@@ -84,7 +87,7 @@ constructor(
+     private val fingerprintAuthInteractor: DeviceEntryFingerprintAuthInteractor,
+     private val powerInteractor: PowerInteractor,
+     private val biometricSettingsInteractor: DeviceEntryBiometricSettingsInteractor,
+-    secureLockDeviceInteractor: Lazy<SecureLockDeviceInteractor>,
++    private val secureLockDeviceInteractor: Lazy<SecureLockDeviceInteractor>,
+     private val systemPropertiesHelper: SystemPropertiesHelper,
+     private val secureSettingsRepository: SecureSettingsRepository,
+     private val keyguardInteractor: KeyguardInteractor,
+@@ -108,6 +111,13 @@ constructor(
+                 fingerprintEnrolledAndEnabled.value ||
+                 trustAgentEnabled.value
+ 
++    private val secureSpaceEntry = MutableStateFlow<SecureSpaceEntryCoordinator?>(null)
++
++    @Inject
++    fun setSecureSpaceEntryCoordinator(coordinator: SecureSpaceEntryCoordinator) {
++        secureSpaceEntry.value = coordinator
++    }
++
+     /**
+      * Reason why device entry is restricted to certain authentication methods for the current user.
+      *
+@@ -197,6 +207,10 @@ constructor(
+     /** Indicates when a device has been unlocked from successful authentication on the bouncer. */
+     private val onUnlockFromBouncer = authenticationInteractor.onAuthenticationResult.filter { it }
+ 
++    private val routedPrimaryProofs = secureSpaceEntry.flatMapLatest { coordinator ->
++        coordinator?.primaryAuthenticationProofs() ?: emptyFlow()
++    }
++
+     private val deviceUnlockSource =
+         /**
+          * When secure lock device is active, the device is not considered unlocked after successful
+@@ -328,9 +342,20 @@ constructor(
+ 
+     private suspend fun handleUnlockEvents() {
+         // Unlock the device when a new unlock source is detected.
+-        deviceUnlockSource.collect {
+-            Log.i(TAG, "unlocking due to \"$it\"")
+-            repository.deviceUnlockStatus.value = DeviceUnlockStatus(true, it)
++        merge(
++            deviceUnlockSource.map { source ->
++                source to (null as SecureSpaceEntryCoordinator.Proof?)
++            },
++            routedPrimaryProofs.map {
++                (if (it.biometric) DeviceUnlockSource.Fingerprint else DeviceUnlockSource.BouncerInput) to it
++            },
++        ).collect { (source, proof) ->
++            if (secureSpaceEntry.value?.isAwaitingPolicy == true) return@collect
++            if (proof != null && ((secureLockDevice()
++                    && secureLockDeviceInteractor.get().isSecureLockDeviceEnabled.value)
++                    || secureSpaceEntry.value?.isProofCurrent(proof) != true)) return@collect
++            Log.i(TAG, "unlocking due to \"$source\"")
++            repository.deviceUnlockStatus.value = DeviceUnlockStatus(true, source)
+         }
+     }
+ 
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt
+index 2626449a3..f0b7cbd1b 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt
+@@ -18,8 +18,11 @@ package com.android.systemui.keyguard.domain.interactor
+ 
+ import android.animation.ValueAnimator
+ import android.util.MathUtils
++import android.util.Log
+ import com.android.app.animation.Interpolators
+ import com.android.app.tracing.coroutines.launchTraced as launch
++import com.android.systemui.bouncer.domain.interactor.PrimaryBouncerInteractor
++import com.android.systemui.bouncer.shared.constants.KeyguardBouncerConstants
+ import com.android.systemui.communal.domain.interactor.CommunalSceneInteractor
+ import com.android.systemui.communal.domain.interactor.CommunalSettingsInteractor
+ import com.android.systemui.communal.shared.model.CommunalScenes
+@@ -51,6 +54,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
+ import kotlinx.coroutines.flow.filter
+ import kotlinx.coroutines.flow.map
+ import kotlinx.coroutines.flow.onStart
++import kotlinx.coroutines.withContext
+ 
+ @SysUISingleton
+ class FromLockscreenTransitionInteractor
+@@ -62,7 +66,7 @@ constructor(
+     @Background private val scope: CoroutineScope,
+     @Application private val applicationScope: CoroutineScope,
+     @Background bgDispatcher: CoroutineDispatcher,
+-    @Main mainDispatcher: CoroutineDispatcher,
++    @Main private val uiDispatcher: CoroutineDispatcher,
+     keyguardInteractor: KeyguardInteractor,
+     private val shadeRepository: ShadeRepository,
+     powerInteractor: PowerInteractor,
+@@ -70,11 +74,12 @@ constructor(
+     private val communalSceneInteractor: CommunalSceneInteractor,
+     private val swipeToDismissInteractor: SwipeToDismissInteractor,
+     keyguardOcclusionInteractor: KeyguardOcclusionInteractor,
++    private val primaryBouncerInteractor: PrimaryBouncerInteractor,
+ ) :
+     TransitionInteractor(
+         fromState = KeyguardState.LOCKSCREEN,
+         transitionInteractor = transitionInteractor,
+-        mainDispatcher = mainDispatcher,
++        mainDispatcher = uiDispatcher,
+         bgDispatcher = bgDispatcher,
+         powerInteractor = powerInteractor,
+         keyguardOcclusionInteractor = keyguardOcclusionInteractor,
+@@ -170,6 +175,23 @@ constructor(
+     private fun listenForLockscreenToPrimaryBouncerDragging() {
+         if (SceneContainerFlag.isEnabled) return
+         var transitionId: UUID? = null
++        // The manual shade collector can be suspended while the transition repository still
++        // accepts and emits the transition. Listen to the authoritative transition stream as a
++        // fallback so the legacy credential container cannot be left invisible.
++        scope.launch("$TAG#repairPrimaryBouncerFromTransition") {
++            transitionInteractor.transitionState
++                .filter {
++                    it.from == KeyguardState.LOCKSCREEN &&
++                        it.to == KeyguardState.PRIMARY_BOUNCER &&
++                        (it.transitionState == TransitionState.STARTED ||
++                            it.transitionState == TransitionState.RUNNING)
++                }
++                .collect {
++                    withContext(uiDispatcher) {
++                        updateLegacyPrimaryBouncer(KeyguardBouncerConstants.EXPANSION_VISIBLE)
++                    }
++                }
++        }
+         applicationScope.launch("$TAG#listenForLockscreenToPrimaryBouncerDragging") {
+             shadeRepository.legacyShadeExpansion.collect { shadeExpansion ->
+                 val statusBarState = keyguardInteractor.statusBarState.value
+@@ -182,6 +204,7 @@ constructor(
+                     internalTransitionInteractor.currentTransitionInfoInternal()
+                 if (id != null) {
+                     if (startedStep.to == KeyguardState.PRIMARY_BOUNCER) {
++                        updateLegacyPrimaryBouncer(shadeExpansion)
+                         // An existing `id` means a transition is started, and calls to
+                         // `updateTransition` will control it until FINISHED or CANCELED
+                         var nextState =
+@@ -251,6 +274,9 @@ constructor(
+                                 animator = null, // transition will be manually controlled,
+                                 ownerReason = "#listenForLockscreenToPrimaryBouncerDragging",
+                             )
++                        if (transitionId != null) {
++                            updateLegacyPrimaryBouncer(shadeExpansion)
++                        }
+                     }
+                 }
+             }
+@@ -268,6 +294,32 @@ constructor(
+         }
+     }
+ 
++    /**
++     * The legacy PIN/password view and the keyguard transition are backed by separate state
++     * repositories. Keep them in lockstep here because this collector owns the manually driven
++     * LOCKSCREEN -> PRIMARY_BOUNCER transition. In particular, a completed biometric dismissal
++     * can recreate the lockscreen with the transition state ready while the legacy bouncer is
++     * still hidden; advancing only the transition then produces an invisible credential view.
++     */
++    private fun updateLegacyPrimaryBouncer(shadeExpansion: Float) {
++        Log.i(
++            TAG,
++            "legacy bouncer bridge expansion=$shadeExpansion showing=" +
++                primaryBouncerInteractor.isShowing.value + " showingSoon=" +
++                primaryBouncerInteractor.isShowingSoon.value,
++        )
++        // showingSoon is only a pending callback; after a biometric dismissal it can remain set
++        // while the actual legacy container is invisible. Retry show() based on the real visible
++        // state so the transition cannot finish with an invisible PIN view.
++        if (!primaryBouncerInteractor.isShowing.value) {
++            primaryBouncerInteractor.show(
++                isScrimmed = false,
++                reason = "$TAG#listenForLockscreenToPrimaryBouncerDragging",
++            )
++        }
++        primaryBouncerInteractor.setPanelExpansion(shadeExpansion)
++    }
++
+     fun dismissKeyguard() {
+         if (SceneContainerFlag.isEnabled) return
+         scope.launch("$TAG#dismissKeyguard") {
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardDismissInteractor.kt b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardDismissInteractor.kt
+index 30e5a2c35..63604b6b9 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardDismissInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardDismissInteractor.kt
+@@ -29,9 +29,14 @@ import com.android.systemui.keyguard.shared.model.KeyguardDone
+ import com.android.systemui.power.domain.interactor.PowerInteractor
+ import com.android.systemui.user.domain.interactor.SelectedUserInteractor
+ import com.android.systemui.util.kotlin.sample
++import com.android.systemui.securespaces.SecureSpaceEntryCoordinator
++import com.android.systemui.securespaces.primaryAuthenticationProofs
++import kotlinx.coroutines.flow.MutableStateFlow
+ import javax.inject.Inject
+ import kotlinx.coroutines.CoroutineDispatcher
+ import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.flow.flatMapLatest
++import kotlinx.coroutines.flow.emptyFlow
+ import kotlinx.coroutines.flow.Flow
+ import kotlinx.coroutines.flow.filter
+ import kotlinx.coroutines.flow.map
+@@ -52,6 +57,13 @@ constructor(
+     trustRepository: TrustRepository,
+     powerInteractor: PowerInteractor,
+ ) {
++    private val secureSpaceEntry = MutableStateFlow<SecureSpaceEntryCoordinator?>(null)
++
++    @Inject
++    fun setSecureSpaceEntryCoordinator(coordinator: SecureSpaceEntryCoordinator) {
++        secureSpaceEntry.value = coordinator
++    }
++
+     /*
+      * Updates when a biometric has authenticated the device and is requesting to dismiss
+      * the keyguard. When true, a class 3 biometrics has authenticated. Else, a lower class
+@@ -83,7 +95,11 @@ constructor(
+     private val primaryAuthenticated: Flow<Unit> =
+         primaryBouncerInteractor.keyguardAuthenticatedPrimaryAuth
+             .filter { authedUserId -> authedUserId == selectedUserInteractor.getSelectedUserId() }
+-            .map {} // map to Unit
++            .map {}
++
++    private val routedPrimaryProofs = secureSpaceEntry.flatMapLatest { coordinator ->
++        coordinator?.primaryAuthenticationProofs() ?: emptyFlow()
++    }
+ 
+     /*
+      * Updates when the current user requests the bouncer after they've already successfully
+@@ -99,14 +115,20 @@ constructor(
+     val keyguardDone: Flow<KeyguardDone> = keyguardRepository.keyguardDone
+ 
+     /** Updates when any request to dismiss the current user's keyguard has arrived. */
+-    private val dismissKeyguardRequest: Flow<DismissAction> =
+-        merge(
++    private val dismissKeyguardRequest:
++        Flow<Pair<DismissAction, SecureSpaceEntryCoordinator.Proof?>> = merge(
++            merge(
+                 biometricAuthenticatedRequestDismissKeyguard,
+                 onTrustGrantedRequestDismissKeyguard,
+                 primaryAuthenticated,
+                 userRequestedBouncerWhenAlreadyAuthenticated,
+-            )
+-            .sample(keyguardRepository.dismissAction)
++            ).map { null as SecureSpaceEntryCoordinator.Proof? },
++            routedPrimaryProofs,
++        ).sample(keyguardRepository.dismissAction) { proof, action -> action to proof }
++
++    private fun isRequestCurrent(request: Pair<DismissAction, SecureSpaceEntryCoordinator.Proof?>):
++        Boolean = secureSpaceEntry.value?.isAwaitingPolicy != true &&
++            (request.second?.let { secureSpaceEntry.value?.isProofCurrent(it) == true } ?: true)
+ 
+     /**
+      * Updates when a request to dismiss the current user's keyguard has arrived and there's a
+@@ -114,7 +136,7 @@ constructor(
+      * with or without a deferral.
+      */
+     val dismissKeyguardRequestWithImmediateDismissAction: Flow<Unit> =
+-        dismissKeyguardRequest.filter { it is DismissAction.RunImmediately }.map {} // map to Unit
++        dismissKeyguardRequest.filter { isRequestCurrent(it) && it.first is DismissAction.RunImmediately }.map {} // map to Unit
+ 
+     /**
+      * Updates when a request to dismiss the current user's keyguard has arrived and there's isn't a
+@@ -122,7 +144,7 @@ constructor(
+      * keyguard transitions to GONE.
+      */
+     val dismissKeyguardRequestWithoutImmediateDismissAction: Flow<Unit> =
+-        dismissKeyguardRequest.filter { it !is DismissAction.RunImmediately }.map {} // map to Unit
++        dismissKeyguardRequest.filter { isRequestCurrent(it) && it.first !is DismissAction.RunImmediately }.map {} // map to Unit
+ 
+     suspend fun setKeyguardDone(keyguardDoneTiming: KeyguardDone) {
+         keyguardRepository.setKeyguardDone(keyguardDoneTiming)
+diff --git a/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinator.java b/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinator.java
+new file mode 100644
+index 000000000..8d9f636ef
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinator.java
+@@ -0,0 +1,738 @@
++/* Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.systemui.securespaces;
++
++import android.app.ActivityManager;
++import android.util.Log;
++import android.content.Context;
++import android.content.pm.UserInfo;
++import android.os.IBinder;
++import android.os.PowerManager;
++import android.os.SystemClock;
++import android.os.UserManager;
++import android.os.UserHandle;
++
++import com.android.internal.widget.ISecureSpaceCredentialAttempt;
++import com.android.internal.widget.LockPatternUtils;
++import com.android.internal.widget.LockscreenCredential;
++import com.android.internal.widget.SecureSpaceCredentialResponse;
++import com.android.internal.widget.VerifyCredentialResponse;
++import com.android.systemui.dagger.SysUISingleton;
++import com.android.systemui.dagger.qualifiers.Background;
++import com.android.systemui.dagger.qualifiers.Main;
++import com.android.systemui.keyguard.WakefulnessLifecycle;
++import com.android.systemui.settings.UserTracker;
++import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
++import com.android.systemui.util.concurrency.DelayableExecutor;
++
++import java.time.Duration;
++import java.util.concurrent.Executor;
++import java.util.concurrent.CopyOnWriteArraySet;
++import java.util.function.Consumer;
++import java.util.concurrent.atomic.AtomicBoolean;
++
++import javax.inject.Inject;
++
++/** Process-owned credential transaction, independent of either bouncer's view lifetime. */
++@SysUISingleton
++public final class SecureSpaceEntryCoordinator {
++    private static final String TAG = "SecureSpaceEntry";
++    public interface Host {
++        /** Must check the selected identity and wait for the native security view to be ready. */
++        boolean isReady(int userId, int serialNumber);
++        /** Runs the normal SIM, secondary admin and keyguard dismissal policy. */
++        void completePrimaryAuthentication(int userId, int serialNumber);
++        default void completeBiometricAuthentication(int userId, int serialNumber, boolean strong) {}
++
++        default void onPrimaryAuthenticationRevoked(int userId, int serialNumber) {}
++    }
++
++    public interface Callback {
++        /** Delivered only while the originating attempt and selected identity are still current. */
++        void onRejected(SecureSpaceCredentialResponse response);
++        /** The native match is now owned by this coordinator, not by the source coroutine. */
++        default void onAccepted() {}
++        default boolean isActive() { return true; }
++        default void onCurrentUserChecked(VerifyCredentialResponse response) {}
++    }
++
++    private static final long LIFETIME_MS = 30_000;
++    interface Backend {
++        int credentialType(int userId);
++        SecureSpaceCredentialResponse check(LockscreenCredential input, int userId, int serial,
++                ISecureSpaceCredentialAttempt witness);
++        VerifyCredentialResponse checkCurrent(LockscreenCredential input, int userId);
++        boolean prepare(IBinder token);
++        boolean consume(IBinder token, int userId, int serial);
++        boolean isLeaseCurrent(IBinder token, int userId, int serial);
++        boolean attachFingerprint(IBinder token, int origin, int originSerial,
++                int destination, int destinationSerial, ISecureSpaceCredentialAttempt witness);
++        boolean consumeFingerprint(IBinder token, int userId, int serial);
++        boolean isErasurePending();
++        void cancel(IBinder token);
++        int currentUser();
++        boolean switchUser(int userId) throws Exception;
++        void reportFailedAttempt(int userId);
++        void reportLockout(Duration timeout, int userId);
++    }
++
++    private static Backend nativeBackend(LockPatternUtils locks) {
++        return new Backend() {
++            public int credentialType(int userId) { return locks.getCredentialTypeForUser(userId); }
++            public SecureSpaceCredentialResponse check(LockscreenCredential input, int userId,
++                    int serial, ISecureSpaceCredentialAttempt witness) {
++                return locks.checkSecureSpaceCredential(input, userId, serial, witness);
++            }
++            public VerifyCredentialResponse checkCurrent(LockscreenCredential input, int userId) {
++                try (LockscreenCredential typed = input.duplicateForSecureSpaceVerification(
++                        locks.getCredentialTypeForUser(userId))) {
++                    return typed == null ? VerifyCredentialResponse.OTHER_ERROR
++                            : locks.checkCredential(typed, userId, null);
++                }
++            }
++            public boolean prepare(IBinder token) {
++                return locks.prepareSecureSpaceCredentialHandoff(token);
++            }
++            public boolean consume(IBinder token, int userId, int serial) {
++                return locks.consumeSecureSpaceCredentialHandoff(token, userId, serial);
++            }
++            public boolean isLeaseCurrent(IBinder token, int userId, int serial) {
++                return locks.isSecureSpaceAuthenticationLeaseCurrent(token, userId, serial);
++            }
++            public boolean attachFingerprint(IBinder token, int origin, int originSerial,
++                    int destination, int destinationSerial, ISecureSpaceCredentialAttempt witness) {
++                return locks.attachSecureSpaceFingerprintWitness(token, origin, originSerial,
++                        destination, destinationSerial, witness);
++            }
++            public boolean consumeFingerprint(IBinder token, int userId, int serial) {
++                return locks.consumeSecureSpaceFingerprintHandoff(token, userId, serial);
++            }
++            public boolean isErasurePending() { return locks.isSecureAuthErasurePending(); }
++            public void cancel(IBinder token) { locks.cancelSecureSpaceCredentialHandoff(token); }
++            public int currentUser() { return ActivityManager.getCurrentUser(); }
++            public boolean switchUser(int userId) throws Exception {
++                return ActivityManager.getService().switchUser(userId);
++            }
++            public void reportFailedAttempt(int userId) {
++                locks.reportFailedPasswordAttempt(userId);
++            }
++            public void reportLockout(Duration timeout, int userId) {
++                locks.reportPasswordLockout(timeout, userId);
++            }
++        };
++    }
++
++    private final Backend mBackend;
++    private final UserManager mUsers;
++    private final PowerManager mPower;
++    private final UserTracker mUserTracker;
++    private final SelectedUserInteractor mSelectedUser;
++    private final Executor mBackground;
++    private final DelayableExecutor mMain;
++    private Host mHost;
++    private volatile Request mRequest;
++    private volatile Request mConsumedRequest;
++    private record AggregateLockout(int userId, int serial, long endTime) {}
++    private volatile AggregateLockout mAggregateLockout;
++
++    /** Hardware retry for one inactive user cannot disable healthy alternatives. */
++    public long getLockoutEndTimeMillis() {
++        AggregateLockout lockout = mAggregateLockout;
++        if (lockout == null || lockout.userId() != mSelectedUser.getSelectedUserId()
++                || !hasIdentity(lockout.userId(), lockout.serial())
++                || SystemClock.elapsedRealtime() >= lockout.endTime()) return 0;
++        return lockout.endTime();
++    }
++
++    private volatile Proof mPublishedProof;
++    private final CopyOnWriteArraySet<Consumer<Proof>> mProofListeners = new CopyOnWriteArraySet<>();
++
++    public static final class Proof {
++        public final int userId;
++        public final int serialNumber;
++        private final Request request;
++        public final boolean biometric;
++        public final boolean strongBiometric;
++        private final AtomicBoolean active;
++        private Proof(int userId, int serialNumber, Request request) {
++            this.userId = userId;
++            this.serialNumber = serialNumber;
++            this.request = request;
++            biometric = request.biometric;
++            strongBiometric = request.strongBiometric;
++            active = request.active;
++        }
++    }
++
++    public void addProofListener(Consumer<Proof> listener) { mProofListeners.add(listener); }
++    public void removeProofListener(Consumer<Proof> listener) { mProofListeners.remove(listener); }
++
++    /** Each queued Scene consumer must validate the same proof identity when it receives it. */
++    public boolean isProofCurrent(Proof proof) {
++        if (proof == null || proof != mPublishedProof || !proof.request.isActive()) return false;
++        boolean current = mPower.isInteractive() && !mUserTracker.isUserSwitching()
++                && mBackend.currentUser() == proof.userId
++                && mUserTracker.getUserId() == proof.userId
++                && mSelectedUser.getSelectedUserId() == proof.userId
++                && hasIdentity(proof.userId, proof.serialNumber)
++                && mUsers.isUserUnlocked(UserHandle.of(proof.userId))
++                && isNativeLeaseCurrent(proof.request) && proof.active.get();
++        if (!current) proof.active.set(false);
++        return current;
++    }
++
++    private boolean isNativeLeaseCurrent(Request request) {
++        try {
++            return !isErasurePending() && request.active.get() && mBackend.isLeaseCurrent(request.token,
++                    request.destination, request.destinationSerial) && request.active.get();
++        } catch (RuntimeException e) {
++            return false;
++        }
++    }
++
++    public boolean isPublishedAuthenticationCurrent(int userId, int serialNumber) {
++        Proof proof = mPublishedProof;
++        return proof != null && proof.userId == userId && proof.serialNumber == serialNumber
++                && isProofCurrent(proof);
++    }
++
++    /** Called only after the native security host has passed all dismissal requirements. */
++    public boolean publishPrimaryAuthentication(int userId, int serialNumber) {
++        Request request = mConsumedRequest;
++        if (request == null || !request.isActive() || request.destination != userId
++                || request.destinationSerial != serialNumber
++                || mBackend.currentUser() != userId
++                || mSelectedUser.getSelectedUserId() != userId
++                || !hasIdentity(userId, serialNumber)) return false;
++        if (!isNativeLeaseCurrent(request)) {
++            cancel();
++            return false;
++        }
++        mConsumedRequest = null;
++        Proof proof = new Proof(userId, serialNumber, request);
++        mPublishedProof = proof;
++        for (Consumer<Proof> listener : mProofListeners) listener.accept(proof);
++        return true;
++    }
++
++    private final UserTracker.Callback mUserCallback = new UserTracker.Callback() {
++        @Override
++        public void onBeforeUserSwitching(int newUser, Runnable acknowledgement) {
++            try {
++                Proof proof = mPublishedProof;
++                if (proof != null) proof.active.set(false);
++                mPublishedProof = null;
++                mConsumedRequest = null;
++                Request request = mRequest;
++                if (request != null && (!request.switchRequested.get()
++                        || request.destination != newUser)) cancel();
++            } finally {
++                acknowledgement.run();
++            }
++        }
++        @Override
++        public void onUserChanged(int newUser, Context context) {
++            Request request = mRequest;
++            if (request != null && request.switchRequested.get()
++                    && request.destination == newUser) {
++                request.switchCompleted.set(true);
++            }
++            tryComplete();
++        }
++    };
++
++    @Inject
++    public SecureSpaceEntryCoordinator(LockPatternUtils locks, UserManager users,
++            PowerManager power, UserTracker userTracker, SelectedUserInteractor selectedUser,
++            @Background Executor background, @Main DelayableExecutor main,
++            WakefulnessLifecycle wakefulness) {
++        this(nativeBackend(locks), users, power, userTracker, selectedUser, background, main,
++                wakefulness);
++    }
++
++    SecureSpaceEntryCoordinator(Backend backend, UserManager users, PowerManager power,
++            UserTracker userTracker, SelectedUserInteractor selectedUser, Executor background,
++            DelayableExecutor main, WakefulnessLifecycle wakefulness) {
++        mBackend = backend;
++        mUsers = users;
++        mPower = power;
++        mUserTracker = userTracker;
++        mSelectedUser = selectedUser;
++        mBackground = background;
++        mMain = main;
++        userTracker.addCallback(mUserCallback, main);
++        wakefulness.addObserver(new WakefulnessLifecycle.Observer() {
++            @Override
++            public void onStartedGoingToSleep() { cancel(); }
++        });
++    }
++
++    /** Concealed entry is enabled only for the native owner/Secure Space credential cohort. */
++    public boolean isAvailable() {
++        UserInfo current = mUsers.getUserInfo(mSelectedUser.getSelectedUserId());
++        if (current == null || !(current.id == 0
++                || UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(current.userType))) return false;
++        int type = mBackend.credentialType(current.id);
++        if (type != LockPatternUtils.CREDENTIAL_TYPE_PIN
++                && type != LockPatternUtils.CREDENTIAL_TYPE_PASSWORD) return false;
++        return true;
++    }
++
++    /**
++     * Keep the normal PIN bouncer while every routable credential is a PIN. A password field is
++     * needed only when the routing cohort contains a password, since it can accept both text
++     * passwords and numeric PINs without revealing which destination owns a given credential.
++     */
++    public boolean usesNeutralInput(int userId) {
++        UserInfo user = mUsers.getUserInfo(userId);
++        if (user == null || !(user.id == 0
++                || UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(user.userType))) {
++            return false;
++        }
++        for (UserInfo candidate : mUsers.getAliveUsers()) {
++            if (candidate == null || candidate.partial || candidate.preCreated
++                    || !candidate.isEnabled() || !candidate.isFull()
++                    || !(candidate.id == 0
++                            || UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(
++                                    candidate.userType))) {
++                continue;
++            }
++            if (mBackend.credentialType(candidate.id)
++                    == LockPatternUtils.CREDENTIAL_TYPE_PASSWORD) {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    /** Main-thread registration; no names or other private metadata enter the host contract. */
++    private final java.util.Set<Consumer<Boolean>> mSecondaryPolicyListeners =
++            new java.util.concurrent.CopyOnWriteArraySet<>();
++    private boolean mSecondaryPolicyVisible;
++
++    public void addSecondaryPolicyListener(Consumer<Boolean> listener) {
++        mSecondaryPolicyListeners.add(listener);
++        listener.accept(mSecondaryPolicyVisible);
++    }
++    public void removeSecondaryPolicyListener(Consumer<Boolean> listener) {
++        mSecondaryPolicyListeners.remove(listener);
++    }
++    public void setSecondaryPolicyVisible(boolean visible) {
++        if (mSecondaryPolicyVisible == visible) return;
++        mSecondaryPolicyVisible = visible;
++        for (Consumer<Boolean> listener : mSecondaryPolicyListeners) listener.accept(visible);
++    }
++
++    private androidx.constraintlayout.widget.ConstraintLayout mSecondaryPolicyHost;
++
++    public void registerSecondaryPolicyHost(androidx.constraintlayout.widget.ConstraintLayout host) {
++        mSecondaryPolicyHost = host;
++        tryComplete();
++    }
++
++    public void unregisterSecondaryPolicyHost(androidx.constraintlayout.widget.ConstraintLayout host) {
++        if (mSecondaryPolicyHost != host) return;
++        mSecondaryPolicyHost = null;
++        if (mConsumedRequest != null || mPublishedProof != null) cancel();
++    }
++
++    public androidx.constraintlayout.widget.ConstraintLayout getSecondaryPolicyHost() {
++        return mSecondaryPolicyHost != null && mSecondaryPolicyHost.isAttachedToWindow()
++                && mSecondaryPolicyHost.isShown() ? mSecondaryPolicyHost : null;
++    }
++
++    public void registerHost(Host host) {
++        mHost = host;
++        tryComplete();
++    }
++
++    public void unregisterHost(Host host) {
++        if (mHost != host) return;
++        mHost = null;
++        onSourcePaused();
++    }
++
++    /** A deliberate prepared switch may destroy the source view without abandoning its proof. */
++    public void onSourcePaused() {
++        if (mConsumedRequest != null) { cancel(); return; }
++        if (mRequest != null && !mRequest.switchRequested.get()) cancel();
++    }
++
++    private volatile boolean mErasurePending;
++
++    public boolean isErasurePending() {
++        if (mErasurePending) return true;
++        try {
++            if (mBackend.isErasurePending()) mErasurePending = true;
++        } catch (RuntimeException error) {
++            return true;
++        }
++        return mErasurePending;
++    }
++
++    public boolean isAwaitingPolicy() {
++        Request request = mRequest;
++        return isErasurePending() || mConsumedRequest != null || (request != null && request.token != null);
++    }
++
++    public boolean isPreparedSwitch(Callback callback) {
++        Request request = mRequest;
++        return request != null && request.callback == callback && request.switchRequested.get();
++    }
++
++    /** Native-proof-backed switch in progress; ordinary user switching remains unchanged. */
++    public boolean isAuthorizedSwitchTo(int userId) {
++        Request request = mRequest;
++        return request != null && request.token != null && request.switchRequested.get()
++                && request.destination == userId && request.isActive()
++                && hasIdentity(request.destination, request.destinationSerial);
++    }
++
++    public boolean isSwitchInProgress() {
++        Request request = mRequest;
++        return request != null && request.token != null && request.switchRequested.get()
++                && request.isActive();
++    }
++
++    public void cancelSource(Callback callback) {
++        Request request = mRequest;
++        if (request != null && request.callback == callback && !request.switchRequested.get()) {
++            request.active.set(false);
++            mMain.execute(() -> { if (mRequest == request) cancel(); });
++        }
++    }
++
++    /** Back, new input and screen off always revoke, including an in-flight Binder call. */
++    public void cancel() {
++        if (mRequest != null) Log.d(TAG, "Entry canceled; prepared=" + mRequest.prepared
++                + ", token=" + (mRequest.token != null));
++        setSecondaryPolicyVisible(false);
++        Request consumed = mConsumedRequest;
++        mConsumedRequest = null;
++        if (consumed != null) {
++            consumed.active.set(false);
++            Host host = mHost;
++            if (host != null) host.onPrimaryAuthenticationRevoked(
++                    consumed.destination, consumed.destinationSerial);
++        }
++        Proof published = mPublishedProof;
++        mPublishedProof = null;
++        if (published != null) {
++            published.active.set(false);
++            // Publication transfers the request out of mConsumedRequest, but the legacy
++            // bouncer may still be running its disappear animation. Notify the host for both
++            // stages so a later relock cannot inherit an unfinishable disappearing state.
++            Host host = mHost;
++            if (host != null) host.onPrimaryAuthenticationRevoked(
++                    published.userId, published.serialNumber);
++        }
++        Request request = mRequest;
++        mRequest = null;
++        if (request == null) return;
++        request.active.set(false);
++        IBinder token = request.token;
++        if (token != null) mBackground.execute(() -> mBackend.cancel(token));
++        if (mSelectedUser.getSelectedUserId() == request.origin
++                && hasIdentity(request.origin, request.originSerial)) {
++            request.callback.onRejected(SecureSpaceCredentialResponse.unavailable());
++        }
++    }
++
++    /** Caller keeps ownership of its input; the background task owns an independent copy. */
++    public void submit(LockscreenCredential credential, Callback callback) {
++        Request pending = mRequest;
++        if (pending != null && pending.token != null && pending.switchRequested.get()
++                && pending.isActive()) {
++            // A second bouncer submission must not revoke an authenticated switch.
++            callback.onAccepted();
++            return;
++        }
++        cancel();
++        int origin = mSelectedUser.getSelectedUserId();
++        UserInfo user = mUsers.getUserInfo(origin);
++        if (user == null) {
++            callback.onRejected(SecureSpaceCredentialResponse.unavailable());
++            return;
++        }
++        Request request = new Request(origin, user.serialNumber, callback);
++        LockscreenCredential copy = credential.duplicate();
++        mRequest = request;
++        mMain.executeDelayed(() -> {
++            if (mRequest == request) cancel();
++        }, LIFETIME_MS);
++        mBackground.execute(() -> {
++            SecureSpaceCredentialResponse response;
++            try (copy) {
++                response = mBackend.check(copy, request.origin,
++                        request.originSerial, request.witness);
++                if (!response.isErasurePending() && response.getUserIds().length == 0 && request.isActive()
++                        && mUserTracker.getUserId() == request.origin
++                        && mSelectedUser.getSelectedUserId() == request.origin
++                        && hasIdentity(request.origin, request.originSerial)) {
++                    // Unsupported policies use the original current-user authentication path.
++                    // No alternate search or matched-user metadata authorizes this fallback.
++                    VerifyCredentialResponse nativeResponse = mBackend.checkCurrent(copy,
++                            request.origin);
++                    long retryMillis = nativeResponse.getTimeout().toMillis();
++                    long now = SystemClock.elapsedRealtime();
++                    mMain.execute(() -> {
++                        if (!isCurrent(request)) return;
++                        mAggregateLockout = retryMillis > 0
++                                ? new AggregateLockout(request.origin, request.originSerial,
++                                        retryMillis > Long.MAX_VALUE - now
++                                                ? Long.MAX_VALUE : now + retryMillis)
++                                : null;
++                        mRequest = null;
++                        request.active.set(false);
++                        if (mSelectedUser.getSelectedUserId() == request.origin
++                                && hasIdentity(request.origin, request.originSerial)) {
++                            request.callback.onCurrentUserChecked(nativeResponse);
++                        }
++                    });
++                    return;
++                }
++            } catch (RuntimeException error) {
++                response = SecureSpaceCredentialResponse.unavailable();
++            }
++            reportAttemptPolicy(request, response);
++            SecureSpaceCredentialResponse completed = response;
++            mMain.execute(() -> onChecked(request, completed));
++        });
++    }
++
++    public void acceptFingerprint(IBinder token, int origin, int originSerial, int destination,
++            int destinationSerial, boolean strong, Callback source) {
++        cancel();
++        if (token == null || isErasurePending() || !isAvailable()
++                || !source.isActive() || mUserTracker.isUserSwitching()
++                || mUserTracker.getUserId() != origin || mSelectedUser.getSelectedUserId() != origin
++                || !hasIdentity(origin, originSerial) || !hasIdentity(destination, destinationSerial)) {
++            cancelToken(token);
++            return;
++        }
++        Request request = new Request(origin, originSerial, source);
++        request.biometric = true;
++        request.strongBiometric = strong;
++        request.token = token;
++        request.destination = destination;
++        request.destinationSerial = destinationSerial;
++        mRequest = request;
++        mMain.executeDelayed(() -> { if (mRequest == request) cancel(); }, LIFETIME_MS);
++        mBackground.execute(() -> {
++            boolean attached = false;
++            try {
++                attached = request.isActive() && mBackend.attachFingerprint(token, origin,
++                        originSerial, destination, destinationSerial, request.witness);
++            } catch (RuntimeException error) { /* Fail closed. */ }
++            final boolean accepted = attached;
++            mMain.execute(() -> {
++                if (!isCurrent(request)) { cancelToken(token); return; }
++                if (!accepted) { Log.d(TAG, "Native entry preparation rejected"); cancel(); return; }
++                onChecked(request, new SecureSpaceCredentialResponse(destination, destinationSerial,
++                        false, new int[0], new int[0], new int[0], new long[0], new boolean[0], token));
++            });
++        });
++    }
++
++    private void reportAttemptPolicy(Request request, SecureSpaceCredentialResponse response) {
++        if (response.isErasurePending() || !request.isActive() || mSelectedUser.getSelectedUserId() != request.origin
++                || !hasIdentity(request.origin, request.originSerial)) return;
++        int[] ids = response.getUserIds();
++        int[] serials = response.getSerialNumbers();
++        int[] outcomes = response.getOutcomes();
++        long[] timeouts = response.getTimeoutMillis();
++        long minimumTimeout = ids.length == 0 ? 0 : Long.MAX_VALUE;
++        for (int index = 0; index < ids.length; index++) {
++            if (!request.isActive() || !hasIdentity(ids[index], serials[index])) {
++                minimumTimeout = 0;
++                continue;
++            }
++            minimumTimeout = Math.min(minimumTimeout, timeouts[index]);
++            try {
++                if (timeouts[index] > 0) {
++                    mBackend.reportLockout(Duration.ofMillis(timeouts[index]), ids[index]);
++                }
++                // Discovery failures cannot count toward an unrelated user's policy wipe when
++                // another normal credential matched. Only a completed union rejection qualifies.
++                // The originating user's normal UI path reports its own failure exactly once.
++                if (response.isAllCertainlyIncorrect() && ids[index] != request.origin
++                        && outcomes[index] == SecureSpaceCredentialResponse.INCORRECT) {
++                    mBackend.reportFailedAttempt(ids[index]);
++                }
++            } catch (RuntimeException error) {
++                // Native throttling remains in effect if policy reporting becomes unavailable.
++            }
++        }
++        if (mRequest != request || !request.isActive()) return;
++        if (response.getMatchedUserId() >= 0 || minimumTimeout == 0) {
++            mAggregateLockout = null;
++        } else {
++            long now = SystemClock.elapsedRealtime();
++            long deadline = minimumTimeout > Long.MAX_VALUE - now
++                    ? Long.MAX_VALUE : now + minimumTimeout;
++            mAggregateLockout = new AggregateLockout(request.origin, request.originSerial, deadline);
++        }
++    }
++
++    private void onChecked(Request request, SecureSpaceCredentialResponse response) {
++        Log.d(TAG, "Credential check returned; active=" + isCurrent(request)
++                + ", proof=" + (response.getHandoffToken() != null));
++        if (response.isErasurePending()) {
++            mErasurePending = true;
++            cancel();
++            if (request.callback != null) request.callback.onAccepted();
++            return;
++        }
++        if (!isCurrent(request)) {
++            cancelToken(response.getHandoffToken());
++            return;
++        }
++        IBinder token = response.getHandoffToken();
++        if (token == null || response.getMatchedUserId() < 0) {
++            request.active.set(false);
++            mRequest = null;
++            if (mSelectedUser.getSelectedUserId() == request.origin
++                    && hasIdentity(request.origin, request.originSerial)) {
++                request.callback.onRejected(response);
++            }
++            return;
++        }
++        request.token = token;
++        request.destination = response.getMatchedUserId();
++        request.destinationSerial = response.getMatchedSerialNumber();
++        request.callback.onAccepted();
++        mBackground.execute(() -> {
++            boolean prepared = false;
++            try {
++                prepared = request.isActive() && mBackend.prepare(token);
++                if (prepared && request.destination != request.origin) {
++                    // Publish before switchUser: the source can be paused before callbacks arrive.
++                    request.switchRequested.set(true);
++                    prepared = request.isActive()
++                            && mBackend.switchUser(request.destination);
++                }
++            } catch (Exception error) {
++                prepared = false;
++            }
++            boolean accepted = prepared;
++            mMain.execute(() -> {
++                if (!isCurrent(request)) { cancelToken(token); return; }
++                if (!accepted) { Log.d(TAG, "Native entry preparation rejected"); cancel(); return; }
++                Log.d(TAG, "Native entry preparation succeeded");
++                request.prepared = true;
++                tryComplete();
++            });
++        });
++    }
++
++    private void tryComplete() {
++        Request request = mRequest;
++        if (request == null || !request.prepared || request.consuming) return;
++        if (!isCurrent(request)) { cancel(); return; }
++        Host host = mHost;
++        if ((request.switchRequested.get() && !request.switchCompleted.get())
++                || mUserTracker.getUserId() != request.destination
++                || mBackend.currentUser() != request.destination
++                || mUserTracker.isUserSwitching()
++                || mSelectedUser.getSelectedUserId() != request.destination
++                || !hasIdentity(request.destination, request.destinationSerial)
++                || !mUsers.isUserUnlocked(android.os.UserHandle.of(request.destination))
++                || host == null || !host.isReady(request.destination, request.destinationSerial)) {
++            mMain.executeDelayed(this::tryComplete, 50);
++            return;
++        }
++        Log.d(TAG, "Entry host ready; consuming native proof");
++        request.consuming = true;
++        mBackground.execute(() -> {
++            boolean consumed = false;
++            try {
++                consumed = request.isActive() && (request.biometric
++                        ? mBackend.consumeFingerprint(request.token, request.destination, request.destinationSerial)
++                        : mBackend.consume(request.token, request.destination, request.destinationSerial));
++            } catch (RuntimeException error) {
++                // A failed native proof cannot be replaced with matched-user metadata.
++            }
++            boolean accepted = consumed;
++            mMain.execute(() -> {
++                if (!isCurrent(request)) return;
++                Log.d(TAG, "Native proof consumption returned; accepted=" + accepted);
++                if (!accepted || mHost != host
++                        || (request.switchRequested.get() && !request.switchCompleted.get())
++                        || mUserTracker.isUserSwitching()
++                        || mSelectedUser.getSelectedUserId() != request.destination
++                        || !hasIdentity(request.destination, request.destinationSerial)
++                        || !host.isReady(request.destination, request.destinationSerial)) {
++                    cancel();
++                    return;
++                }
++                mRequest = null;
++                // The policy proof must not retain a completed credential coroutine or view.
++                request.callback = null;
++                mConsumedRequest = request;
++                if (request.biometric) {
++                    host.completeBiometricAuthentication(request.destination, request.destinationSerial,
++                            request.strongBiometric);
++                } else {
++                    host.completePrimaryAuthentication(request.destination, request.destinationSerial);
++                }
++            });
++        });
++    }
++
++    private boolean isCurrent(Request request) {
++        return mRequest == request && request.isActive();
++    }
++
++    private boolean hasIdentity(int userId, int serial) {
++        UserInfo user = mUsers.getUserInfo(userId);
++        return user != null && user.serialNumber == serial && !user.partial && !user.preCreated
++                && user.isEnabled() && user.isFull();
++    }
++
++    private void cancelToken(IBinder token) {
++        if (token != null) mBackground.execute(() -> mBackend.cancel(token));
++    }
++
++    private final class Request {
++        final int origin;
++        final int originSerial;
++        volatile Callback callback;
++        final long expiresAt = SystemClock.elapsedRealtime() + LIFETIME_MS;
++        final AtomicBoolean active = new AtomicBoolean(true);
++        boolean biometric;
++        boolean strongBiometric;
++        final AtomicBoolean switchRequested = new AtomicBoolean();
++        final AtomicBoolean switchCompleted = new AtomicBoolean();
++        volatile int destination = -1;
++        volatile int destinationSerial = -1;
++        volatile IBinder token;
++        boolean prepared;
++        boolean consuming;
++        final ISecureSpaceCredentialAttempt witness = new ISecureSpaceCredentialAttempt.Stub() {
++            @Override public boolean isActive() { return Request.this.isActive(); }
++            @Override public void invalidate() {
++                active.set(false);
++                mMain.execute(() -> {
++                    if (mRequest == Request.this || mConsumedRequest == Request.this
++                            || (mPublishedProof != null
++                                    && mPublishedProof.request == Request.this)) cancel();
++                });
++            }
++        };
++        Request(int origin, int serial, Callback callback) {
++            this.origin = origin;
++            originSerial = serial;
++            this.callback = callback;
++        }
++        boolean isActive() {
++            long now = SystemClock.elapsedRealtime();
++            Callback source = callback;
++            if (now >= expiresAt || !mPower.isInteractive()
++                    || (!switchRequested.get() && source != null && !source.isActive())) {
++                active.set(false);
++            }
++            return active.get();
++        }
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceProofs.kt b/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceProofs.kt
+new file mode 100644
+index 000000000..e7963bfd6
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceProofs.kt
+@@ -0,0 +1,18 @@
++/* Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.systemui.securespaces
++
++import java.util.function.Consumer
++import kotlinx.coroutines.channels.awaitClose
++import kotlinx.coroutines.flow.Flow
++import kotlinx.coroutines.flow.callbackFlow
++import kotlinx.coroutines.flow.filter
++
++/** No replay: a new bouncer cannot inherit an authentication from a previous screen. */
++fun SecureSpaceEntryCoordinator.primaryAuthenticationProofs():
++    Flow<SecureSpaceEntryCoordinator.Proof> = callbackFlow {
++        val listener = Consumer<SecureSpaceEntryCoordinator.Proof> { trySend(it) }
++        addProofListener(listener)
++        awaitClose { removeProofListener(listener) }
++    }.filter { isProofCurrent(it) }
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarKeyguardViewManager.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarKeyguardViewManager.java
+index 9a1089398..284da2c3f 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarKeyguardViewManager.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarKeyguardViewManager.java
+@@ -1144,6 +1144,13 @@ public class StatusBarKeyguardViewManager implements RemoteInputController.Callb
+     @Override
+     public void onStartedWakingUp() {
+         mIsSleeping = false;
++        // A wake can interrupt going-to-sleep before onFinishedGoingToSleep() gets a chance to
++        // clear the previous keyguard dismissal. Leaving that disappear runnable pending makes
++        // beginShowingBouncer() reject every later swipe even though the transition framework has
++        // already moved back to LOCKSCREEN.
++        if (!SceneContainerFlag.isEnabled() && mPrimaryBouncerInteractor.isAnimatingAway()) {
++            mPrimaryBouncerInteractor.hide();
++        }
+         setRootViewAnimationDisabled(false);
+         NavigationBarView navBarView = mCentralSurfaces.getNavigationBarView();
+         if (navBarView != null) {
+diff --git a/packages/SystemUI/tests/robolectric/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinatorTest.java b/packages/SystemUI/tests/robolectric/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinatorTest.java
+new file mode 100644
+index 000000000..e485c8497
+--- /dev/null
++++ b/packages/SystemUI/tests/robolectric/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinatorTest.java
+@@ -0,0 +1,479 @@
++/* Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.systemui.securespaces;
++
++import static com.google.common.truth.Truth.assertThat;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.ArgumentMatchers.anyInt;
++import static org.mockito.ArgumentMatchers.eq;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.when;
++
++import android.app.Application;
++import android.content.pm.UserInfo;
++import android.os.Binder;
++import android.os.IBinder;
++import android.os.PowerManager;
++import android.os.UserManager;
++
++import com.android.internal.widget.ISecureSpaceCredentialAttempt;
++import com.android.internal.widget.LockscreenCredential;
++import com.android.internal.widget.SecureSpaceCredentialResponse;
++import com.android.systemui.keyguard.WakefulnessLifecycle;
++import com.android.systemui.settings.UserTracker;
++import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
++import com.android.systemui.util.concurrency.DelayableExecutor;
++
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++
++import java.util.ArrayDeque;
++import java.util.concurrent.TimeUnit;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(sdk = 36, manifest = Config.NONE, application = Application.class)
++public class SecureSpaceEntryCoordinatorTest {
++    private final ArrayDeque<Runnable> mBackground = new ArrayDeque<>();
++    private final ArrayDeque<Runnable> mMain = new ArrayDeque<>();
++    private final ArrayDeque<Runnable> mDelayed = new ArrayDeque<>();
++    private SecureSpaceEntryCoordinator.Backend mBackend;
++    private SecureSpaceEntryCoordinator mCoordinator;
++    private PowerManager mPower;
++    private UserManager mUsers;
++    private SecureSpaceEntryCoordinator.Host mHost;
++    private IBinder mToken;
++    private ISecureSpaceCredentialAttempt mWitness;
++    private LockscreenCredential mCheckedCopy;
++    private final Callback mCallback = new Callback();
++
++    @Before
++    public void setUp() throws Exception {
++        mBackend = mock(SecureSpaceEntryCoordinator.Backend.class);
++        mPower = mock(PowerManager.class);
++        when(mPower.isInteractive()).thenReturn(true);
++        mUsers = mock(UserManager.class);
++        UserInfo owner = new UserInfo(0, "", UserInfo.FLAG_ADMIN | UserInfo.FLAG_FULL);
++        owner.serialNumber = 1;
++        when(mUsers.getUserInfo(0)).thenReturn(owner);
++        when(mUsers.isUserUnlocked(any(android.os.UserHandle.class))).thenReturn(true);
++        UserTracker tracker = mock(UserTracker.class);
++        when(tracker.getUserId()).thenReturn(0);
++        SelectedUserInteractor selected = mock(SelectedUserInteractor.class);
++        when(selected.getSelectedUserId()).thenReturn(0);
++        DelayableExecutor main = new DelayableExecutor() {
++            public void execute(Runnable runnable) { mMain.add(runnable); }
++            public Runnable executeDelayed(Runnable runnable, long delay, TimeUnit unit) {
++                mDelayed.add(runnable);
++                return () -> mDelayed.remove(runnable);
++            }
++            public Runnable executeAtTime(Runnable runnable, long uptime, TimeUnit unit) {
++                throw new AssertionError("Unexpected timer");
++            }
++        };
++        mCoordinator = new SecureSpaceEntryCoordinator(mBackend, mUsers, mPower, tracker,
++                selected, mBackground::add, main, mock(WakefulnessLifecycle.class));
++        mHost = mock(SecureSpaceEntryCoordinator.Host.class);
++        when(mHost.isReady(0, 1)).thenReturn(true);
++        mCoordinator.registerHost(mHost);
++        mToken = new Binder();
++        when(mBackend.check(any(), eq(0), eq(1), any())).thenAnswer(invocation -> {
++            mCheckedCopy = invocation.getArgument(0);
++            mWitness = invocation.getArgument(3);
++            return matched();
++        });
++        when(mBackend.prepare(mToken)).thenReturn(true);
++        when(mBackend.consume(mToken, 0, 1)).thenReturn(true);
++        when(mBackend.isLeaseCurrent(mToken, 0, 1)).thenReturn(true);
++    }
++
++    @Test
++    public void missedRevocationCallback_preventsPublication() {
++        submit();
++        drain();
++        when(mBackend.isLeaseCurrent(mToken, 0, 1)).thenReturn(false);
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isFalse();
++        verify(mHost).onPrimaryAuthenticationRevoked(0, 1);
++    }
++
++    @Test
++    public void missedRevocationCallback_permanentlyRejectsBufferedProof() {
++        final SecureSpaceEntryCoordinator.Proof[] published = new SecureSpaceEntryCoordinator.Proof[1];
++        mCoordinator.addProofListener(proof -> published[0] = proof);
++        submit();
++        drain();
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++        when(mBackend.isLeaseCurrent(mToken, 0, 1)).thenReturn(false);
++        assertThat(mCoordinator.isProofCurrent(published[0])).isFalse();
++        when(mBackend.isLeaseCurrent(mToken, 0, 1)).thenReturn(true);
++        assertThat(mCoordinator.isProofCurrent(published[0])).isFalse();
++    }
++
++    @Test
++    public void erasurePending_doesNotFallBackOrDismiss() {
++        when(mBackend.check(any(), eq(0), eq(1), any()))
++                .thenReturn(SecureSpaceCredentialResponse.erasurePending());
++        submit();
++        drain();
++        verify(mBackend, never()).checkCurrent(any(), anyInt());
++        verify(mHost, never()).completePrimaryAuthentication(anyInt(), anyInt());
++        assertThat(mCallback.accepted).isEqualTo(1);
++        assertThat(mCoordinator.isErasurePending()).isTrue();
++        assertThat(mCoordinator.isAwaitingPolicy()).isTrue();
++        mCoordinator.cancel();
++        assertThat(mCoordinator.isAwaitingPolicy()).isTrue();
++    }
++
++    @Test
++    public void nativeErasureFence_survivesCancellationWithoutResponse() {
++        when(mBackend.isErasurePending()).thenReturn(true);
++        assertThat(mCoordinator.isAwaitingPolicy()).isTrue();
++        when(mBackend.isErasurePending()).thenReturn(false);
++        mCoordinator.cancel();
++        assertThat(mCoordinator.isAwaitingPolicy()).isTrue();
++    }
++
++    @Test
++    public void removedSecondarySurface_revokesConsumedAuthentication() {
++        androidx.constraintlayout.widget.ConstraintLayout parent =
++                new androidx.constraintlayout.widget.ConstraintLayout(
++                        org.robolectric.RuntimeEnvironment.getApplication());
++        mCoordinator.registerSecondaryPolicyHost(parent);
++        submit();
++        drain();
++        mCoordinator.unregisterSecondaryPolicyHost(parent);
++        verify(mHost).onPrimaryAuthenticationRevoked(0, 1);
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isFalse();
++    }
++
++    @Test
++    public void finalClassicCompletion_rechecksNativeLeaseAfterPublication() {
++        submit();
++        drain();
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++        assertThat(mCoordinator.isPublishedAuthenticationCurrent(0, 1)).isTrue();
++        assertThat(mCoordinator.isPublishedAuthenticationCurrent(0, 2)).isFalse();
++        when(mBackend.isLeaseCurrent(mToken, 0, 1)).thenReturn(false);
++        assertThat(mCoordinator.isPublishedAuthenticationCurrent(0, 1)).isFalse();
++    }
++
++    private void acceptFingerprint() {
++        when(mBackend.credentialType(0)).thenReturn(
++                com.android.internal.widget.LockPatternUtils.CREDENTIAL_TYPE_PIN);
++        when(mBackend.attachFingerprint(eq(mToken), eq(0), eq(1), eq(0), eq(1), any()))
++                .thenAnswer(invocation -> {
++                    mWitness = invocation.getArgument(5);
++                    return true;
++                });
++        when(mBackend.consumeFingerprint(mToken, 0, 1)).thenReturn(true);
++        mCoordinator.acceptFingerprint(mToken, 0, 1, 0, 1, true, mCallback);
++    }
++
++    @Test
++    public void fingerprint_usesNativeBiometricConsumeAndPreservesProofKind() {
++        final SecureSpaceEntryCoordinator.Proof[] proof = new SecureSpaceEntryCoordinator.Proof[1];
++        mCoordinator.addProofListener(value -> proof[0] = value);
++        acceptFingerprint();
++        drain();
++        verify(mBackend).consumeFingerprint(mToken, 0, 1);
++        verify(mBackend, never()).consume(any(), anyInt(), anyInt());
++        verify(mHost).completeBiometricAuthentication(0, 1, true);
++        verify(mHost, never()).completePrimaryAuthentication(anyInt(), anyInt());
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++        assertThat(proof[0].biometric).isTrue();
++        assertThat(proof[0].strongBiometric).isTrue();
++        assertThat(mCoordinator.isProofCurrent(proof[0])).isTrue();
++    }
++
++    @Test
++    public void fingerprint_failedWitnessAttachmentCannotDismiss() {
++        acceptFingerprint();
++        when(mBackend.attachFingerprint(eq(mToken), eq(0), eq(1), eq(0), eq(1), any()))
++                .thenReturn(false);
++        drain();
++        verify(mBackend, never()).consumeFingerprint(any(), anyInt(), anyInt());
++        verify(mHost, never()).completeBiometricAuthentication(anyInt(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean());
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isFalse();
++    }
++
++    @Test
++    public void fingerprint_primaryConsumeCannotSubstituteForBiometricConsume() {
++        acceptFingerprint();
++        when(mBackend.consumeFingerprint(mToken, 0, 1)).thenReturn(false);
++        drain();
++        verify(mBackend, never()).consume(any(), anyInt(), anyInt());
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isFalse();
++    }
++
++    @Test
++    public void fingerprint_sourceCancellationBeforeNativeAttachRejectsGrant() {
++        acceptFingerprint();
++        mCallback.active = false;
++        drain();
++        verify(mBackend, never()).consumeFingerprint(any(), anyInt(), anyInt());
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isFalse();
++    }
++
++    private SecureSpaceCredentialResponse matched() {
++        return new SecureSpaceCredentialResponse(0, 1, false, new int[]{0}, new int[]{1},
++                new int[]{SecureSpaceCredentialResponse.MATCHED}, new long[]{0},
++                new boolean[]{false}, mToken);
++    }
++
++    private void submit() {
++        try (LockscreenCredential input = LockscreenCredential.createPin("1234")) {
++            mCoordinator.submit(input, mCallback);
++        }
++    }
++
++    private void drain() {
++        int turns = 0;
++        while (!mBackground.isEmpty() || !mMain.isEmpty()) {
++            if (++turns > 30) throw new AssertionError("Unexpected executor loop");
++            if (!mBackground.isEmpty()) mBackground.remove().run();
++            if (!mMain.isEmpty()) mMain.remove().run();
++        }
++    }
++
++    @Test
++    public void currentMatch_requiresPreparationAndConsumptionBeforeHostCompletion() {
++        submit();
++        mBackground.remove().run();
++        verify(mHost, never()).completePrimaryAuthentication(anyInt(), anyInt());
++        drain();
++        org.junit.Assert.assertThrows(IllegalStateException.class,
++                () -> mCheckedCopy.getCredential());
++        verify(mBackend).prepare(mToken);
++        verify(mBackend).consume(mToken, 0, 1);
++        verify(mHost).completePrimaryAuthentication(0, 1);
++        assertThat(mCallback.accepted).isEqualTo(1);
++        assertThat(mCoordinator.isAwaitingPolicy()).isTrue();
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isFalse();
++    }
++
++    @Test
++    public void failedNativeConsumption_neverCompletesHost() {
++        when(mBackend.consume(mToken, 0, 1)).thenReturn(false);
++        submit();
++        drain();
++        verify(mHost, never()).completePrimaryAuthentication(anyInt(), anyInt());
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isFalse();
++    }
++
++    @Test
++    public void cancellationRevokesInFlightWitnessAndDoesNotConsumeLateMatch() throws Exception {
++        submit();
++        mBackground.remove().run();
++        assertThat(mWitness.isActive()).isTrue();
++        mCoordinator.cancel();
++        assertThat(mWitness.isActive()).isFalse();
++        drain();
++        verify(mBackend, never()).consume(any(), anyInt(), anyInt());
++        verify(mHost, never()).completePrimaryAuthentication(anyInt(), anyInt());
++    }
++
++    @Test
++    public void screenOffRevokesWitnessWithoutWaitingForMainCallback() throws Exception {
++        submit();
++        mBackground.remove().run();
++        when(mPower.isInteractive()).thenReturn(false);
++        assertThat(mWitness.isActive()).isFalse();
++        when(mPower.isInteractive()).thenReturn(true);
++        assertThat(mWitness.isActive()).isFalse();
++        drain();
++        verify(mHost, never()).completePrimaryAuthentication(anyInt(), anyInt());
++    }
++
++    @Test
++    public void cancelledPublishedProof_cannotBeReplayedToSceneConsumer() {
++        submit();
++        drain();
++        SecureSpaceEntryCoordinator.Proof[] proof = new SecureSpaceEntryCoordinator.Proof[1];
++        mCoordinator.addProofListener(value -> proof[0] = value);
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++        assertThat(mCoordinator.isProofCurrent(proof[0])).isTrue();
++        mCoordinator.cancel();
++        assertThat(mCoordinator.isProofCurrent(proof[0])).isFalse();
++        verify(mHost).onPrimaryAuthenticationRevoked(0, 1);
++    }
++
++    @Test
++    public void recycledSerial_rejectsPublishedProof() {
++        submit();
++        drain();
++        SecureSpaceEntryCoordinator.Proof[] proof = new SecureSpaceEntryCoordinator.Proof[1];
++        mCoordinator.addProofListener(value -> proof[0] = value);
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++        mUsers.getUserInfo(0).serialNumber = 2;
++        assertThat(mCoordinator.isProofCurrent(proof[0])).isFalse();
++    }
++
++    @Test
++    public void publishedProof_expiresWithNativeAttemptLifetime() {
++        submit();
++        drain();
++        SecureSpaceEntryCoordinator.Proof[] proof = new SecureSpaceEntryCoordinator.Proof[1];
++        mCoordinator.addProofListener(value -> proof[0] = value);
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(31));
++        assertThat(mCoordinator.isProofCurrent(proof[0])).isFalse();
++    }
++
++    @Test
++    public void publishedProof_rejectsRelockedCredentialEncryptedStorage() {
++        submit();
++        drain();
++        SecureSpaceEntryCoordinator.Proof[] proof = new SecureSpaceEntryCoordinator.Proof[1];
++        mCoordinator.addProofListener(value -> proof[0] = value);
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++        when(mUsers.isUserUnlocked(any(android.os.UserHandle.class))).thenReturn(false);
++        assertThat(mCoordinator.isProofCurrent(proof[0])).isFalse();
++        when(mUsers.isUserUnlocked(any(android.os.UserHandle.class))).thenReturn(true);
++        assertThat(mCoordinator.isProofCurrent(proof[0])).isFalse();
++    }
++
++    @Test
++    public void nativeRevocationAfterConsumption_preventsPolicyPublication() throws Exception {
++        submit();
++        drain();
++        mWitness.invalidate();
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isFalse();
++        drain();
++        assertThat(mCoordinator.isAwaitingPolicy()).isFalse();
++        verify(mHost).onPrimaryAuthenticationRevoked(0, 1);
++    }
++
++    @Test
++    public void nativeRevocationAfterPublication_rejectsBufferedSceneProof() throws Exception {
++        submit();
++        drain();
++        SecureSpaceEntryCoordinator.Proof[] proof = new SecureSpaceEntryCoordinator.Proof[1];
++        mCoordinator.addProofListener(value -> proof[0] = value);
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++        mWitness.invalidate();
++        assertThat(mCoordinator.isProofCurrent(proof[0])).isFalse();
++    }
++
++    @Test
++    public void lateOldLeaseRevocation_doesNotCancelNewAttempt() throws Exception {
++        submit();
++        drain();
++        ISecureSpaceCredentialAttempt oldWitness = mWitness;
++        submit();
++        drain();
++        oldWitness.invalidate();
++        drain();
++        assertThat(mWitness.isActive()).isTrue();
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++    }
++
++    private void addAlternative() {
++        UserInfo other = new UserInfo(10, "", UserInfo.FLAG_FULL);
++        other.serialNumber = 2;
++        when(mUsers.getUserInfo(10)).thenReturn(other);
++    }
++
++    @Test
++    public void completedUnionRejection_reportsInactivePolicyOnce() {
++        addAlternative();
++        when(mBackend.check(any(), eq(0), eq(1), any())).thenReturn(
++                new SecureSpaceCredentialResponse(-10000, -1, true,
++                        new int[]{0, 10}, new int[]{1, 2},
++                        new int[]{SecureSpaceCredentialResponse.INCORRECT,
++                                SecureSpaceCredentialResponse.INCORRECT},
++                        new long[]{0, 0}, new boolean[]{false, false}, null));
++        submit();
++        drain();
++        verify(mBackend).reportFailedAttempt(10);
++        verify(mBackend, never()).reportFailedAttempt(0);
++        assertThat(mCallback.rejected).isEqualTo(1);
++    }
++
++    @Test
++    public void normalMatch_doesNotReportDiscoveryFailureToInactivePolicy() {
++        addAlternative();
++        when(mBackend.check(any(), eq(0), eq(1), any())).thenReturn(
++                new SecureSpaceCredentialResponse(10, 2, false,
++                        new int[]{0, 10}, new int[]{1, 2},
++                        new int[]{SecureSpaceCredentialResponse.INCORRECT,
++                                SecureSpaceCredentialResponse.MATCHED},
++                        new long[]{0, 0}, new boolean[]{false, false}, mToken));
++        submit();
++        drain();
++        verify(mBackend, never()).reportFailedAttempt(anyInt());
++    }
++
++    @Test
++    public void throttledCurrentUser_doesNotDisableHealthyAlternative() {
++        addAlternative();
++        when(mBackend.check(any(), eq(0), eq(1), any())).thenReturn(
++                new SecureSpaceCredentialResponse(-10000, -1, false,
++                        new int[]{0, 10}, new int[]{1, 2},
++                        new int[]{SecureSpaceCredentialResponse.INCONCLUSIVE,
++                                SecureSpaceCredentialResponse.INCORRECT},
++                        new long[]{30_000, 0}, new boolean[]{false, false}, null));
++        submit();
++        drain();
++        verify(mBackend, never()).reportFailedAttempt(anyInt());
++        assertThat(mCoordinator.getLockoutEndTimeMillis()).isEqualTo(0);
++    }
++
++    @Test
++    public void everyCandidateThrottled_usesShortestNativeTimeout() {
++        addAlternative();
++        long started = android.os.SystemClock.elapsedRealtime();
++        when(mBackend.check(any(), eq(0), eq(1), any())).thenReturn(
++                new SecureSpaceCredentialResponse(-10000, -1, false,
++                        new int[]{0, 10}, new int[]{1, 2},
++                        new int[]{SecureSpaceCredentialResponse.INCONCLUSIVE,
++                                SecureSpaceCredentialResponse.INCONCLUSIVE},
++                        new long[]{30_000, 1_500}, new boolean[]{false, false}, null));
++        submit();
++        drain();
++        assertThat(mCoordinator.getLockoutEndTimeMillis()).isAtLeast(started + 1_500);
++        assertThat(mCoordinator.getLockoutEndTimeMillis()).isLessThan(started + 30_000);
++        verify(mBackend, never()).reportFailedAttempt(anyInt());
++    }
++
++    @Test
++    public void lockedDestinationStorage_waitsBeforeNativeConsumption() {
++        when(mUsers.isUserUnlocked(any(android.os.UserHandle.class))).thenReturn(false);
++        submit();
++        drain();
++        verify(mBackend, never()).consume(any(), anyInt(), anyInt());
++        verify(mHost, never()).completePrimaryAuthentication(anyInt(), anyInt());
++        when(mUsers.isUserUnlocked(any(android.os.UserHandle.class))).thenReturn(true);
++        mDelayed.removeLast().run();
++        drain();
++        verify(mBackend).consume(mToken, 0, 1);
++        verify(mHost).completePrimaryAuthentication(0, 1);
++    }
++
++    @Test
++    public void publishedProof_screenOffRevocationIsPermanent() {
++        submit();
++        drain();
++        SecureSpaceEntryCoordinator.Proof[] proof = new SecureSpaceEntryCoordinator.Proof[1];
++        mCoordinator.addProofListener(value -> proof[0] = value);
++        assertThat(mCoordinator.publishPrimaryAuthentication(0, 1)).isTrue();
++        when(mPower.isInteractive()).thenReturn(false);
++        assertThat(mCoordinator.isProofCurrent(proof[0])).isFalse();
++        when(mPower.isInteractive()).thenReturn(true);
++        assertThat(mCoordinator.isProofCurrent(proof[0])).isFalse();
++    }
++
++    private static class Callback implements SecureSpaceEntryCoordinator.Callback {
++        boolean active = true;
++        public boolean isActive() { return active; }
++        int accepted;
++        int rejected;
++        public void onAccepted() { ++accepted; }
++        public void onRejected(SecureSpaceCredentialResponse response) { ++rejected; }
++    }
++}
+diff --git a/packages/SystemUI/tests/src/com/android/keyguard/AdminSecondaryLockScreenControllerTest.java b/packages/SystemUI/tests/src/com/android/keyguard/AdminSecondaryLockScreenControllerTest.java
+index cdd0eb0e2..632dcc6b4 100644
+--- a/packages/SystemUI/tests/src/com/android/keyguard/AdminSecondaryLockScreenControllerTest.java
++++ b/packages/SystemUI/tests/src/com/android/keyguard/AdminSecondaryLockScreenControllerTest.java
+@@ -148,6 +148,24 @@ public class AdminSecondaryLockScreenControllerTest extends SysuiTestCase {
+         verifyViewDismissed(verifySurfaceReady());
+     }
+ 
++    @Test
++    public void testShow_bindsServiceAsDestinationUser() {
++        android.testing.TestableContext context = spy(mContext);
++        when(mSelectedUserInteractor.getSelectedUserId()).thenReturn(10);
++        AdminSecondaryLockScreenController controller =
++                new AdminSecondaryLockScreenController.Factory(context,
++                        mKeyguardSecurityContainer, mUpdateMonitor, mHandler,
++                        mSelectedUserInteractor).create(mKeyguardCallback);
++
++        controller.show(mServiceIntent);
++
++        verify(context).bindServiceAsUser(org.mockito.ArgumentMatchers.eq(mServiceIntent),
++                any(android.content.ServiceConnection.class),
++                org.mockito.ArgumentMatchers.eq(android.content.Context.BIND_AUTO_CREATE),
++                org.mockito.ArgumentMatchers.eq(android.os.UserHandle.of(10)));
++        controller.hide();
++    }
++
+     @Test
+     public void testHide() throws Exception {
+         // Show the view first, then hide.
+diff --git a/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java b/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java
+index be6d145bd..0f5185099 100644
+--- a/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java
++++ b/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java
+@@ -1559,7 +1559,7 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
+         serviceInfo.name = cls;
+         ResolveInfo resolveInfo = new ResolveInfo();
+         resolveInfo.serviceInfo = serviceInfo;
+-        when(mPackageManager.resolveService(any(Intent.class), eq(0))).thenReturn(resolveInfo);
++        when(mPackageManager.resolveServiceAsUser(any(Intent.class), eq(0), eq(user))).thenReturn(resolveInfo);
+         when(mDevicePolicyManager.isSecondaryLockscreenEnabled(eq(UserHandle.of(user))))
+                 .thenReturn(true, false);
+         when(mDevicePolicyManager.getProfileOwnerOrDeviceOwnerSupervisionComponent(
+@@ -1585,6 +1585,43 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
+         assertThat(mKeyguardUpdateMonitor.getSecondaryLockscreenRequirement(user)).isNull();
+     }
+ 
++    @Test
++    public void routedSecondaryRequirement_resolvesDestinationUser() {
++        int user = 10;
++        ComponentName supervisor = new ComponentName("secure.admin", "Supervisor");
++        when(mDevicePolicyManager.isSecondaryLockscreenEnabled(UserHandle.of(user)))
++                .thenReturn(true);
++        when(mDevicePolicyManager.getProfileOwnerOrDeviceOwnerSupervisionComponent(
++                UserHandle.of(user))).thenReturn(supervisor);
++        ResolveInfo resolved = new ResolveInfo();
++        resolved.serviceInfo = new ServiceInfo();
++        resolved.serviceInfo.packageName = supervisor.getPackageName();
++        resolved.serviceInfo.name = "SecondaryService";
++        when(mPackageManager.resolveServiceAsUser(any(Intent.class), eq(0), eq(user)))
++                .thenReturn(resolved);
++
++        assertThat(mKeyguardUpdateMonitor.refreshSecondaryLockscreenRequirementForSecureEntry(user))
++                .isTrue();
++        verify(mPackageManager).resolveServiceAsUser(any(Intent.class), eq(0), eq(user));
++        assertThat(mKeyguardUpdateMonitor.getSecondaryLockscreenRequirement(user)
++                .getComponent().getPackageName()).isEqualTo("secure.admin");
++    }
++
++    @Test
++    public void routedSecondaryRequirement_missingDestinationServiceFailsClosed() {
++        int user = 10;
++        when(mDevicePolicyManager.isSecondaryLockscreenEnabled(UserHandle.of(user)))
++                .thenReturn(true);
++        when(mDevicePolicyManager.getProfileOwnerOrDeviceOwnerSupervisionComponent(
++                UserHandle.of(user))).thenReturn(new ComponentName("secure.admin", "Supervisor"));
++        when(mPackageManager.resolveServiceAsUser(any(Intent.class), eq(0), eq(user)))
++                .thenReturn(null);
++
++        assertThat(mKeyguardUpdateMonitor.refreshSecondaryLockscreenRequirementForSecureEntry(user))
++                .isFalse();
++        assertThat(mKeyguardUpdateMonitor.getSecondaryLockscreenRequirement(user)).isNull();
++    }
++
+     @Test
+     public void testRegisterAuthControllerCallback() {
+         assertThat(mKeyguardUpdateMonitor.isUdfpsEnrolled()).isFalse();
+diff --git a/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractorKosmos.kt b/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractorKosmos.kt
+index f2142e739..640077a43 100644
+--- a/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractorKosmos.kt
++++ b/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractorKosmos.kt
+@@ -16,6 +16,7 @@
+ 
+ package com.android.systemui.keyguard.domain.interactor
+ 
++import com.android.systemui.bouncer.domain.interactor.primaryBouncerInteractor
+ import com.android.systemui.communal.domain.interactor.communalSceneInteractor
+ import com.android.systemui.communal.domain.interactor.communalSettingsInteractor
+ import com.android.systemui.keyguard.data.repository.keyguardTransitionRepository
+@@ -42,5 +43,6 @@ var Kosmos.fromLockscreenTransitionInteractor by
+             swipeToDismissInteractor = swipeToDismissInteractor,
+             keyguardOcclusionInteractor = keyguardOcclusionInteractor,
+             communalSceneInteractor = communalSceneInteractor,
++            primaryBouncerInteractor = primaryBouncerInteractor,
+         )
+     }

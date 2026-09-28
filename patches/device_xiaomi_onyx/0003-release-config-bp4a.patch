@@ -1,3 +1,18 @@
+diff --git a/device.mk b/device.mk
+index e08ef14..11a1f0e 100644
+--- a/device.mk
++++ b/device.mk
+@@ -3,6 +3,10 @@
+ # SPDX-License-Identifier: Apache-2.0
+ #
+ 
++# Release configuration
++PRODUCT_RELEASE_CONFIG_MAPS += \
++    $(LOCAL_PATH)/configs/release/release_config_map.textproto
++
+ # Generic ramdisk allow list
+ $(call inherit-product, $(SRC_TARGET_DIR)/product/generic_ramdisk.mk)
+ 
 diff --git a/configs/release/aconfig/bp4a/Android.bp b/configs/release/aconfig/bp4a/Android.bp
 new file mode 100644
 index 0000000..918b363
@@ -63,18 +78,3 @@ index 0000000..587985b
 @@ -0,0 +1,2 @@
 +name: "bp4a"
 +aconfig_value_sets: "//device/xiaomi/onyx:aconfig_value_set-onyx-bp4a"
-diff --git a/device.mk b/device.mk
-index 6d7a968..6898fc5 100644
---- a/device.mk
-+++ b/device.mk
-@@ -3,6 +3,10 @@
- # SPDX-License-Identifier: Apache-2.0
- #
- 
-+# Release configuration
-+PRODUCT_RELEASE_CONFIG_MAPS += \
-+    $(LOCAL_PATH)/configs/release/release_config_map.textproto
-+
- # Generic ramdisk allow list
- $(call inherit-product, $(SRC_TARGET_DIR)/product/generic_ramdisk.mk)
- 

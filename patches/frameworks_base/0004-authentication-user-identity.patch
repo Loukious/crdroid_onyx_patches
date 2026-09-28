@@ -1,0 +1,1338 @@
+diff --git a/packages/SystemUI/Android.bp b/packages/SystemUI/Android.bp
+index 6f24dc7a4..e484cec35 100644
+--- a/packages/SystemUI/Android.bp
++++ b/packages/SystemUI/Android.bp
+@@ -1141,3 +1141,40 @@ filegroup {
+         "proguard_kotlin.flags",
+     ],
+ }
++
++// Focused credential identity and cancellation regressions.
++android_app {
++    name: "SecureSpacesAuthenticationRoboStub",
++    defaults: ["platform_app_defaults"],
++    manifest: "SecureSpacesAuthenticationRoboManifest.xml",
++    min_sdk_version: "35",
++    dont_merge_manifests: true,
++    use_resource_processor: true,
++    resource_dirs: [],
++    static_libs: ["SystemUI-application"],
++    platform_apis: true,
++    certificate: "platform",
++    privileged: true,
++    aaptflags: ["--extra-packages", "com.android.systemui"],
++    optimize: { enabled: false },
++}
++
++android_robolectric_test {
++    name: "SecureSpacesAuthenticationRoboTests",
++    srcs: [
++        "tests/robolectric/src/com/android/systemui/authentication/SecureSpaceAuthenticationIdentityTest.kt",
++        "tests/robolectric/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinatorTest.java",
++        "tests/utils/src/com/android/systemui/authentication/data/repository/FakeAuthenticationRepository.kt",
++    ],
++    defaults: ["systemui-non-platform-apis-defaults"],
++    static_libs: [
++        "SecureSpaceClientProtocolRoboLib",
++        "inline-mockito5-robolectric-prebuilt",
++        "mockito-kotlin-nodeps",
++        "kotlinx_coroutines_test",
++        "android.security.flags-aconfig-java",
++    ],
++    libs: ["truth"],
++    instrumentation_for: "SecureSpacesAuthenticationRoboStub",
++    strict_mode: false,
++}
+diff --git a/packages/SystemUI/SecureSpacesAuthenticationRoboManifest.xml b/packages/SystemUI/SecureSpacesAuthenticationRoboManifest.xml
+new file mode 100644
+index 000000000..89b2d0cad
+--- /dev/null
++++ b/packages/SystemUI/SecureSpacesAuthenticationRoboManifest.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Copyright (C) 2026 The Evolution X Project; SPDX-License-Identifier: Apache-2.0 -->
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="com.android.systemui.authentication.tests">
++    <application />
++</manifest>
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/keyguard/KeyguardAbsKeyInputViewControllerTest.java b/packages/SystemUI/multivalentTests/src/com/android/keyguard/KeyguardAbsKeyInputViewControllerTest.java
+index d8d9ffb99..015f252dd 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/keyguard/KeyguardAbsKeyInputViewControllerTest.java
++++ b/packages/SystemUI/multivalentTests/src/com/android/keyguard/KeyguardAbsKeyInputViewControllerTest.java
+@@ -19,6 +19,7 @@ package com.android.keyguard;
+ import static com.google.common.truth.Truth.assertThat;
+ 
+ import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.ArgumentMatchers.anyBoolean;
+ import static org.mockito.ArgumentMatchers.anyInt;
+ import static org.mockito.ArgumentMatchers.eq;
+ import static org.mockito.Mockito.mock;
+@@ -39,6 +40,9 @@ import androidx.test.filters.SmallTest;
+ 
+ import com.android.internal.util.LatencyTracker;
+ import com.android.internal.widget.LockPatternUtils;
++import com.android.internal.widget.LockPatternChecker;
++import com.android.internal.widget.LockscreenCredential;
++import com.android.internal.widget.VerifyCredentialResponse;
+ import com.android.keyguard.KeyguardAbsKeyInputView.KeyDownListener;
+ import com.android.keyguard.KeyguardSecurityModel.SecurityMode;
+ import com.android.systemui.Flags;
+@@ -151,6 +155,44 @@ public class KeyguardAbsKeyInputViewControllerTest extends SysuiTestCase {
+         };
+     }
+ 
++    private LockPatternChecker.OnCheckCallback beginCredentialCheck(String input) {
++        when(mAbsKeyInputView.getEnteredCredential())
++                .thenReturn(LockscreenCredential.createPin(input));
++        mKeyguardAbsKeyInputViewController.onResume(0);
++        mKeyguardAbsKeyInputViewController.verifyPasswordAndUnlock();
++        ArgumentCaptor<LockPatternChecker.OnCheckCallback> callback =
++                ArgumentCaptor.forClass(LockPatternChecker.OnCheckCallback.class);
++        verify(mLockPatternCheckerWrapper).checkCredential(
++                eq(mLockPatternUtils), any(), eq(0), callback.capture());
++        return callback.getValue();
++    }
++
++    @Test
++    public void earlyMatchWaitsForCompletedVerification() {
++        LockPatternChecker.OnCheckCallback callback = beginCredentialCheck("3456");
++        callback.onEarlyMatched();
++        verify(mKeyguardSecurityCallback, never()).dismiss(anyBoolean(), anyInt(), any());
++        callback.onChecked(VerifyCredentialResponse.OK);
++        verify(mKeyguardSecurityCallback).dismiss(true, 0, mSecurityMode);
++    }
++
++    @Test
++    public void pausedCheckCannotDismissAfterEarlyMatch() {
++        LockPatternChecker.OnCheckCallback callback = beginCredentialCheck("3456");
++        callback.onEarlyMatched();
++        mKeyguardAbsKeyInputViewController.onPause();
++        callback.onChecked(VerifyCredentialResponse.OK);
++        verify(mKeyguardSecurityCallback, never()).dismiss(anyBoolean(), anyInt(), any());
++    }
++
++    @Test
++    public void changedUserCannotReceiveCompletedMatch() {
++        LockPatternChecker.OnCheckCallback callback = beginCredentialCheck("3456");
++        when(mSelectedUserInteractor.getSelectedUserId()).thenReturn(10);
++        callback.onChecked(VerifyCredentialResponse.OK);
++        verify(mKeyguardSecurityCallback, never()).dismiss(anyBoolean(), anyInt(), any());
++    }
++
+     @Test
+     @EnableFlags(Flags.FLAG_REVAMPED_BOUNCER_MESSAGES)
+     public void withFeatureFlagOn_oldMessage_isHidden() {
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/authentication/data/repository/AuthenticationRepositoryTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/authentication/data/repository/AuthenticationRepositoryTest.kt
+index 810b4211b..08d807653 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/authentication/data/repository/AuthenticationRepositoryTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/authentication/data/repository/AuthenticationRepositoryTest.kt
+@@ -27,6 +27,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
+ import androidx.test.filters.SmallTest
+ import com.android.internal.widget.LockPatternUtils
+ import com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE
++import com.android.internal.widget.LockscreenCredential
++import com.android.internal.widget.VerifyCredentialResponse
+ import com.android.keyguard.KeyguardSecurityModel
+ import com.android.systemui.SysuiTestCase
+ import com.android.systemui.authentication.shared.model.AuthenticationMethodModel
+@@ -59,6 +61,8 @@ import org.mockito.ArgumentMatchers.anyInt
+ import org.mockito.Mock
+ import org.mockito.Mockito.verify
+ import org.mockito.MockitoAnnotations
++import org.mockito.kotlin.any
++import org.mockito.kotlin.eq
+ import org.mockito.kotlin.never
+ 
+ @SmallTest
+@@ -209,21 +213,58 @@ class AuthenticationRepositoryTest : SysuiTestCase() {
+         setElapsedRealtime(duration.inWholeMilliseconds)
+     }
+ 
++    @Test
++    fun checkCredential_usesExplicitIdentityAfterSelectedUserChanges() =
++        testScope.runTest {
++            val checkedUser = USER_INFOS[0].id
++            userRepository.setSelectedUserInfo(USER_INFOS[1])
++            whenever(lockPatternUtils.checkCredential(any(), eq(checkedUser), any()))
++                .thenReturn(VerifyCredentialResponse.OK)
++            LockscreenCredential.createPin("123456").use { credential ->
++                val result = underTest.checkCredential(credential, checkedUser) {}
++                assertThat(result.checkedUserId).isEqualTo(checkedUser)
++                assertThat(result.matchedUserId).isEqualTo(checkedUser)
++                verify(lockPatternUtils).checkCredential(eq(credential), eq(checkedUser), any())
++            }
++        }
++
++    @Test
++    fun reportFailedAttempt_doesNotAttributeOldAttemptToNewUser() =
++        testScope.runTest {
++            val checkedUser = USER_INFOS[0].id
++            userRepository.setSelectedUserInfo(USER_INFOS[1])
++            underTest.reportAuthenticationAttempt(AuthenticationResult.FAILED, checkedUser)
++
++            verify(lockPatternUtils).reportFailedPasswordAttempt(checkedUser)
++            verify(lockPatternUtils, never()).reportFailedPasswordAttempt(USER_INFOS[1].id)
++        }
++
++    @Test
++    fun reportLockout_doesNotPublishOldUserLockoutToNewBouncer() =
++        testScope.runTest {
++            userRepository.setSelectedUserInfo(USER_INFOS[1])
++            underTest.reportLockoutStarted(30.seconds, USER_INFOS[0].id)
++
++            verify(lockPatternUtils)
++                .reportPasswordLockout(30.seconds.toJavaDuration(), USER_INFOS[0].id)
++            assertThat(underTest.hasLockoutOccurred.value).isFalse()
++        }
++
+     @Test
+     fun hasLockoutOccurred() =
+         testScope.runTest {
+             val hasLockoutOccurred by collectLastValue(underTest.hasLockoutOccurred)
+             assertThat(hasLockoutOccurred).isFalse()
+ 
+-            underTest.reportLockoutStarted(1.seconds)
++            underTest.reportLockoutStarted(1.seconds, USER_INFOS[0].id)
+             assertThat(hasLockoutOccurred).isTrue()
+ 
+             clock.setElapsedRealtime(clock.elapsedRealtime() + 60.seconds.inWholeMilliseconds)
+ 
+-            underTest.reportAuthenticationAttempt(AuthenticationResult.FAILED)
++            underTest.reportAuthenticationAttempt(AuthenticationResult.FAILED, USER_INFOS[0].id)
+             assertThat(hasLockoutOccurred).isTrue()
+ 
+-            underTest.reportAuthenticationAttempt(AuthenticationResult.SUCCEEDED)
++            underTest.reportAuthenticationAttempt(AuthenticationResult.SUCCEEDED, USER_INFOS[0].id)
+             assertThat(hasLockoutOccurred).isFalse()
+         }
+ 
+@@ -235,7 +276,7 @@ class AuthenticationRepositoryTest : SysuiTestCase() {
+             whenever(lockPatternUtils.getStrongAuthForUser(anyInt()))
+                 .thenReturn(STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE)
+ 
+-            underTest.reportAuthenticationAttempt(AuthenticationResult.SUCCEEDED)
++            underTest.reportAuthenticationAttempt(AuthenticationResult.SUCCEEDED, USER_INFOS[0].id)
+             verify(lockPatternUtils, never()).userPresent(anyInt())
+             verify(lockPatternUtils, never()).reportSuccessfulPasswordAttempt(anyInt())
+         }
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/authentication/domain/interactor/AuthenticationInteractorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/authentication/domain/interactor/AuthenticationInteractorTest.kt
+index fc93e68e0..db562a9a5 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/authentication/domain/interactor/AuthenticationInteractorTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/authentication/domain/interactor/AuthenticationInteractorTest.kt
+@@ -17,6 +17,7 @@
+ package com.android.systemui.authentication.domain.interactor
+ 
+ import android.app.admin.DevicePolicyManager
++import android.content.pm.UserInfo
+ import android.platform.test.annotations.DisableFlags
+ import android.platform.test.annotations.EnableFlags
+ import android.security.Flags.FLAG_LOCKSCREEN_INDICATE_DUPLICATE_GUESSES
+@@ -113,7 +114,7 @@ class AuthenticationInteractorTest : SysuiTestCase() {
+         }
+ 
+     @Test
+-    fun authenticate_withCorrectPin_succeeds_throughEarlyMatch() =
++    fun authenticate_withCorrectPin_waitsForFullResult() =
+         kosmos.runTest {
+             kosmos.fakeAuthenticationRepository.setAuthenticationMethod(Pin)
+             val completableDeferred = kosmos.fakeAuthenticationRepository.deferFullSuccessResult()
+@@ -124,11 +125,54 @@ class AuthenticationInteractorTest : SysuiTestCase() {
+                     underTest.authenticate(FakeAuthenticationRepository.DEFAULT_PIN)
+                 }
+             runCurrent()
+-            assertThat(onAuthenticationResult).isTrue()
++            assertThat(onAuthenticationResult).isNull()
+ 
+             assertThat(job.isActive).isTrue()
+             completableDeferred.complete(Unit)
+             job.join()
++            assertThat(onAuthenticationResult).isTrue()
++        }
++
++    @Test
++    fun authenticate_userChangesWhileVerifying_doesNotDismissNewUser() =
++        kosmos.runTest {
++            val deferred = kosmos.fakeAuthenticationRepository.deferFullSuccessResult()
++            var result: AuthenticationResult? = null
++            val job =
++                testScope.launch {
++                    result = underTest.authenticate(FakeAuthenticationRepository.DEFAULT_PIN)
++                }
++            runCurrent()
++            assertThat(onAuthenticationResult).isNull()
++            kosmos.fakeUserRepository.setSelectedUserInfo(UserInfo(10, "other", 0))
++            deferred.complete(Unit)
++            job.join()
++
++            assertThat(result).isEqualTo(AuthenticationResult.SKIPPED)
++            assertThat(onAuthenticationResult).isNull()
++            assertThat(kosmos.fakeAuthenticationRepository.lastReportedUserId).isEqualTo(0)
++            Assert.assertThrows(IllegalStateException::class.java) {
++                kosmos.fakeAuthenticationRepository.lastCheckedCredential!!.credential
++            }
++        }
++
++    @Test
++    fun authenticate_cancelledAfterEarlyMatch_neverDismissesAndClearsCredential() =
++        kosmos.runTest {
++            kosmos.fakeAuthenticationRepository.deferFullSuccessResult()
++            val job =
++                testScope.launch {
++                    underTest.authenticate(FakeAuthenticationRepository.DEFAULT_PIN)
++                }
++            runCurrent()
++            job.cancel()
++            job.join()
++
++            assertThat(onAuthenticationResult).isNull()
++            assertThat(kosmos.fakeAuthenticationRepository.lastReportedUserId).isNull()
++            Assert.assertThrows(IllegalStateException::class.java) {
++                kosmos.fakeAuthenticationRepository.lastCheckedCredential!!.credential
++            }
+         }
+ 
+     @Test
+@@ -309,7 +353,7 @@ class AuthenticationInteractorTest : SysuiTestCase() {
+             kosmos.fakeAuthenticationRepository.apply {
+                 setAuthenticationMethod(Pin)
+                 setAutoConfirmFeatureEnabled(true)
+-                reportLockoutStarted(42.milliseconds)
++                reportLockoutStarted(42.milliseconds, userId = 0)
+             }
+ 
+             val correctPin = FakeAuthenticationRepository.DEFAULT_PIN
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/ui/viewmodel/BouncerMessageViewModelTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/ui/viewmodel/BouncerMessageViewModelTest.kt
+index 400ec1980..9bd5cc250 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/ui/viewmodel/BouncerMessageViewModelTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/ui/viewmodel/BouncerMessageViewModelTest.kt
+@@ -972,7 +972,8 @@ class BouncerMessageViewModelTest : SysuiTestCase() {
+                     assertThat(bouncerMessage?.text).isEqualTo(text)
+ 
+                     kosmos.fakeAuthenticationRepository.reportAuthenticationAttempt(
+-                        AuthenticationResult.SUCCEEDED
++                        AuthenticationResult.SUCCEEDED,
++                        userId = 0,
+                     )
+ 
+                     job.cancelAndJoin()
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/ui/viewmodel/PasswordBouncerViewModelTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/ui/viewmodel/PasswordBouncerViewModelTest.kt
+index 8fc666a02..e47b29210 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/ui/viewmodel/PasswordBouncerViewModelTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/ui/viewmodel/PasswordBouncerViewModelTest.kt
+@@ -507,12 +507,16 @@ class PasswordBouncerViewModelTest : SysuiTestCase() {
+         if (isLockedOut) {
+             repeat(failedAttemptCount) {
+                 fakeAuthenticationRepository.reportAuthenticationAttempt(
+-                    AuthenticationResult.FAILED
++                    AuthenticationResult.FAILED,
++                    userId = 0,
+                 )
+             }
+-            fakeAuthenticationRepository.reportLockoutStarted(30.seconds)
++            fakeAuthenticationRepository.reportLockoutStarted(30.seconds, userId = 0)
+         } else {
+-            fakeAuthenticationRepository.reportAuthenticationAttempt(AuthenticationResult.SUCCEEDED)
++            fakeAuthenticationRepository.reportAuthenticationAttempt(
++                AuthenticationResult.SUCCEEDED,
++                userId = 0,
++            )
+         }
+         isInputEnabled.value = !isLockedOut
+ 
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractorTest.kt
+index fddd02821..ff9f844b0 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractorTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractorTest.kt
+@@ -1029,7 +1029,10 @@ class DeviceUnlockedInteractorTest : SysuiTestCase() {
+             assertThat(deviceUnlockStatus?.deviceUnlockSource).isNull()
+ 
+             // Mock primary auth on bouncer
+-            authenticationRepository.reportAuthenticationAttempt(AuthenticationResult.SUCCEEDED)
++            authenticationRepository.reportAuthenticationAttempt(
++                AuthenticationResult.SUCCEEDED,
++                userId = 0,
++            )
+ 
+             // Mock primary auth secure lock device flag cleared
+             kosmos.fakeSecureLockDeviceRepository.onSuccessfulPrimaryAuth()
+@@ -1129,7 +1132,10 @@ class DeviceUnlockedInteractorTest : SysuiTestCase() {
+ 
+             // Mock primary auth on bouncer
+             kosmos.fakeSecureLockDeviceRepository.onSuccessfulPrimaryAuth()
+-            authenticationRepository.reportAuthenticationAttempt(AuthenticationResult.SUCCEEDED)
++            authenticationRepository.reportAuthenticationAttempt(
++                AuthenticationResult.SUCCEEDED,
++                userId = 0,
++            )
+ 
+             // Mock primary auth secure lock device flag cleared
+             kosmos.fakeSecureLockDeviceRepository.onSuccessfulPrimaryAuth()
+diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardAbsKeyInputViewController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardAbsKeyInputViewController.java
+index 127f5da68..6fa66c3e6 100644
+--- a/packages/SystemUI/src/com/android/keyguard/KeyguardAbsKeyInputViewController.java
++++ b/packages/SystemUI/src/com/android/keyguard/KeyguardAbsKeyInputViewController.java
+@@ -65,6 +65,19 @@ public abstract class KeyguardAbsKeyInputViewController<T extends KeyguardAbsKey
+     private CountDownTimer mCountdownTimer;
+     private boolean mDismissing;
+     protected AsyncTask<?, ?, ?> mPendingLockCheck;
++    private long mCredentialCheckGeneration;
++    private boolean mClearingVerifiedCredential;
++    private com.android.systemui.securespaces.SecureSpaceEntryCoordinator mSecureSpaceEntry;
++
++    void setSecureSpaceEntryCoordinator(
++            com.android.systemui.securespaces.SecureSpaceEntryCoordinator coordinator) {
++        mSecureSpaceEntry = coordinator;
++    }
++
++    private boolean isSecureSpaceRouting() {
++        return mSecureSpaceEntry != null && mSecureSpaceEntry.isAvailable();
++    }
++
+     protected boolean mResumed;
+     protected boolean mLockedOut;
+     private static final String TAG = "KeyguardAbsKeyInputViewController";
+@@ -128,7 +141,7 @@ public abstract class KeyguardAbsKeyInputViewController<T extends KeyguardAbsKey
+         // if the user is currently locked out, enforce it.
+         Duration lockoutEndTime = mLockPatternUtils.getLockoutEndTime(
+                 mSelectedUserInteractor.getSelectedUserId());
+-        if (shouldLockout(lockoutEndTime)) {
++        if (!isSecureSpaceRouting() && shouldLockout(lockoutEndTime)) {
+             handleAttemptLockout(lockoutEndTime);
+         }
+     }
+@@ -244,9 +257,11 @@ public abstract class KeyguardAbsKeyInputViewController<T extends KeyguardAbsKey
+ 
+     protected void verifyPasswordAndUnlock() {
+         if (mDismissing) return; // already verified but haven't been dismissed; don't do it again.
+-        if (mLockedOut) return;
++        if (mLockedOut && (!isSecureSpaceRouting()
++                || mSecureSpaceEntry.getLockoutEndTimeMillis() > 0)) return;
+ 
+         final LockscreenCredential password = mView.getEnteredCredential();
++        final long checkGeneration = ++mCredentialCheckGeneration;
+         mView.setPasswordEntryInputEnabled(false);
+         if (mPendingLockCheck != null) {
+             mPendingLockCheck.cancel(false);
+@@ -267,6 +282,58 @@ public abstract class KeyguardAbsKeyInputViewController<T extends KeyguardAbsKey
+         mLatencyTracker.onActionStart(ACTION_CHECK_CREDENTIAL_UNLOCKED);
+ 
+         mKeyguardUpdateMonitor.setCredentialAttempted();
++        if (isSecureSpaceRouting()) {
++            try {
++                mSecureSpaceEntry.submit(password,
++                        new com.android.systemui.securespaces.SecureSpaceEntryCoordinator.Callback() {
++                    @Override
++                    public void onAccepted() {
++                        // Animated PIN clearing reports user activity. It is not new input and
++                        // must not revoke the native proof that is completing this unlock.
++                        mClearingVerifiedCredential = true;
++                        try {
++                            mView.resetPasswordText(true, false);
++                        } finally {
++                            mClearingVerifiedCredential = false;
++                        }
++                        mLatencyTracker.onActionEnd(ACTION_CHECK_CREDENTIAL);
++                        mLatencyTracker.onActionEnd(ACTION_CHECK_CREDENTIAL_UNLOCKED);
++                    }
++                    @Override
++                    public void onRejected(
++                            com.android.internal.widget.SecureSpaceCredentialResponse response) {
++                    mLatencyTracker.onActionEnd(ACTION_CHECK_CREDENTIAL);
++                    mLatencyTracker.onActionEnd(ACTION_CHECK_CREDENTIAL_UNLOCKED);
++                    if (checkGeneration != mCredentialCheckGeneration || !mResumed
++                            || mSelectedUserInteractor.getSelectedUserId() != userId) return;
++                    mView.setPasswordEntryInputEnabled(true);
++                    if (response.isAllCertainlyIncorrect()) {
++                        onPasswordChecked(userId, false, Duration.ZERO, true, false);
++                        long endTime = mSecureSpaceEntry.getLockoutEndTimeMillis();
++                        if (endTime > 0) handleAttemptLockout(Duration.ofMillis(endTime));
++                    } else {
++                        // Retry/service/stale responses do not establish a wrong credential.
++                        mView.resetPasswordText(true, false);
++                        long endTime = mSecureSpaceEntry.getLockoutEndTimeMillis();
++                        if (endTime > 0) handleAttemptLockout(Duration.ofMillis(endTime));
++                    }
++                    }
++                    @Override
++                    public void onCurrentUserChecked(VerifyCredentialResponse response) {
++                        mLatencyTracker.onActionEnd(ACTION_CHECK_CREDENTIAL);
++                        mLatencyTracker.onActionEnd(ACTION_CHECK_CREDENTIAL_UNLOCKED);
++                        if (checkGeneration != mCredentialCheckGeneration || !mResumed
++                                || mSelectedUserInteractor.getSelectedUserId() != userId) return;
++                        mView.setPasswordEntryInputEnabled(true);
++                        onPasswordChecked(userId, response.isMatched(), response.getTimeout(),
++                                true, response.isCredAlreadyTried());
++                    }
++                });
++            } finally {
++                password.zeroize();
++            }
++            return;
++        }
+         mPendingLockCheck = mLockPatternChecker.checkCredential(
+                 mLockPatternUtils,
+                 password,
+@@ -276,10 +343,8 @@ public abstract class KeyguardAbsKeyInputViewController<T extends KeyguardAbsKey
+                     @Override
+                     public void onEarlyMatched() {
+                         mLatencyTracker.onActionEnd(ACTION_CHECK_CREDENTIAL);
+-
+-                        onPasswordChecked(userId, true /* matched */, Duration.ZERO /* timeout */,
+-                                true /* isValidPassword */, false /* isDuplicate */);
+-                        password.zeroize();
++                        // Native verification is still using the credential. Only the completed
++                        // response can authorize dismissal; this callback measures latency only.
+                     }
+ 
+                     @Override
+@@ -289,19 +354,22 @@ public abstract class KeyguardAbsKeyInputViewController<T extends KeyguardAbsKey
+                         boolean isDuplicate = lockscreenIndicateDuplicateGuesses()
+                                 && response.isCredAlreadyTried();
+                         mLatencyTracker.onActionEnd(ACTION_CHECK_CREDENTIAL_UNLOCKED);
+-                        mView.setPasswordEntryInputEnabled(true);
+-                        mPendingLockCheck = null;
+-                        if (!matched) {
+-                            onPasswordChecked(userId, false /* matched */, timeout,
++                        try {
++                            if (checkGeneration != mCredentialCheckGeneration || !mResumed
++                                    || mSelectedUserInteractor.getSelectedUserId() != userId) {
++                                return;
++                            }
++                            mView.setPasswordEntryInputEnabled(true);
++                            mPendingLockCheck = null;
++                            onPasswordChecked(userId, matched, timeout,
+                                     true /* isValidPassword */, isDuplicate);
++                        } finally {
++                            password.zeroize();
+                         }
+-                        password.zeroize();
+                     }
+ 
+                     @Override
+                     public void onCancelled() {
+-                        // We already got dismissed with the early matched callback, so we cancelled
+-                        // the check. However, we still need to note down the latency.
+                         mLatencyTracker.onActionEnd(ACTION_CHECK_CREDENTIAL_UNLOCKED);
+                         password.zeroize();
+                     }
+@@ -320,6 +388,28 @@ public abstract class KeyguardAbsKeyInputViewController<T extends KeyguardAbsKey
+     }
+ 
+     protected void onUserInput() {
++        if (mClearingVerifiedCredential) return;
++        if (mSecureSpaceEntry != null && mSecureSpaceEntry.isSwitchInProgress()) {
++            mView.setPasswordEntryInputEnabled(false);
++            mClearingVerifiedCredential = true;
++            try {
++                mView.resetPasswordText(true, false);
++            } finally {
++                mClearingVerifiedCredential = false;
++            }
++            mView.postDelayed(new Runnable() {
++                @Override public void run() {
++                    if (!mResumed) return;
++                    if (mSecureSpaceEntry.isSwitchInProgress()) {
++                        mView.postDelayed(this, 250);
++                    } else {
++                        mView.setPasswordEntryInputEnabled(true);
++                    }
++                }
++            }, 250);
++            return;
++        }
++        if (mSecureSpaceEntry != null) mSecureSpaceEntry.cancel();
+         mFalsingCollector.updateFalseConfidence(FalsingClassifier.Result.passed(0.6));
+         getKeyguardSecurityCallback().userActivity();
+         getKeyguardSecurityCallback().onUserInput();
+@@ -335,6 +425,8 @@ public abstract class KeyguardAbsKeyInputViewController<T extends KeyguardAbsKey
+     @Override
+     public void onPause() {
+         mResumed = false;
++        if (mSecureSpaceEntry != null) mSecureSpaceEntry.onSourcePaused();
++        ++mCredentialCheckGeneration;
+ 
+         if (mCountdownTimer != null) {
+             mCountdownTimer.cancel();
+diff --git a/packages/SystemUI/src/com/android/systemui/authentication/data/repository/AuthenticationRepository.kt b/packages/SystemUI/src/com/android/systemui/authentication/data/repository/AuthenticationRepository.kt
+index 3f23a4e7d..a0a393c3c 100644
+--- a/packages/SystemUI/src/com/android/systemui/authentication/data/repository/AuthenticationRepository.kt
++++ b/packages/SystemUI/src/com/android/systemui/authentication/data/repository/AuthenticationRepository.kt
+@@ -56,6 +56,12 @@ import com.android.systemui.util.time.SystemClock
+ import dagger.Binds
+ import dagger.Module
+ import java.util.function.Function
++import com.android.systemui.securespaces.SecureSpaceEntryCoordinator
++import com.android.internal.widget.SecureSpaceCredentialResponse
++import java.util.concurrent.atomic.AtomicBoolean
++import kotlin.coroutines.resume
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.suspendCancellableCoroutine
+ import javax.inject.Inject
+ import kotlin.time.Duration
+ import kotlin.time.Duration.Companion.ZERO
+@@ -166,6 +172,7 @@ interface AuthenticationRepository {
+      */
+     suspend fun checkCredential(
+         credential: LockscreenCredential,
++        @UserIdInt userId: Int,
+         onEarlyMatched: () -> Unit,
+     ): AuthenticationResultModel
+ 
+@@ -175,11 +182,12 @@ interface AuthenticationRepository {
+     /** Reports an authentication attempt. Skipped attempts are not reported downstream. */
+     suspend fun reportAuthenticationAttempt(
+         result: AuthenticationResult,
++        @UserIdInt userId: Int,
+         isDuplicate: Boolean = false,
+     )
+ 
+     /** Reports that the user has entered a temporary device lockout (throttling). */
+-    suspend fun reportLockoutStarted(duration: Duration)
++    suspend fun reportLockoutStarted(duration: Duration, @UserIdInt userId: Int)
+ 
+     /**
+      * Returns the current maximum number of login attempts that are allowed before the device or
+@@ -261,11 +269,18 @@ constructor(
+     @SceneFrameworkTableLog private val tableLogBuffer: TableLogBuffer,
+ ) : AuthenticationRepository {
+ 
++    private var secureSpaceEntry: SecureSpaceEntryCoordinator? = null
++
++    @Inject
++    fun setSecureSpaceEntryCoordinator(coordinator: SecureSpaceEntryCoordinator) {
++        secureSpaceEntry = coordinator
++    }
++
+     override val hintedPinLength: Int = 6
+ 
+     /**
+-     * Emits whenever the current user's lockscreen knowledge factor (credential) changes.
+-     * Used to force-refresh cached pattern-related settings (size, dots, error path) that
++     * Emits whenever the current user's lockscreen knowledge factor (credential) changes. Used to
++     * force-refresh cached pattern-related settings (size, dots, error path) that
+      * LockSettingsService doesn't otherwise notify observers about.
+      */
+     private val lockscreenKnowledgeFactorChanged: Flow<Unit> =
+@@ -383,10 +398,16 @@ constructor(
+         _failedAuthenticationAttempts.asStateFlow()
+ 
+     override val lockoutEndTime: Duration?
+-        get() =
+-            lockPatternUtils.getLockoutEndTime(selectedUserId).toKotlinDuration().takeIf {
++        get() {
++            val coordinator = secureSpaceEntry
++            if (coordinator?.isAvailable == true) {
++                return coordinator.lockoutEndTimeMillis.takeIf { it > clock.elapsedRealtime() }
++                    ?.milliseconds
++            }
++            return lockPatternUtils.getLockoutEndTime(selectedUserId).toKotlinDuration().takeIf {
+                 clock.elapsedRealtime().milliseconds < it
+             }
++        }
+ 
+     private val _hasLockoutOccurred = MutableStateFlow(false)
+     override val hasLockoutOccurred: StateFlow<Boolean> = _hasLockoutOccurred.asStateFlow()
+@@ -410,12 +431,52 @@ constructor(
+ 
+     override suspend fun checkCredential(
+         credential: LockscreenCredential,
++        @UserIdInt userId: Int,
+         onEarlyMatched: () -> Unit,
+     ): AuthenticationResultModel {
++        val coordinator = secureSpaceEntry
++        if (SceneContainerFlag.isEnabled && coordinator != null) {
++            val routed = withContext(Dispatchers.Main.immediate) {
++                if (!coordinator.isAvailable) return@withContext null
++                suspendCancellableCoroutine<AuthenticationResultModel> { continuation ->
++                    val active = AtomicBoolean(true)
++                    val callback = object : SecureSpaceEntryCoordinator.Callback {
++                        override fun isActive() = active.get()
++                        override fun onAccepted() {
++                            if (continuation.isActive) continuation.resume(
++                                AuthenticationResultModel(checkedUserId = userId,
++                                    isHandoffPending = true))
++                        }
++                        override fun onCurrentUserChecked(
++                            response: com.android.internal.widget.VerifyCredentialResponse,
++                        ) {
++                            if (continuation.isActive) continuation.resume(
++                                AuthenticationResultModel(checkedUserId = userId,
++                                    isSuccessful = response.isMatched,
++                                    lockoutDuration = response.timeout.toKotlinDuration(),
++                                    isDuplicate = response.isCredAlreadyTried))
++                        }
++                        override fun onRejected(response: SecureSpaceCredentialResponse) {
++                            if (continuation.isActive) continuation.resume(
++                                AuthenticationResultModel(checkedUserId = userId,
++                                    lockoutDuration = (coordinator.lockoutEndTimeMillis
++                                        - clock.elapsedRealtime()).coerceAtLeast(0).milliseconds,
++                                    isInconclusive = !response.isAllCertainlyIncorrect))
++                        }
++                    }
++                    continuation.invokeOnCancellation {
++                        if (!coordinator.isPreparedSwitch(callback)) active.set(false)
++                        coordinator.cancelSource(callback)
++                    }
++                    if (continuation.isActive) coordinator.submit(credential, callback)
++                }
++            }
++            if (routed != null) return routed
++        }
+         return withContext(backgroundDispatcher) {
+-            val response =
+-                lockPatternUtils.checkCredential(credential, selectedUserId) { onEarlyMatched() }
++            val response = lockPatternUtils.checkCredential(credential, userId) { onEarlyMatched() }
+             return@withContext AuthenticationResultModel(
++                checkedUserId = userId,
+                 isSuccessful = response.isMatched,
+                 lockoutDuration = response.timeout.toKotlinDuration(),
+                 isDuplicate = lockscreenIndicateDuplicateGuesses() && response.isCredAlreadyTried,
+@@ -429,6 +490,7 @@ constructor(
+ 
+     override suspend fun reportAuthenticationAttempt(
+         result: AuthenticationResult,
++        @UserIdInt userId: Int,
+         isDuplicate: Boolean,
+     ) {
+         withContext(backgroundDispatcher) {
+@@ -438,7 +500,7 @@ constructor(
+                         secureLockDevice() &&
+                             SceneContainerFlag.isEnabled &&
+                             lockPatternUtils
+-                                .getStrongAuthForUser(selectedUserId)
++                                .getStrongAuthForUser(userId)
+                                 .and(STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE) != 0
+                     ) {
+                         Log.d(
+@@ -447,31 +509,36 @@ constructor(
+                                 "biometric authentication before unlocking.",
+                         )
+                     } else {
+-                        lockPatternUtils.userPresent(selectedUserId)
+-                        lockPatternUtils.reportSuccessfulPasswordAttempt(selectedUserId)
++                        lockPatternUtils.userPresent(userId)
++                        lockPatternUtils.reportSuccessfulPasswordAttempt(userId)
+                     }
+-                    _hasLockoutOccurred.value = false
++                    if (selectedUserId == userId) _hasLockoutOccurred.value = false
+                 }
+                 AuthenticationResult.FAILED -> {
+-                    lockPatternUtils.reportFailedPasswordAttempt(selectedUserId)
++                    lockPatternUtils.reportFailedPasswordAttempt(userId)
+                 }
+-                AuthenticationResult.SKIPPED -> {
++                AuthenticationResult.SKIPPED, AuthenticationResult.HANDOFF_PENDING -> {
+                     // Skipped, we don't want to use any downstream attempts here.
+                 }
+             }
+-            _isDuplicateAttempt.value = isDuplicate
+-            // Skipped attempts don't change anything downstream.
+-            if (result != AuthenticationResult.SKIPPED) {
+-                _failedAuthenticationAttempts.value = getFailedAuthenticationAttemptCount()
++            // Report hardware attempts to their original identity, but do not publish an old
++            // user's result into the newly selected user's bouncer state.
++            if (selectedUserId == userId) {
++                _isDuplicateAttempt.value = isDuplicate
++                if (result != AuthenticationResult.SKIPPED
++                        && result != AuthenticationResult.HANDOFF_PENDING) {
++                    val count = lockPatternUtils.getCurrentFailedPasswordAttempts(userId)
++                    if (selectedUserId == userId) _failedAuthenticationAttempts.value = count
++                }
+             }
+         }
+     }
+ 
+-    override suspend fun reportLockoutStarted(duration: Duration) {
++    override suspend fun reportLockoutStarted(duration: Duration, @UserIdInt userId: Int) {
+         withContext(backgroundDispatcher) {
+-            lockPatternUtils.reportPasswordLockout(duration.toJavaDuration(), selectedUserId)
++            lockPatternUtils.reportPasswordLockout(duration.toJavaDuration(), userId)
+         }
+-        _hasLockoutOccurred.value = true
++        if (selectedUserId == userId) _hasLockoutOccurred.value = true
+     }
+ 
+     private suspend fun getFailedAuthenticationAttemptCount(): Int {
+diff --git a/packages/SystemUI/src/com/android/systemui/authentication/domain/interactor/AuthenticationInteractor.kt b/packages/SystemUI/src/com/android/systemui/authentication/domain/interactor/AuthenticationInteractor.kt
+index 9f3a8e059..dddb5b23c 100644
+--- a/packages/SystemUI/src/com/android/systemui/authentication/domain/interactor/AuthenticationInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/authentication/domain/interactor/AuthenticationInteractor.kt
+@@ -48,7 +48,9 @@ import kotlinx.coroutines.CancellationException
+ import kotlinx.coroutines.CoroutineDispatcher
+ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.channels.awaitClose
++import kotlinx.coroutines.currentCoroutineContext
+ import kotlinx.coroutines.delay
++import kotlinx.coroutines.ensureActive
+ import kotlinx.coroutines.flow.Flow
+ import kotlinx.coroutines.flow.SharingStarted
+ import kotlinx.coroutines.flow.StateFlow
+@@ -259,42 +261,75 @@ constructor(
+             throw IllegalArgumentException("Input was empty!")
+         }
+ 
++        val attemptUserId = selectedUserInteractor.getSelectedUserId()
+         val authMethod = authenticationMethod.value
+         if (shouldSkipAuthenticationAttempt(authMethod, tryAutoConfirm, input.size)) {
+             if (lockscreenIndicateDuplicateGuesses() && !tryAutoConfirm) {
+                 // skips during auto confirm do not appear to be attempts from a user perspective
+                 repository.reportAuthenticationAttempt(
+                     AuthenticationResult.SKIPPED,
++                    userId = attemptUserId,
+                     isDuplicate = false,
+                 )
+             }
+             return AuthenticationResult.SKIPPED
+         }
+ 
++        // Skip inputs collected for a user that changed while checking auto-confirm/lockout.
++        currentCoroutineContext().ensureActive()
++        if (selectedUserInteractor.getSelectedUserId() != attemptUserId) {
++            return AuthenticationResult.SKIPPED
++        }
++
+         // Attempt to authenticate:
+         val credential = authMethod.createCredential(input) ?: return AuthenticationResult.SKIPPED
+         latencyTracker.onActionStart(LatencyTracker.ACTION_CHECK_CREDENTIAL)
+         latencyTracker.onActionStart(LatencyTracker.ACTION_CHECK_CREDENTIAL_UNLOCKED)
+         try {
+-            var successEmitted = false
+             val authenticationResult =
+-                repository.checkCredential(credential) {
++                repository.checkCredential(credential, attemptUserId) {
++                    // Early matching is a latency signal only. A user may switch or cancel while
++                    // the full verifier result is still pending; it must not dismiss Keyguard.
+                     latencyTracker.onActionEnd(LatencyTracker.ACTION_CHECK_CREDENTIAL)
+-                    if (!successEmitted) {
+-                        successEmitted = true
+-                        notifyOnAuthResultListeners(true)
+-                    }
+                 }
+             credential.zeroize()
++            currentCoroutineContext().ensureActive()
++            if (authenticationResult.isHandoffPending || authenticationResult.isInconclusive) {
++                latencyTracker.onActionEnd(LatencyTracker.ACTION_CHECK_CREDENTIAL)
++                latencyTracker.onActionEnd(LatencyTracker.ACTION_CHECK_CREDENTIAL_UNLOCKED)
++                return if (authenticationResult.isHandoffPending) {
++                    AuthenticationResult.HANDOFF_PENDING
++                } else {
++                    // A union retry is not a verified wrong credential: show its countdown
++                    // without incrementing the originating user's policy failure counter.
++                    if (authenticationResult.lockoutDuration.isPositive()) {
++                        repository.reportLockoutStarted(authenticationResult.lockoutDuration,
++                            authenticationResult.checkedUserId)
++                        currentCoroutineContext().ensureActive()
++                        if (selectedUserInteractor.getSelectedUserId() != attemptUserId) {
++                            return AuthenticationResult.SKIPPED
++                        }
++                        notifyOnAuthResultListeners(false)
++                        AuthenticationResult.FAILED
++                    } else AuthenticationResult.SKIPPED
++                }
++            }
++            check(authenticationResult.checkedUserId == attemptUserId) {
++                "Credential result has a different user identity"
++            }
+ 
+             if (authenticationResult.isSuccessful) {
+                 latencyTracker.onActionEnd(LatencyTracker.ACTION_CHECK_CREDENTIAL_UNLOCKED)
+-                repository.reportAuthenticationAttempt(AuthenticationResult.SUCCEEDED)
+-                latencyTracker.onActionStart(LatencyTracker.ACTION_LOCKSCREEN_UNLOCK)
+-                if (!successEmitted) {
+-                    successEmitted = true
+-                    notifyOnAuthResultListeners(true)
++                repository.reportAuthenticationAttempt(
++                    AuthenticationResult.SUCCEEDED,
++                    userId = authenticationResult.matchedUserId!!,
++                )
++                currentCoroutineContext().ensureActive()
++                if (selectedUserInteractor.getSelectedUserId() != attemptUserId) {
++                    return AuthenticationResult.SKIPPED
+                 }
++                latencyTracker.onActionStart(LatencyTracker.ACTION_LOCKSCREEN_UNLOCK)
++                notifyOnAuthResultListeners(true)
+ 
+                 // Force a garbage collection in an attempt to erase any credentials left in memory.
+                 // Do it after a 5-sec delay to avoid making the bouncer dismiss animation janky.
+@@ -306,20 +341,30 @@ constructor(
+             // Authentication failed.
+             repository.reportAuthenticationAttempt(
+                 AuthenticationResult.FAILED,
+-                authenticationResult.isDuplicate,
++                userId = authenticationResult.checkedUserId,
++                isDuplicate = authenticationResult.isDuplicate,
+             )
+ 
+             if (authenticationResult.lockoutDuration.isPositive()) {
+                 // Lockout has been triggered.
+-                repository.reportLockoutStarted(authenticationResult.lockoutDuration)
++                repository.reportLockoutStarted(
++                    authenticationResult.lockoutDuration,
++                    authenticationResult.checkedUserId,
++                )
+             }
+ 
++            currentCoroutineContext().ensureActive()
++            if (selectedUserInteractor.getSelectedUserId() != attemptUserId) {
++                return AuthenticationResult.SKIPPED
++            }
+             notifyOnAuthResultListeners(false)
+             return AuthenticationResult.FAILED
+         } catch (ex: CancellationException) {
+             // The authentication action has been cancelled, likely due to the user leaving the UI.
+             latencyTracker.onActionEnd(LatencyTracker.ACTION_CHECK_CREDENTIAL_UNLOCKED)
+             throw ex
++        } finally {
++            credential.zeroize()
+         }
+     }
+ 
+@@ -421,7 +466,7 @@ constructor(
+                     input
+                         .map { it as AuthenticationPatternCoordinate }
+                         .map { LockPatternView.Cell.of(it.y, it.x, patternSize.value) },
+-                    patternSize.value
++                    patternSize.value,
+                 )
+             else -> null
+         }
+diff --git a/packages/SystemUI/src/com/android/systemui/authentication/shared/model/AuthenticationResult.kt b/packages/SystemUI/src/com/android/systemui/authentication/shared/model/AuthenticationResult.kt
+index 767a1b32f..9744f2174 100644
+--- a/packages/SystemUI/src/com/android/systemui/authentication/shared/model/AuthenticationResult.kt
++++ b/packages/SystemUI/src/com/android/systemui/authentication/shared/model/AuthenticationResult.kt
+@@ -24,4 +24,6 @@ enum class AuthenticationResult {
+     FAILED,
+     /** Authentication was not performed, e.g. due to insufficient input. */
+     SKIPPED,
++    /** A native match is completing through the durable user-switch/keyguard policy transaction. */
++    HANDOFF_PENDING,
+ }
+diff --git a/packages/SystemUI/src/com/android/systemui/authentication/shared/model/AuthenticationResultModel.kt b/packages/SystemUI/src/com/android/systemui/authentication/shared/model/AuthenticationResultModel.kt
+index ab0e01240..ab0188697 100644
+--- a/packages/SystemUI/src/com/android/systemui/authentication/shared/model/AuthenticationResultModel.kt
++++ b/packages/SystemUI/src/com/android/systemui/authentication/shared/model/AuthenticationResultModel.kt
+@@ -16,6 +16,7 @@
+ 
+ package com.android.systemui.authentication.shared.model
+ 
++import android.os.UserHandle
+ import kotlin.time.Duration
+ 
+ /** Models the result of an authentication attempt. */
+@@ -26,4 +27,14 @@ data class AuthenticationResultModel(
+     val lockoutDuration: Duration = Duration.ZERO,
+     /** If [isSuccessful] is `false`, whether the attempt was a duplicate. */
+     val isDuplicate: Boolean = false,
+-)
++    /** Identity actually sent to the hardware verifier, including failed/throttled attempts. */
++    val checkedUserId: Int = UserHandle.USER_NULL,
++    /** A native handoff owns completion; this response cannot directly dismiss keyguard. */
++    val isHandoffPending: Boolean = false,
++    /** Hardware retry, cancellation or service failure cannot establish a wrong credential. */
++    val isInconclusive: Boolean = false,
++) {
++    /** A successful result identifies a user; an unsuccessful result never authenticates one. */
++    val matchedUserId: Int?
++        get() = checkedUserId.takeIf { isSuccessful && it != UserHandle.USER_NULL }
++}
+diff --git a/packages/SystemUI/tests/robolectric/src/com/android/systemui/authentication/SecureSpaceAuthenticationIdentityTest.kt b/packages/SystemUI/tests/robolectric/src/com/android/systemui/authentication/SecureSpaceAuthenticationIdentityTest.kt
+new file mode 100644
+index 000000000..4e9321c49
+--- /dev/null
++++ b/packages/SystemUI/tests/robolectric/src/com/android/systemui/authentication/SecureSpaceAuthenticationIdentityTest.kt
+@@ -0,0 +1,282 @@
++/*
++ * Copyright (C) 2026 The Evolution X Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++package com.android.systemui.authentication
++
++import android.app.Application
++import android.security.Flags
++import com.android.internal.util.LatencyTracker
++import com.android.internal.widget.LockscreenCredential
++import com.android.systemui.authentication.data.repository.AuthenticationRepository
++import com.android.systemui.authentication.data.repository.FakeAuthenticationRepository
++import com.android.systemui.authentication.domain.interactor.AuthenticationInteractor
++import com.android.systemui.authentication.shared.model.AuthenticationResult
++import com.android.systemui.authentication.shared.model.AuthenticationResultModel
++import com.android.systemui.user.domain.interactor.SelectedUserInteractor
++import com.android.systemui.util.time.SystemClock
++import com.google.common.truth.Truth.assertThat
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.test.StandardTestDispatcher
++import kotlinx.coroutines.test.TestScope
++import kotlinx.coroutines.test.currentTime
++import kotlinx.coroutines.test.runCurrent
++import kotlinx.coroutines.test.runTest
++import org.junit.After
++import org.junit.Assert.assertThrows
++import org.junit.Before
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.mockito.MockedStatic
++import org.mockito.Mockito.mockStatic
++import org.mockito.kotlin.mock
++import org.mockito.kotlin.whenever
++import org.robolectric.RobolectricTestRunner
++import org.robolectric.annotation.Config
++
++@RunWith(RobolectricTestRunner::class)
++@Config(sdk = [36], application = Application::class)
++class SecureSpaceAuthenticationIdentityTest {
++    private lateinit var flags: MockedStatic<Flags>
++    private var selectedUserId = 0
++    private val selectedUser: SelectedUserInteractor = mock()
++    private val clock: SystemClock = mock()
++
++    @Before
++    fun setUp() {
++        // These tests cover identity/lifecycle, not feature-flag configuration or second factors.
++        flags = mockStatic(Flags::class.java)
++        whenever(selectedUser.getSelectedUserId()).thenAnswer { selectedUserId }
++    }
++
++    @After
++    fun tearDown() {
++        flags.close()
++    }
++
++    private fun TestScope.interactor(
++        repository: AuthenticationRepository
++    ): AuthenticationInteractor {
++        return AuthenticationInteractor(
++            applicationScope = backgroundScope,
++            backgroundDispatcher = StandardTestDispatcher(testScheduler),
++            clock = clock,
++            repository = repository,
++            selectedUserInteractor = selectedUser,
++            latencyTracker = mock<LatencyTracker>(),
++        )
++    }
++
++    private fun AuthenticationInteractor.listen(results: MutableList<Boolean>) {
++        addOnAuthenticationResultListener(
++            object : AuthenticationInteractor.OnAuthenticationResultListener {
++                override fun onAuthenticationResult(isSuccessful: Boolean) {
++                    results += isSuccessful
++                }
++            }
++        )
++    }
++
++    @Test
++    fun successfulResultIdentifiesUser_failedResultDoesNot() {
++        assertThat(AuthenticationResultModel(isSuccessful = true, checkedUserId = 10).matchedUserId)
++            .isEqualTo(10)
++        assertThat(
++                AuthenticationResultModel(isSuccessful = false, checkedUserId = 10).matchedUserId
++            )
++            .isNull()
++        assertThat(AuthenticationResultModel(isSuccessful = true).matchedUserId).isNull()
++    }
++
++    @Test
++    fun normalCredential_notifiesOnceAndClearsCredential() = runTest {
++        val repository = FakeAuthenticationRepository { currentTime }
++        val interactor = interactor(repository)
++        val results = mutableListOf<Boolean>()
++        interactor.listen(results)
++
++        assertThat(interactor.authenticate(FakeAuthenticationRepository.DEFAULT_PIN))
++            .isEqualTo(AuthenticationResult.SUCCEEDED)
++        assertThat(results).containsExactly(true)
++        assertThat(repository.lastReportedUserId).isEqualTo(0)
++        assertThrows(IllegalStateException::class.java) {
++            repository.lastCheckedCredential!!.credential
++        }
++    }
++
++    @Test
++    fun mismatchedVerifierIdentity_failsClosedAndClearsCredential() = runTest {
++        val delegate = FakeAuthenticationRepository { currentTime }
++        var checkedCredential: LockscreenCredential? = null
++        val repository =
++            object : AuthenticationRepository by delegate {
++                override suspend fun checkCredential(
++                    credential: LockscreenCredential,
++                    userId: Int,
++                    onEarlyMatched: () -> Unit,
++                ): AuthenticationResultModel {
++                    checkedCredential = credential
++                    return AuthenticationResultModel(isSuccessful = true, checkedUserId = 10)
++                }
++            }
++        val interactor = interactor(repository)
++        val results = mutableListOf<Boolean>()
++        interactor.listen(results)
++        try {
++            interactor.authenticate(FakeAuthenticationRepository.DEFAULT_PIN)
++            org.junit.Assert.fail("Mismatched identity must be rejected")
++        } catch (expected: IllegalStateException) {
++            assertThat(expected)
++                .hasMessageThat()
++                .isEqualTo("Credential result has a different user identity")
++        }
++        assertThat(results).isEmpty()
++        assertThat(delegate.lastReportedUserId).isNull()
++        assertThrows(IllegalStateException::class.java) { checkedCredential!!.credential }
++    }
++
++    @Test
++    fun earlyMatch_doesNotDismissBeforeFullResult() = runTest {
++        val repository = FakeAuthenticationRepository { currentTime }
++        val fullResult = repository.deferFullSuccessResult()
++        val interactor = interactor(repository)
++        val results = mutableListOf<Boolean>()
++        interactor.listen(results)
++        val job = launch { interactor.authenticate(FakeAuthenticationRepository.DEFAULT_PIN) }
++        runCurrent()
++        assertThat(results).isEmpty()
++        assertThat(job.isActive).isTrue()
++
++        fullResult.complete(Unit)
++        job.join()
++        assertThat(results).containsExactly(true)
++    }
++
++    @Test
++    fun selectedUserChanges_creditsOriginalUserAndDoesNotDismissNewUser() = runTest {
++        val repository = FakeAuthenticationRepository { currentTime }
++        val fullResult = repository.deferFullSuccessResult()
++        val interactor = interactor(repository)
++        val results = mutableListOf<Boolean>()
++        interactor.listen(results)
++        var result: AuthenticationResult? = null
++        val job = launch {
++            result = interactor.authenticate(FakeAuthenticationRepository.DEFAULT_PIN)
++        }
++        runCurrent()
++        selectedUserId = 10
++        fullResult.complete(Unit)
++        job.join()
++
++        assertThat(result).isEqualTo(AuthenticationResult.SKIPPED)
++        assertThat(results).isEmpty()
++        assertThat(repository.lastReportedUserId).isEqualTo(0)
++        assertThrows(IllegalStateException::class.java) {
++            repository.lastCheckedCredential!!.credential
++        }
++    }
++
++    @Test
++    fun cancellationAfterEarlyMatch_neverDismissesAndClearsCredential() = runTest {
++        val repository = FakeAuthenticationRepository { currentTime }
++        repository.deferFullSuccessResult()
++        val interactor = interactor(repository)
++        val results = mutableListOf<Boolean>()
++        interactor.listen(results)
++        val job = launch { interactor.authenticate(FakeAuthenticationRepository.DEFAULT_PIN) }
++        runCurrent()
++        job.cancel()
++        job.join()
++
++        assertThat(results).isEmpty()
++        assertThat(repository.lastReportedUserId).isNull()
++        assertThrows(IllegalStateException::class.java) {
++            repository.lastCheckedCredential!!.credential
++        }
++    }
++
++    @Test
++    fun incorrectCredential_reportsFailureAndClearsCredential() = runTest {
++        val repository = FakeAuthenticationRepository { currentTime }
++        val interactor = interactor(repository)
++        val results = mutableListOf<Boolean>()
++        interactor.listen(results)
++        assertThat(interactor.authenticate(FakeAuthenticationRepository.WRONG_PIN))
++            .isEqualTo(AuthenticationResult.FAILED)
++        assertThat(results).containsExactly(false)
++        assertThat(repository.lastReportedUserId).isEqualTo(0)
++        assertThrows(IllegalStateException::class.java) {
++            repository.lastCheckedCredential!!.credential
++        }
++    }
++    @Test
++    fun routedNativeMatch_doesNotPublishGenericSuccessOrReportTwice() = runTest {
++        val delegate = FakeAuthenticationRepository { currentTime }
++        var checkedCredential: LockscreenCredential? = null
++        val repository = object : AuthenticationRepository by delegate {
++            override suspend fun checkCredential(
++                credential: LockscreenCredential,
++                userId: Int,
++                onEarlyMatched: () -> Unit,
++            ): AuthenticationResultModel {
++                checkedCredential = credential
++                return AuthenticationResultModel(checkedUserId = userId, isHandoffPending = true)
++            }
++        }
++        val interactor = interactor(repository)
++        val results = mutableListOf<Boolean>()
++        interactor.listen(results)
++
++        assertThat(interactor.authenticate(FakeAuthenticationRepository.DEFAULT_PIN))
++            .isEqualTo(AuthenticationResult.HANDOFF_PENDING)
++        assertThat(results).isEmpty()
++        assertThat(delegate.lastReportedUserId).isNull()
++        assertThrows(IllegalStateException::class.java) { checkedCredential!!.credential }
++    }
++
++    @Test
++    fun inconclusiveRoutingResult_neverReportsWrongCredential() = runTest {
++        val delegate = FakeAuthenticationRepository { currentTime }
++        val repository = object : AuthenticationRepository by delegate {
++            override suspend fun checkCredential(
++                credential: LockscreenCredential,
++                userId: Int,
++                onEarlyMatched: () -> Unit,
++            ) = AuthenticationResultModel(checkedUserId = userId, isInconclusive = true)
++        }
++        val interactor = interactor(repository)
++        val results = mutableListOf<Boolean>()
++        interactor.listen(results)
++        assertThat(interactor.authenticate(FakeAuthenticationRepository.DEFAULT_PIN))
++            .isEqualTo(AuthenticationResult.SKIPPED)
++        assertThat(results).isEmpty()
++        assertThat(delegate.lastReportedUserId).isNull()
++    }
++
++    @Test
++    fun aggregateNativeRetry_startsCountdownWithoutPolicyFailure() = runTest {
++        val delegate = FakeAuthenticationRepository { currentTime }
++        var lockoutUser: Int? = null
++        val retry = kotlin.time.Duration.parse("30s")
++        val repository = object : AuthenticationRepository by delegate {
++            override suspend fun checkCredential(
++                credential: LockscreenCredential,
++                userId: Int,
++                onEarlyMatched: () -> Unit,
++            ) = AuthenticationResultModel(checkedUserId = userId, isInconclusive = true,
++                lockoutDuration = retry)
++            override suspend fun reportLockoutStarted(
++                duration: kotlin.time.Duration, userId: Int,
++            ) { lockoutUser = userId }
++        }
++        val interactor = interactor(repository)
++        val results = mutableListOf<Boolean>()
++        interactor.listen(results)
++        assertThat(interactor.authenticate(FakeAuthenticationRepository.DEFAULT_PIN))
++            .isEqualTo(AuthenticationResult.FAILED)
++        assertThat(results).containsExactly(false)
++        assertThat(lockoutUser).isEqualTo(0)
++        assertThat(delegate.lastReportedUserId).isNull()
++    }
++
++}
+diff --git a/packages/SystemUI/tests/utils/src/com/android/systemui/authentication/data/repository/FakeAuthenticationRepository.kt b/packages/SystemUI/tests/utils/src/com/android/systemui/authentication/data/repository/FakeAuthenticationRepository.kt
+index 1548027df..e691251de 100644
+--- a/packages/SystemUI/tests/utils/src/com/android/systemui/authentication/data/repository/FakeAuthenticationRepository.kt
++++ b/packages/SystemUI/tests/utils/src/com/android/systemui/authentication/data/repository/FakeAuthenticationRepository.kt
+@@ -120,10 +120,18 @@ class FakeAuthenticationRepository(private val currentTimeMs: () -> Long) :
+         credentialOverride = pin
+     }
+ 
++    var lastReportedUserId: Int? = null
++        private set
++
++    var lastCheckedCredential: LockscreenCredential? = null
++        private set
++
+     override suspend fun reportAuthenticationAttempt(
+         result: AuthenticationResult,
++        userId: Int,
+         isDuplicate: Boolean,
+     ) {
++        lastReportedUserId = userId
+         when (result) {
+             AuthenticationResult.SUCCEEDED -> {
+                 _failedAuthenticationAttempts.value = 0
+@@ -135,7 +143,7 @@ class FakeAuthenticationRepository(private val currentTimeMs: () -> Long) :
+             AuthenticationResult.FAILED -> {
+                 _failedAuthenticationAttempts.value++
+             }
+-            AuthenticationResult.SKIPPED -> {}
++            AuthenticationResult.SKIPPED, AuthenticationResult.HANDOFF_PENDING -> {}
+         }
+         _isDuplicateAttempt.value = isDuplicate
+     }
+@@ -153,7 +161,7 @@ class FakeAuthenticationRepository(private val currentTimeMs: () -> Long) :
+ 
+     private var deferred: CompletableDeferred<Unit>? = null
+ 
+-    override suspend fun reportLockoutStarted(duration: Duration) {
++    override suspend fun reportLockoutStarted(duration: Duration, userId: Int) {
+         _lockoutEndTime = (currentTime + duration).takeIf { duration.isPositive() }
+         hasLockoutOccurred.value = true
+         lockoutStartedReportCount++
+@@ -181,8 +189,10 @@ class FakeAuthenticationRepository(private val currentTimeMs: () -> Long) :
+ 
+     override suspend fun checkCredential(
+         credential: LockscreenCredential,
++        userId: Int,
+         onEarlyMatched: () -> Unit,
+     ): AuthenticationResultModel {
++        lastCheckedCredential = credential
+         return credentialCheckingMutex.withLock {
+             Log.d(
+                 TAG,
+@@ -190,6 +200,7 @@ class FakeAuthenticationRepository(private val currentTimeMs: () -> Long) :
+             )
+             if (credential in previousAttempts) {
+                 return AuthenticationResultModel(
++                    checkedUserId = userId,
+                     isSuccessful = false,
+                     lockoutDuration = Duration.ZERO,
+                     isDuplicate = true,
+@@ -221,6 +232,7 @@ class FakeAuthenticationRepository(private val currentTimeMs: () -> Long) :
+                 lockoutOverride?.let {
+                     lockoutOverride = null
+                     return@checkCredential AuthenticationResultModel(
++                        checkedUserId = userId,
+                         isSuccessful = false,
+                         lockoutDuration = it,
+                     )
+@@ -229,9 +241,17 @@ class FakeAuthenticationRepository(private val currentTimeMs: () -> Long) :
+ 
+             val failedAttempts = _failedAuthenticationAttempts.value
+             if (isSuccessful || failedAttempts < MAX_FAILED_AUTH_TRIES_BEFORE_LOCKOUT - 1) {
+-                AuthenticationResultModel(isSuccessful, lockoutDuration = Duration.ZERO)
++                AuthenticationResultModel(
++                    isSuccessful,
++                    lockoutDuration = Duration.ZERO,
++                    checkedUserId = userId,
++                )
+             } else {
+-                AuthenticationResultModel(isSuccessful = false, lockoutDuration = LOCKOUT_DURATION)
++                AuthenticationResultModel(
++                    isSuccessful = false,
++                    lockoutDuration = LOCKOUT_DURATION,
++                    checkedUserId = userId,
++                )
+             }
+         }
+     }
+@@ -345,7 +365,7 @@ class FakeAuthenticationRepository(private val currentTimeMs: () -> Long) :
+                     credential.contentEquals(
+                         LockPatternUtils.patternToByteArray(
+                             expectedCredential as List<LockPatternView.Cell>,
+-                            LockPatternUtils.PATTERN_SIZE_DEFAULT
++                            LockPatternUtils.PATTERN_SIZE_DEFAULT,
+                         )
+                     )
+                 else -> error("Unsupported credential type $type!")
+@@ -353,8 +373,13 @@ class FakeAuthenticationRepository(private val currentTimeMs: () -> Long) :
+         }
+ 
+         private fun List<AuthenticationPatternCoordinate>.toCells(): List<LockPatternView.Cell> {
+-            return map { coordinate -> LockPatternView.Cell.of(
+-                coordinate.y, coordinate.x, LockPatternUtils.PATTERN_SIZE_DEFAULT) }
++            return map { coordinate ->
++                LockPatternView.Cell.of(
++                    coordinate.y,
++                    coordinate.x,
++                    LockPatternUtils.PATTERN_SIZE_DEFAULT,
++                )
++            }
+         }
+     }
+ }

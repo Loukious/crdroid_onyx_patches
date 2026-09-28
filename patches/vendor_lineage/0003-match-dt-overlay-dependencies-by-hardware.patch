@@ -1,0 +1,47 @@
+diff --git a/build/tools/merge_dtbs.py b/build/tools/merge_dtbs.py
+index 836be1a..afa53da 100755
+--- a/build/tools/merge_dtbs.py
++++ b/build/tools/merge_dtbs.py
+@@ -468,17 +468,28 @@ class MergedDeviceTree(object):
+ 		for mdt in self.merged_devicetrees:
+ 			yield mdt.save(name, out_dir)
+ 
+-def find_symbol(dtbs, symbol):
++def find_symbol(dtbs, symbol, consumer):
+ 	for symbols, _, dt in dtbs:
+-		if symbol in symbols:
+-			return dt
++		if symbol not in symbols or dt.filename == consumer.filename:
++			continue
++		# Different SoCs and boards reuse labels. Only an overlay that can
++		# apply to the same hardware can provide a fixup dependency.
++		props = ['plat_id', 'board_id', 'pmic_id']
++		if any(getattr(dt, p) is not None and getattr(consumer, p) is not None
++			and not (getattr(dt, p) & getattr(consumer, p)) for p in props):
++			continue
++		if any(dt.extra_ids.get(p) is not None and consumer.extra_ids.get(p) is not None
++			and not (dt.extra_ids[p] & consumer.extra_ids[p])
++			for p in dt.extra_ids.keys() | consumer.extra_ids.keys()):
++			continue
++		return dt.filename
+ 
+ def create_adjacency(dtbs):
+ 	graph = {}
+ 	for _, fixups, dt in dtbs:
+-		graph[dt] = set()
++		graph[dt.filename] = set()
+ 		for fixup in fixups:
+-			graph[dt].add(find_symbol(dtbs, fixup))
++			graph[dt.filename].add(find_symbol(dtbs, fixup, dt))
+ 	return graph
+ 
+ def parse_tech_dt_files(folder):
+@@ -488,7 +499,7 @@ def parse_tech_dt_files(folder):
+ 			if os.path.splitext(filename)[1] in ['.dtbo','.dtb']:
+ 				filepath = os.path.join(root, filename)
+ 				dt = DeviceTree(filepath)
+-				dtbs.append((dt.list_props('/__symbols__'), dt.list_props('/__fixups__'), filepath))
++				dtbs.append((dt.list_props('/__symbols__'), dt.list_props('/__fixups__'), dt))
+ 	graph = create_adjacency(dtbs)
+ 	ts = graphlib.TopologicalSorter(graph)
+ 	order = list(ts.static_order())

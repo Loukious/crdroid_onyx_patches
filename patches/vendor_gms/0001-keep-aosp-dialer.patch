@@ -1,0 +1,12 @@
+diff --git a/gms_full.mk b/gms_full.mk
+index dbf3062..aca26ad 100644
+--- a/gms_full.mk
++++ b/gms_full.mk
+@@ -117,7 +117,6 @@ PRODUCT_PACKAGES += \
+     FamilySpacePrebuilt-v2026 \
+     FilesPrebuilt \
+     GeminiShell_227 \
+-    GoogleDialer \
+     GoogleRestorePrebuilt-v1068888 \
+     KidsSupervisionStub \
+     OdadPrebuilt \

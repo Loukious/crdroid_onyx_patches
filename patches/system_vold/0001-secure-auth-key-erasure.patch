@@ -1,0 +1,157 @@
+diff --git a/FsCrypt.cpp b/FsCrypt.cpp
+index eb9a511..b6a145a 100644
+--- a/FsCrypt.cpp
++++ b/FsCrypt.cpp
+@@ -724,15 +724,17 @@ static bool evict_user_keys(std::map<userid_t, UserPolicies>& policy_map, userid
+ }
+ 
+ // Evicts and destroys all CE and DE keys for a user.  This is called when the user is removed.
+-bool fscrypt_destroy_user_keys(userid_t user_id) {
++bool fscrypt_destroy_user_keys(userid_t user_id, bool evict) {
+     LOG(DEBUG) << "fscrypt_destroy_user_keys(" << user_id << ")";
+     if (!IsFbeEnabled()) {
+         return true;
+     }
+     bool success = true;
+ 
+-    success &= evict_user_keys(s_ce_policies, user_id);
+-    success &= evict_user_keys(s_de_policies, user_id);
++    if (evict) {
++        success &= evict_user_keys(s_ce_policies, user_id);
++        success &= evict_user_keys(s_de_policies, user_id);
++    }
+ 
+     if (!s_ephemeral_users.erase(user_id)) {
+         auto ce_path = get_ce_key_directory_path(user_id);
+@@ -754,6 +756,15 @@ bool fscrypt_destroy_user_keys(userid_t user_id) {
+     return success;
+ }
+ 
++// Remove the persisted system DE key. In-memory keys are left for immediate shutdown.
++bool fscrypt_destroy_system_key() {
++    bool success = android::vold::destroyKey(device_key_path);
++    if (android::vold::pathExists(device_key_temp)) {
++        success &= android::vold::destroyKey(device_key_temp);
++    }
++    return success;
++}
++
+ static android::vold::KeyAuthentication authentication_from_secret(
+         const std::vector<uint8_t>& secret) {
+     std::string secret_str(secret.begin(), secret.end());
+diff --git a/FsCrypt.h b/FsCrypt.h
+index d4a482c..f746db9 100644
+--- a/FsCrypt.h
++++ b/FsCrypt.h
+@@ -24,7 +24,8 @@ bool fscrypt_initialize_systemwide_keys();
+ bool fscrypt_init_user0();
+ extern bool fscrypt_init_user0_done;
+ bool fscrypt_create_user_keys(userid_t user_id, bool ephemeral);
+-bool fscrypt_destroy_user_keys(userid_t user_id);
++bool fscrypt_destroy_user_keys(userid_t user_id, bool evict = true);
++bool fscrypt_destroy_system_key();
+ bool fscrypt_set_ce_key_protection(userid_t user_id, const std::vector<uint8_t>& secret);
+ void fscrypt_deferred_fixate_ce_keys();
+ 
+diff --git a/MetadataCrypt.cpp b/MetadataCrypt.cpp
+index e435d7d..aef54df 100644
+--- a/MetadataCrypt.cpp
++++ b/MetadataCrypt.cpp
+@@ -500,5 +500,19 @@ bool destroy_dsu_metadata_key(const std::string& dsu_slot) {
+     return android::vold::DeleteDirContentsAndDir(dsu_metadata_key_dir) == android::OK;
+ }
+ 
++bool destroy_mountpoint_metadata_key(const std::string& mount_point) {
++    const auto* entry = GetEntryForMountPoint(&fstab_default, mount_point);
++    if (entry == nullptr || entry->metadata_key_dir.empty()) {
++        LOG(ERROR) << "No metadata key directory for mount point";
++        return false;
++    }
++    bool success = android::vold::destroyKey(entry->metadata_key_dir + "/key");
++    const auto temporary_key = entry->metadata_key_dir + "/tmp";
++    if (android::vold::pathExists(temporary_key)) {
++        success &= android::vold::destroyKey(temporary_key);
++    }
++    return success;
++}
++
+ }  // namespace vold
+ }  // namespace android
+diff --git a/MetadataCrypt.h b/MetadataCrypt.h
+index 6c46237..5576305 100644
+--- a/MetadataCrypt.h
++++ b/MetadataCrypt.h
+@@ -39,6 +39,7 @@ bool defaultkey_setup_ext_volume(const std::string& label, const std::string& bl
+                                  std::string* out_crypto_blkdev);
+ 
+ bool destroy_dsu_metadata_key(const std::string& dsu_slot);
++bool destroy_mountpoint_metadata_key(const std::string& mount_point);
+ 
+ }  // namespace vold
+ }  // namespace android
+diff --git a/VoldNativeService.cpp b/VoldNativeService.cpp
+index 48b1464..b678048 100644
+--- a/VoldNativeService.cpp
++++ b/VoldNativeService.cpp
+@@ -704,6 +704,31 @@ binder::Status VoldNativeService::destroyUserStorageKeys(int32_t userId) {
+     return translateBool(fscrypt_destroy_user_keys(userId));
+ }
+ 
++binder::Status VoldNativeService::destroyUserStorageKeys2(int32_t userId, bool evict) {
++    ENFORCE_SYSTEM_OR_ROOT;
++    ACQUIRE_CRYPT_LOCK;
++    if (userId < 0) {
++        return binder::Status::fromExceptionCode(binder::Status::EX_ILLEGAL_ARGUMENT);
++    }
++    return translateBool(fscrypt_destroy_user_keys(userId, evict));
++}
++
++binder::Status VoldNativeService::destroySystemStorageKey() {
++    ENFORCE_SYSTEM_OR_ROOT;
++    ACQUIRE_CRYPT_LOCK;
++    return translateBool(fscrypt_destroy_system_key());
++}
++
++binder::Status VoldNativeService::destroyMetadataKey(const std::string& mountPointPath) {
++    ENFORCE_SYSTEM_OR_ROOT;
++    ACQUIRE_CRYPT_LOCK;
++    // The duress path destroys the userdata hierarchy, never unrelated fstab entries.
++    if (mountPointPath != "/data") {
++        return binder::Status::fromExceptionCode(binder::Status::EX_ILLEGAL_ARGUMENT);
++    }
++    return translateBool(destroy_mountpoint_metadata_key(mountPointPath));
++}
++
+ binder::Status VoldNativeService::setCeStorageProtection(int32_t userId,
+                                                          const std::vector<uint8_t>& secret) {
+     ENFORCE_SYSTEM_OR_ROOT;
+diff --git a/VoldNativeService.h b/VoldNativeService.h
+index 366f6ac..1256caa 100644
+--- a/VoldNativeService.h
++++ b/VoldNativeService.h
+@@ -118,6 +118,9 @@ class VoldNativeService : public BinderService<VoldNativeService>, public os::Bn
+ 
+     binder::Status createUserStorageKeys(int32_t userId, bool ephemeral);
+     binder::Status destroyUserStorageKeys(int32_t userId);
++    binder::Status destroyUserStorageKeys2(int32_t userId, bool evict) override;
++    binder::Status destroySystemStorageKey() override;
++    binder::Status destroyMetadataKey(const std::string& mountPointPath) override;
+ 
+     binder::Status setCeStorageProtection(int32_t userId, const std::vector<uint8_t>& secret);
+ 
+diff --git a/binder/android/os/IVold.aidl b/binder/android/os/IVold.aidl
+index 5d2d9f1..5c4553a 100644
+--- a/binder/android/os/IVold.aidl
++++ b/binder/android/os/IVold.aidl
+@@ -151,6 +151,11 @@ interface IVold {
+     boolean setWriteBoosterBufferOn(boolean enable);
+     int getWriteBoosterLifeTimeEstimate();
+ 
++    // Append trusted erasure operations after vendor methods to preserve transaction numbers.
++    void destroyUserStorageKeys2(int userId, boolean evict);
++    void destroySystemStorageKey();
++    void destroyMetadataKey(@utf8InCpp String mountPointPath);
++
+     const int FSTRIM_FLAG_DEEP_TRIM = 1;
+ 
+     const int MOUNT_FLAG_PRIMARY = 1;

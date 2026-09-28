@@ -1,17 +1,17 @@
-# Evolution X 16 `onyx` patch set
+# Evolution X 17 `onyx` patch set
 
 Everything I carry on top of upstream Evolution X for the POCO F7 (`onyx`),
 kept as patches so the tree can be `repo sync`'d freely and re-patched
 afterwards. Driven by `apply.sh`.
 
 ```sh
-git clone -b evolution-bka https://github.com/Loukious/crdroid_onyx_patches /tmp/patches
+git clone -b evolution-cnb https://github.com/Loukious/crdroid_onyx_patches /tmp/patches
 /tmp/patches/apply.sh /path/to/rom
 ```
 
 The repo name still says `crdroid` because renaming it would break every URL
-that references it; the contents target Evolution X `bka`. The crDroid-era set
-is preserved on the `crdroid-16.0` branch.
+that references it; the contents target Evolution X `cnb` / Android 17. The
+crDroid-era set is preserved on the `crdroid-16.0` branch.
 
 `apply.sh` is **idempotent** — it reverse-checks each patch first and skips ones
 already applied — and exits non-zero on a genuine failure so a build stops
@@ -25,7 +25,7 @@ rather than shipping a half-patched ROM.
 | `SKIP_WLAN=1` | don't overlay the wlan driver fork over sm8735-modules |
 | `GITHUB_TOKEN` | used for the release API if the kernel repo is private |
 
-## The three features
+## Key carried features
 
 **Gesture navigation space** — an extra settable inset below the gesture pill.
 `frameworks/base` (`Settings.java`, `DisplayPolicy.java`) plus a UI half that is
@@ -41,16 +41,36 @@ Evolver screen and it lands in the wrong menu. There is no Java: Evo's
 `org.evolution.settings.preferences.SystemSettingListPreference` persists the
 value to `Settings.System` itself.
 
-**LHDC A2DP codec** — the big one, spanning six projects:
-`packages/modules/Bluetooth` (the codec itself, ~22.6k lines),
-`vendor/qcom/opensource/interfaces` (the AIDL + frozen `aidl_api` snapshots),
-`build/release` (the `lhdc_codec_support` aconfig value set),
-`packages/modules/common` (`allowed_deps.txt` entries for the new NDK lib),
-`frameworks/base` (`AudioSystem`, `BtHelper`), and `device/xiaomi/onyx`
-(props + the `extract-files.py` blob fixups that byte-patch the two Qualcomm
-offload libs).
+**LHDC A2DP codec** — Android 17 carries the reduced V5/QTI-offload port in
+`packages/modules/Bluetooth`, the QTI Bluetooth Audio AIDL definitions in
+`vendor/qcom/opensource/interfaces`, the `lhdc_codec_support` aconfig value in
+`build/release`, and the Onyx properties/blob fixups in `device/xiaomi/onyx`.
+The old Android 16 aptX Adaptive/LHDCv2/LHDCv3/QHS source-list additions are not
+carried because those source files do not exist in the Android 17 Bluetooth tree
+and are not required for the V5 path.
 
 ## Layout
+
+The Secure Spaces work in `custom-rom` adds framework patches
+`0003-secure-spaces-full-user-type` through
+`0010-secure-space-fingerprint-routing`, Settings patch
+`0002-secure-spaces-management`, the keystore/vold companion patches, and a
+lineage-sdk user-switch observer acknowledgement patch. The service-side routing
+API preserves native credential verification, carries per-user outcomes, and
+issues a one-use handoff capability. Settings requires owner authentication
+before disclosing space names and counts. The current stack includes the native
+key-erasure/duress path, shared-hardware lockscreen fingerprint routing,
+first-touch routing fences, anonymous user-switch transition handling, the
+main-thread bouncer fix, and a dedicated routed fingerprint success haptic. The
+NXP NFC teardown-race fix is preserved separately under
+`patches/hardware_nxp_nfc`. Post-flash runtime validation is still required for
+the patched NFC HAL and the routed fingerprint haptic. See
+[`SECURE_AUTH_IMPLEMENTATION_NOTES.md`](../SECURE_AUTH_IMPLEMENTATION_NOTES.md)
+for scope and validation. The Android 17 focused integration build passes, and
+the full `mka evolution -j12` product build completed successfully on
+2026-09-29. It produced
+`EvolutionX-17.0-20260928-onyx-12.2-Unofficial.zip` (5,295,639,080 bytes,
+SHA-256 `782c20f639771dbbcbb43eb1145cb66cec9b3089a634de0c6556d1860df3093a`).
 
 One directory per git project, project path with `/` → `_`. Patches are
 generated with `git add -N` first, so a patch *creates* new files rather than
@@ -62,35 +82,44 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0002-release-config-bp4a
                                               0003-lhdc-aptx-props-and-blob-fixups
                                               0004-firmware-os3.0.302.0
-                                              0005-drop-crdroid-bcr
 patches/frameworks_base/                      0001-gesture-navbar-space
-                                              0002-lhdc-audio
+                                              0003-secure-spaces-full-user-type
+                                              0004-authentication-user-identity
+                                              0005-secure-space-credential-router
+                                              0006-secure-space-public-switcher-privacy
+                                              0007-secure-auth-key-erasure
+                                              0008-secure-auth-duress-verifier
+                                              0009-secure-space-entry-coordinator
+                                              0010-secure-space-fingerprint-routing
+patches/hardware_nxp_nfc/                     0001-fix-client-thread-teardown-race
+patches/lineage-sdk/                          0001-secure-space-user-switch-observer-acks
 patches/packages_apps_Evolver/                0001-gesture-navbar-space-ui
 patches/packages_apps_Settings/               0001-gesture-navbar-space-ui
+                                              0002-secure-spaces-management
 patches/packages_apps_Updater/                0001-self-hosted-ota-url
-patches/packages_modules_Bluetooth/           0001-lhdc-codec
-patches/packages_modules_common/              0001-lhdc-allowed-deps
+patches/packages_modules_Bluetooth/           0001-lhdc-v5-qti-offload
+patches/system_security/                      0001-secure-auth-biometric-user-scope
+patches/system_vold/                          0001-secure-auth-key-erasure
 patches/vendor_gms/                           0001-keep-aosp-dialer
 patches/vendor_lineage/                       0001-kernel-bin-override
 patches/vendor_qcom_opensource_interfaces/    0001-lhdc-aidl
 patches/vendor_xiaomi_onyx/                   0001-firmware-sha1s-os3.0.302.0
 ```
 
-Every patch is a `git diff` of the working tree. `gen-patches.sh` also supports
-diffing from a ref (`BASE`), because the gesture-navbar-space **UI** halves once
-lived as local *commits* rather than as dirty files, which made a plain
-`git diff` blind to them — every crave build before 2026-08-27 shipped the
-framework half of the feature with no way to reach the setting. Nothing needs
-`BASE` today; it is kept for the next time something gets committed locally.
-**If you add a feature by committing it locally rather than leaving it
-dirty, it will not be picked up unless you give its emit a `BASE`.**
+Most patches are generated from the working-tree diff. Secure Spaces is
+intentionally committed in local feature commits and mirrored in the user's
+forks, so `gen-patches.sh` generates those patches from pinned, audited
+base/end commit ranges. This captures the committed feature without sweeping in
+unrelated dirty gesture-navigation or Settings storage changes. The generator
+also refuses to run when a managed source repo already has staged work, and it
+updates only patch files it owns instead of deleting the whole patch directory.
 
 ## Build identity
 
 Nothing to patch. `vendor_evolution/config/version.mk` has
 `EVO_BUILD_TYPE ?= Unofficial`, so an unofficial build is what you get by
 default, and the zip comes out
-`EvolutionX-16.0-<date>-onyx-11.10-Unofficial.zip`.
+`EvolutionX-17.0-<date>-onyx-12.2-Unofficial.zip`.
 
 There is no maintainer preference in Evolution X's Settings at all — every
 `maintainer` hit in that tree is `PrivateSpaceMaintainer`, and the name only
@@ -157,21 +186,20 @@ There is no OTA-metadata overlay any more. crDroid had a build-time
 buildtype / donate fields; Evolution X has no equivalent, so
 `overlay_ota_metadata()` and its preflight check were removed along with it.
 
-## Evolution X migration state (2026-08-28)
+## Evolution X migration state (2026-09-28)
 
-The ROM base moved from crDroid 16.0 to **Evolution X `bka`** — `bka`, not the
-newer `cnb`: `bka` is Android 16 (`lineage-23.2`, `android-16.0.0_r4`) and
-matches this device tree, its `bp4a` release config, the OS3.0.302.0 blobs and
-the kernel. `cnb` is Android 17 and would be an OS jump on top of a ROM swap.
+The ROM base is now **Evolution X `cnb` / Android 17**. The main Onyx device,
+hardware, kernel and vendor projects are synced to their `17.0` branches. The
+MIUI camera helper/vendor projects remain on `16.0-onyx` because an Onyx
+`17.0-onyx` branch is not published for them.
 
-The device tree is still crDroid's (`crdroidandroid/android_device_xiaomi_onyx`
-@ `16.0`) and drops in unrenamed: `PRODUCT_NAME := lineage_onyx`,
-`lineage_onyx.mk` inherits `vendor/lineage/config/common_full_phone.mk` which
-`vendor_evolution` ships, and `breakfast onyx` resolves to
-`lineage_onyx-bp4a-userdebug` — byte-identical to what it was under crDroid.
+The device tree remains crDroid's
+(`crdroidandroid/android_device_xiaomi_onyx` @ `17.0`) and continues to build
+as `lineage_onyx` under Evolution X. The Android 17 sync and patch rebase were
+completed before the current focused/product builds.
 
-**Patch count went 20 → 17** (16 of the original 20 kept, plus one new: `0005-drop-crdroid-bcr`). Four were deleted outright, because Evolution X
-already does the thing:
+Several older Evolution/crDroid compatibility patches are no longer needed
+because the Android 17 sources already contain the required behavior:
 
 | Deleted | Why |
 |---|---|
@@ -180,29 +208,16 @@ already does the thing:
 | `vendor_lineage/0003-unofficial-buildtype` | `EVO_BUILD_TYPE ?= Unofficial` is the default. |
 | `vendor_lineage/0001-roomservice-allow-loukious` | Evo's `roomservice.py` is the older Lineage variant with no `validate_repository()` org allowlist, so there is nothing to allow. |
 
-Rebased and round-trip verified against real Evolution X `bka` clones:
+Rebased and round-trip verified against the synced Evolution X `cnb` tree:
 
 | Patch | State |
 |---|---|
 | `packages_apps_Evolver/0001-gesture-navbar-space-ui` | new — replaces the crDroidSettings patch, which died with crDroid |
 | `packages_apps_Settings/0001-gesture-navbar-space-ui` | rewritten. Evo's `SystemSettingListPreference` persists to `Settings.System` itself, so the 43 lines of Java the crDroid version carried are gone; the patch is now one XML block |
-| `packages_apps_Updater/0001-self-hosted-ota-url` | re-aimed at Evo's `strings.xml` and at the `evolution-bka` branch of this repo |
+| `packages_apps_Updater/0001-self-hosted-ota-url` | re-aimed at Evo's `strings.xml` and at the current `evolution-cnb` branch of this repo |
 
-Still to rebase against the synced tree:
-
-- `frameworks_base/0001-gesture-navbar-space` — Evo `bka` *does* declare
-  `GESTURE_NAVBAR_LENGTH_MODE`, `GESTURE_NAVBAR_HEIGHT_MODE` and
-  `GESTURE_NAVBAR_AUTO_HIDE`, and declares nothing named `GESTURE_NAVBAR_SPACE`,
-  so the feature is genuinely ours and the `Settings.java` half should land
-  cleanly. `DisplayPolicy.java` is 7 hunks deep and needs the synced tree to
-  rebase honestly.
-- `vendor_lineage/0001-kernel-bin-override` — same path, different repo:
-  `vendor/lineage` is where `vendor_evolution` mounts. The anchor survives
-  (`build/tasks/kernel.mk` is 839 lines; the `TARGET_NO_KERNEL_OVERRIDE` region
-  runs 106–838 and `$(INSTALLED_KERNEL_TARGET): $(KERNEL_BIN)` is at 823, up
-  from ~791 under crDroid), so the patch needs renumbered context, not a
-  redesign.
-- the four `device_xiaomi_onyx` patches.
+The current layered tree has already been rebased and focused-build validated;
+there is no remaining Android 16 patch-application step before the product build.
 
 `device_xiaomi_onyx/0002-release-config-bp4a` is **not** droppable, contrary to
 what this file said earlier. It is what turns the LHDC aconfig flags on for the
@@ -216,12 +231,9 @@ references them unconditionally and both a bare `include` and a bare
 `PRODUCT_PACKAGES` entry hard-fail when absent: `packages/apps/NotGameTurbo`
 (`BoardConfig.mk:285`) and `packages/apps/LunarisDolby` (`device.mk:175`).
 
-`vendor/bcr` is the opposite case: Evo already ships bcr as a prebuilt in
-`vendor/extras` (wired by `vendor/lineage/config/telephony.mk:40`), so crDroid's
-copy is *not* synced and `device_xiaomi_onyx/0005` removes the device tree's
-`inherit-product` of it. Without that patch the two would define
-`MODULE.TARGET.APPS.bcr` twice and the build dies at `base_rules.mk:320` —
-caught by the local compile gate on 2026-08-28, before any crave time.
+The old `drop-crdroid-bcr` patch is obsolete on the 17.0 device tree: current
+Onyx sources no longer inherit `vendor/bcr/bcr.mk`, so there is nothing to
+remove.
 
 GApps come from Evolution X now — one variable,
 `WITH_GMS := true` in `vendor/extra`, which makes
@@ -248,3 +260,22 @@ confirmed detection on `onyx`, and Evolution X ships the feature natively, so
 carrying a port is pointless. The removed work is preserved on the
 `nowplaying-archive` branch of this repo (and of `android_vendor_extra`) if it
 is ever needed again.
+
+The continued Secure Auth work also adds framework
+`0007-secure-auth-key-erasure` and `system_vold/0001-secure-auth-key-erasure`.
+They provide native all-user key destruction with preserved IVold transaction
+positions and an inert-backend host test module. The duress flow is wired to the
+native erasure/shutdown path while normal credentials remain on Android's
+LockSettings/Gatekeeper/Weaver/Synthetic Password/FBE stack.
+The public switcher patch includes the internal unfiltered registry snapshot
+used by erasure; public user lists remain filtered for Secure Spaces.
+
+Framework `0008-secure-auth-duress-verifier` stores only dedicated stretched duress
+verifiers. `0009-secure-space-entry-coordinator` adds both lockscreen clients,
+identity-bound Scene proofs, cancellation, native lease revocation, and target-user
+secondary admin policy resolution. The public privacy patch additionally filters
+the power-menu count and public user identity; the Settings patch disables the
+standard Users page inside a Secure Space. The latest lifecycle/privacy changes
+passed the focused Android 17 integration build and the full Evolution X product
+build. Post-flash runtime verification remains for the new NFC teardown path,
+routed fingerprint-success haptic, and LHDC V5 vendor/offload behavior.
