@@ -1,5 +1,24 @@
+diff --git a/core/java/android/app/ActivityManagerInternal.java b/core/java/android/app/ActivityManagerInternal.java
+index 83077ffe76e21..20231b4e2cfcd 100644
+--- a/core/java/android/app/ActivityManagerInternal.java
++++ b/core/java/android/app/ActivityManagerInternal.java
+@@ -361,6 +361,14 @@ public abstract class ActivityManagerInternal {
+      */
+     public abstract Pair<Integer, Integer> getCurrentAndTargetUserIds();
+ 
++    /**
++     * Switches to {@code targetUserId} only if {@code expectedCurrentUserId} is still current and
++     * no other user switch is pending. Unlike the public switch API, this never queues behind an
++     * in-progress switch.
++     */
++    public abstract boolean switchUserIfCurrent(@UserIdInt int expectedCurrentUserId,
++            @UserIdInt int targetUserId);
++
+     /** Returns the current user id. */
+     public abstract int getCurrentUserId();
+ 
 diff --git a/core/java/android/content/pm/UserInfo.java b/core/java/android/content/pm/UserInfo.java
-index 9444edd72..6289f6514 100644
+index 9444edd721063..6289f6514a707 100644
 --- a/core/java/android/content/pm/UserInfo.java
 +++ b/core/java/android/content/pm/UserInfo.java
 @@ -517,12 +517,14 @@ public class UserInfo implements Parcelable {
@@ -19,7 +38,7 @@ index 9444edd72..6289f6514 100644
  
      /**
 diff --git a/core/tests/mockingcoretests/src/android/content/pm/UserInfoTest.java b/core/tests/mockingcoretests/src/android/content/pm/UserInfoTest.java
-index cf8ca95d9..3d430f572 100644
+index cf8ca95d985aa..3d430f5727e15 100644
 --- a/core/tests/mockingcoretests/src/android/content/pm/UserInfoTest.java
 +++ b/core/tests/mockingcoretests/src/android/content/pm/UserInfoTest.java
 @@ -66,6 +66,15 @@ public final class UserInfoTest {
@@ -39,7 +58,7 @@ index cf8ca95d9..3d430f572 100644
      public void testSimple() throws Exception {
          UserInfo ui = createTestUserInfo(FLAG_GUEST);
 diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractorTest.kt
-index d5bfcdcc1..6a0f827f6 100644
+index d5bfcdcc1fca0..6a0f827f6713c 100644
 --- a/packages/SystemUI/multivalentTests/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractorTest.kt
 +++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractorTest.kt
 @@ -277,6 +277,55 @@ class UserSwitcherInteractorTest : SysuiTestCase() {
@@ -99,7 +118,7 @@ index d5bfcdcc1..6a0f827f6 100644
      fun users_switcherEnabled() {
          createUserInteractor()
 diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
-index 0271cf84d..603ff273f 100644
+index 0271cf84de412..603ff273f213b 100644
 --- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
 +++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialogLite.java
 @@ -904,7 +904,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
@@ -114,7 +133,7 @@ index 0271cf84d..603ff273f 100644
                          addIfShouldShowAction(tempActions, new UsersAction());
                      }
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/policy/UserInfoControllerImpl.java b/packages/SystemUI/src/com/android/systemui/statusbar/policy/UserInfoControllerImpl.java
-index 081f2ee93..136e0dca5 100644
+index 081f2ee93f395..136e0dca542f0 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/policy/UserInfoControllerImpl.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/policy/UserInfoControllerImpl.java
 @@ -150,6 +150,10 @@ public class UserInfoControllerImpl implements UserInfoController {
@@ -139,7 +158,7 @@ index 081f2ee93..136e0dca5 100644
                          // Try and read the display name from the local profile
                          final Cursor cursor = context.getContentResolver().query(
 diff --git a/packages/SystemUI/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractor.kt b/packages/SystemUI/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractor.kt
-index df63af8d3..0bd825fbb 100644
+index df63af8d3388b..0bd825fbb984a 100644
 --- a/packages/SystemUI/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractor.kt
 +++ b/packages/SystemUI/src/com/android/systemui/user/domain/interactor/UserSwitcherInteractor.kt
 @@ -125,7 +125,16 @@ constructor(
@@ -255,11 +274,77 @@ index df63af8d3..0bd825fbb 100644
          if (featureFlags.isEnabled(Flags.FULL_SCREEN_USER_SWITCHER)) {
              showDialog(ShowDialogRequestModel.ShowUserSwitcherFullscreenDialog(expandable, context))
          } else {
+diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
+index 348e3eb0771e8..c9bb5d15e06e8 100644
+--- a/services/core/java/com/android/server/am/ActivityManagerService.java
++++ b/services/core/java/com/android/server/am/ActivityManagerService.java
+@@ -18116,6 +18116,11 @@ public class ActivityManagerService extends IActivityManager.Stub
+             return mUserController.getCurrentAndTargetUserIds();
+         }
+ 
++        @Override
++        public boolean switchUserIfCurrent(int expectedCurrentUserId, int targetUserId) {
++            return mUserController.switchUserIfCurrent(expectedCurrentUserId, targetUserId);
++        }
++
+         @Override
+         public int getCurrentUserId() {
+             return mUserController.getCurrentUserId();
 diff --git a/services/core/java/com/android/server/am/UserController.java b/services/core/java/com/android/server/am/UserController.java
-index 971216ef4..8d83a604a 100644
+index 971216ef428cb..8eddf3693bdfa 100644
 --- a/services/core/java/com/android/server/am/UserController.java
 +++ b/services/core/java/com/android/server/am/UserController.java
-@@ -2562,8 +2562,11 @@ class UserController implements Handler.Callback {
+@@ -2522,12 +2522,36 @@ class UserController implements Handler.Callback {
+     }
+ 
+     boolean switchUser(final int targetUserId) {
++        return switchUserInternal(UserHandle.USER_NULL, targetUserId, true /* queueIfBusy */);
++    }
++
++    /**
++     * Starts a switch only while the expected origin is still current and no other switch exists.
++     * This is deliberately non-queuing so a security-sensitive authorization cannot be replayed
++     * after an unrelated foreground-user transition completes.
++     */
++    boolean switchUserIfCurrent(final int expectedCurrentUserId, final int targetUserId) {
++        if (expectedCurrentUserId == UserHandle.USER_NULL) return false;
++        return switchUserInternal(expectedCurrentUserId, targetUserId, false /* queueIfBusy */);
++    }
++
++    private boolean switchUserInternal(final int expectedCurrentUserId, final int targetUserId,
++            boolean queueIfBusy) {
+         enforceShellRestriction(UserManager.DISALLOW_DEBUGGING_FEATURES, targetUserId);
+         EventLog.writeEvent(EventLogTags.UC_SWITCH_USER, targetUserId);
+-        int currentUserId = getCurrentUserId();
+         UserInfo targetUserInfo = getUserInfo(targetUserId);
+         boolean userSwitchUiEnabled;
++        final int currentUserId;
+         synchronized (mLock) {
++            currentUserId = mCurrentUserId;
++            if (expectedCurrentUserId != UserHandle.USER_NULL
++                    && (currentUserId != expectedCurrentUserId
++                            || mTargetUserId != UserHandle.USER_NULL)) {
++                Slogf.w(TAG, "Conditional user switch rejected: expected current User #"
++                        + expectedCurrentUserId + ", actual current User #" + currentUserId
++                        + ", target User #" + mTargetUserId);
++                return false;
++            }
+             if (targetUserId == currentUserId && mTargetUserId == UserHandle.USER_NULL) {
+                 Slogf.i(TAG, "user #" + targetUserId + " is already the current user");
+                 mHandler.post(this::endUserSwitch);
+@@ -2553,6 +2577,11 @@ class UserController implements Handler.Callback {
+                 return false;
+             }
+             if (mTargetUserId != UserHandle.USER_NULL) {
++                if (!queueIfBusy) {
++                    Slogf.w(TAG, "Conditional user switch rejected: switch to User #"
++                            + mTargetUserId + " already in progress");
++                    return false;
++                }
+                 Slogf.w(TAG, "There is already an ongoing user switch to User #" + mTargetUserId
+                         + ". User #" + targetUserId + " will be added to the queue.");
+                 mPendingTargetUserIds.offer(targetUserId);
+@@ -2562,8 +2591,11 @@ class UserController implements Handler.Callback {
              ActivityManager.invalidateGetCurrentUserIdCache();
              userSwitchUiEnabled = mUserSwitchUiEnabled;
          }
@@ -273,7 +358,7 @@ index 971216ef4..8d83a604a 100644
              mUiHandler.removeMessages(START_USER_SWITCH_UI_MSG);
              mUiHandler.sendMessage(mUiHandler.obtainMessage(
 diff --git a/services/core/java/com/android/server/am/UserSwitchingDialog.java b/services/core/java/com/android/server/am/UserSwitchingDialog.java
-index 398728918..a6af12ea3 100644
+index 3987289183c05..a6af12ea37043 100644
 --- a/services/core/java/com/android/server/am/UserSwitchingDialog.java
 +++ b/services/core/java/com/android/server/am/UserSwitchingDialog.java
 @@ -131,16 +131,26 @@ class UserSwitchingDialog extends Dialog {
@@ -320,7 +405,7 @@ index 398728918..a6af12ea3 100644
          final String iconPath = mIsLogout ? mOldUser.iconPath : mNewUser.iconPath;
          final Bitmap bmp = ObjectUtils.getOrElse(BitmapFactory.decodeFile(iconPath),
 diff --git a/services/core/java/com/android/server/pm/UserManagerService.java b/services/core/java/com/android/server/pm/UserManagerService.java
-index d34c9157f..307a4842f 100644
+index d34c9157f1515..307a4842f6c37 100644
 --- a/services/core/java/com/android/server/pm/UserManagerService.java
 +++ b/services/core/java/com/android/server/pm/UserManagerService.java
 @@ -3333,6 +3333,13 @@ public class UserManagerService extends IUserManager.Stub {
@@ -356,10 +441,10 @@ index d34c9157f..307a4842f 100644
          public @NonNull List<UserInfo> getUsers(boolean excludeDying) {
              if (!android.multiuser.Flags.userFilterRefactoring()) {
 diff --git a/services/tests/servicestests/src/com/android/server/am/UserControllerTest.java b/services/tests/servicestests/src/com/android/server/am/UserControllerTest.java
-index e54bb0bad..d36890fbd 100644
+index e54bb0bad7ac1..fcde233c5e1e1 100644
 --- a/services/tests/servicestests/src/com/android/server/am/UserControllerTest.java
 +++ b/services/tests/servicestests/src/com/android/server/am/UserControllerTest.java
-@@ -272,6 +272,23 @@ public class UserControllerTest {
+@@ -272,6 +272,60 @@ public class UserControllerTest {
      }
  
  
@@ -378,6 +463,43 @@ index e54bb0bad..d36890fbd 100644
 +                UserController.START_USER_SWITCH_UI_MSG);
 +        verify(mInjector, never()).showUserSwitchingDialog(
 +                any(), any(), any(), any(), anyBoolean(), any());
++    }
++
++    @Test
++    public void switchUserIfCurrent_startsOnlyFromExpectedIdleOrigin() {
++        setUpUser(TEST_USER_ID1, DEFAULT_USER_FLAGS);
++        mInjector.mHandler.mRunCallbacksImmediately = false;
++
++        assertTrue(mUserController.switchUserIfCurrent(SYSTEM_USER_ID, TEST_USER_ID1));
++
++        var users = mUserController.getCurrentAndTargetUserIds();
++        assertEquals(SYSTEM_USER_ID, users.first.intValue());
++        assertEquals(TEST_USER_ID1, users.second.intValue());
++    }
++
++    @Test
++    public void switchUserIfCurrent_busySwitchRefusesInsteadOfQueuing() {
++        setUpUser(TEST_USER_ID1, DEFAULT_USER_FLAGS);
++        setUpUser(TEST_USER_ID2, DEFAULT_USER_FLAGS);
++        mInjector.mHandler.mRunCallbacksImmediately = false;
++
++        assertTrue(mUserController.switchUser(TEST_USER_ID1));
++        assertFalse(mUserController.switchUserIfCurrent(SYSTEM_USER_ID, TEST_USER_ID2));
++
++        var users = mUserController.getCurrentAndTargetUserIds();
++        assertEquals(SYSTEM_USER_ID, users.first.intValue());
++        assertEquals(TEST_USER_ID1, users.second.intValue());
++    }
++
++    @Test
++    public void switchUserIfCurrent_wrongOriginFailsClosed() {
++        setUpUser(TEST_USER_ID1, DEFAULT_USER_FLAGS);
++
++        assertFalse(mUserController.switchUserIfCurrent(TEST_USER_ID2, TEST_USER_ID1));
++
++        var users = mUserController.getCurrentAndTargetUserIds();
++        assertEquals(SYSTEM_USER_ID, users.first.intValue());
++        assertEquals(UserHandle.USER_NULL, users.second.intValue());
 +    }
 +
      @Test

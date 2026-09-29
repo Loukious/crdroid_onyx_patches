@@ -27,7 +27,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # a later repo sync or unrelated local commit from silently changing generated
 # security-sensitive patches.
 FRAMEWORK_SECURE_BASE="${FRAMEWORK_SECURE_BASE:-4f5b74dd19f11e846536f5cda1004a54dba42a0a}"
-FRAMEWORK_SECURE_END="${FRAMEWORK_SECURE_END:-7f7389d31fcc955c54df3286e33f1ad3a7df2650}"
+FRAMEWORK_SECURE_END="${FRAMEWORK_SECURE_END:-b726744f59a3b4d81763885b5142c872ac777736}"
 SETTINGS_SECURE_BASE="${SETTINGS_SECURE_BASE:-36d32b115a6ce46e8b3098b62ccd1fe5a1f80fc0}"
 SETTINGS_SECURE_END="${SETTINGS_SECURE_END:-5abf5fa3c5bfce68f3e04f372db51bf94b6724df}"
 LINEAGE_SECURE_BASE="${LINEAGE_SECURE_BASE:-c3efc4ee11e2348a058f71b021e2ab4c403fdc64}"
@@ -310,6 +310,7 @@ if [ -f "$ROM/frameworks/base/services/core/java/com/android/server/locksettings
         services/core/java/com/android/server/locksettings/SecureSpaceCredentialHandoff.java \
         services/core/java/com/android/server/locksettings/LockSettingsStrongAuth.java \
         services/tests/servicestests/Android.bp \
+        services/tests/servicestests/src/com/android/server/locksettings/LockSettingsServiceTests.java \
         services/tests/servicestests/src/com/android/server/locksettings/SecureSpaceCredentialRouterTest.java \
         services/tests/servicestests/src/com/android/server/locksettings/SecureSpaceCredentialHandoffTest.java \
         services/tests/servicestests/SecureSpaceCredentialRouterTests.xml
@@ -317,8 +318,10 @@ fi
 
 if [ -f "$ROM/frameworks/base/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinator.java" ]; then
     emit_committed frameworks/base 0006-secure-space-public-switcher-privacy.patch \
+        core/java/android/app/ActivityManagerInternal.java \
         core/java/android/content/pm/UserInfo.java \
         core/tests/mockingcoretests/src/android/content/pm/UserInfoTest.java \
+        services/core/java/com/android/server/am/ActivityManagerService.java \
         services/core/java/com/android/server/am/UserController.java \
         services/core/java/com/android/server/am/UserSwitchingDialog.java \
         services/core/java/com/android/server/pm/UserManagerService.java \

@@ -1,8 +1,8 @@
 diff --git a/core/java/android/hardware/fingerprint/FingerprintCallback.java b/core/java/android/hardware/fingerprint/FingerprintCallback.java
-index e4fbe6e09..8ad7f5534 100644
+index e4fbe6e097096..ba430f6774d89 100644
 --- a/core/java/android/hardware/fingerprint/FingerprintCallback.java
 +++ b/core/java/android/hardware/fingerprint/FingerprintCallback.java
-@@ -169,6 +169,14 @@ public class FingerprintCallback {
+@@ -169,6 +169,26 @@ public class FingerprintCallback {
      /**
       * Propagate authentication failed via the callback.
       */
@@ -14,14 +14,26 @@ index e4fbe6e09..8ad7f5534 100644
 +        }
 +    }
 +
++    public void sendSecureSpaceIdentificationSucceeded(int sensorId, int fingerId,
++            int originUserId, int originSerial, long originForegroundGeneration,
++            long originSessionEpoch, long originProtectorId, int destinationUserId,
++            int destinationSerial, long destinationSecureUserId, long destinationProtectorId) {
++        if (mAuthenticationCallback != null) {
++            mAuthenticationCallback.onSecureSpaceIdentificationSucceeded(sensorId, fingerId,
++                    originUserId, originSerial, originForegroundGeneration, originSessionEpoch,
++                    originProtectorId, destinationUserId, destinationSerial,
++                    destinationSecureUserId, destinationProtectorId);
++        }
++    }
++
      public void sendAuthenticatedFailed() {
          if (mAuthenticationCallback != null) {
              mAuthenticationCallback.onAuthenticationFailed();
 diff --git a/core/java/android/hardware/fingerprint/FingerprintManager.java b/core/java/android/hardware/fingerprint/FingerprintManager.java
-index 3b865ec0e..6009c2e31 100644
+index 3b865ec0e994a..793d981db72db 100644
 --- a/core/java/android/hardware/fingerprint/FingerprintManager.java
 +++ b/core/java/android/hardware/fingerprint/FingerprintManager.java
-@@ -401,6 +401,12 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
+@@ -401,6 +401,19 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
           */
          public void onAuthenticationSucceeded(AuthenticationResult result) { }
  
@@ -30,11 +42,18 @@ index 3b865ec0e..6009c2e31 100644
 +                int originSerial, int destinationUserId, int destinationSerial,
 +                boolean strongBiometric) {}
 +
++        /** @hide Identifies a locked Secure Space; the destination still requires primary auth. */
++        public void onSecureSpaceIdentificationSucceeded(int sensorId, int fingerId,
++                int originUserId, int originSerial, long originForegroundGeneration,
++                long originSessionEpoch, long originProtectorId, int destinationUserId,
++                int destinationSerial, long destinationSecureUserId,
++                long destinationProtectorId) {}
++
 +
          /**
           * Called when a fingerprint is valid but not recognized.
           */
-@@ -1607,6 +1613,14 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
+@@ -1607,6 +1620,26 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
                      isStrongBiometric));
          }
  
@@ -46,10 +65,22 @@ index 3b865ec0e..6009c2e31 100644
 +                    token, originUserId, originSerial, destinationUserId, destinationSerial, strongBiometric));
 +        }
 +
++        @Override
++        public void onSecureSpaceIdentificationSucceeded(int sensorId, int fingerId,
++                int originUserId, int originSerial, long originForegroundGeneration,
++                long originSessionEpoch, long originProtectorId, int destinationUserId,
++                int destinationSerial, long destinationSecureUserId,
++                long destinationProtectorId) {
++            mExecutor.execute(() -> mFingerprintCallback.sendSecureSpaceIdentificationSucceeded(
++                    sensorId, fingerId, originUserId, originSerial, originForegroundGeneration,
++                    originSessionEpoch, originProtectorId, destinationUserId, destinationSerial,
++                    destinationSecureUserId, destinationProtectorId));
++        }
++
          @Override
          public void onFingerprintDetected(int sensorId, int userId, boolean isStrongBiometric) {
              mExecutor.execute(() -> mFingerprintCallback.sendFingerprintDetected(sensorId, userId,
-@@ -1650,4 +1664,13 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
+@@ -1650,4 +1683,46 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
              mExecutor.execute(mFingerprintCallback::sendUdfpsOverlayShown);
          }
      }
@@ -62,12 +93,45 @@ index 3b865ec0e..6009c2e31 100644
 +            return false;
 +        }
 +    }
++
++    /** @hide */
++    public boolean isSecureSpaceIdentificationCurrent(int sensorId, int fingerId,
++            int originUserId, int originSerial, long originForegroundGeneration,
++            long originSessionEpoch, long originProtectorId, int destinationUserId,
++            int destinationSerial, long destinationSecureUserId, long destinationProtectorId) {
++        if (mService == null) return false;
++        try {
++            return mService.isSecureSpaceIdentificationCurrent(mContext.getOpPackageName(),
++                    sensorId, fingerId, originUserId, originSerial, originForegroundGeneration,
++                    originSessionEpoch, originProtectorId, destinationUserId, destinationSerial,
++                    destinationSecureUserId, destinationProtectorId);
++        } catch (RemoteException | RuntimeException error) {
++            return false;
++        }
++    }
++
++    /** @hide */
++    public boolean switchSecureSpaceIdentification(int sensorId, int fingerId,
++            int originUserId, int originSerial, long originForegroundGeneration,
++            long originSessionEpoch, long originProtectorId, int destinationUserId,
++            int destinationSerial, long destinationSecureUserId, long destinationProtectorId,
++            com.android.internal.widget.ISecureSpaceCredentialAttempt witness) {
++        if (mService == null) return false;
++        try {
++            return mService.switchSecureSpaceIdentification(mContext.getOpPackageName(),
++                    sensorId, fingerId, originUserId, originSerial, originForegroundGeneration,
++                    originSessionEpoch, originProtectorId, destinationUserId, destinationSerial,
++                    destinationSecureUserId, destinationProtectorId, witness);
++        } catch (RemoteException | RuntimeException error) {
++            return false;
++        }
++    }
  }
 diff --git a/core/java/android/hardware/fingerprint/FingerprintServiceReceiver.java b/core/java/android/hardware/fingerprint/FingerprintServiceReceiver.java
-index 89d710d4a..9116c3312 100644
+index 89d710d4adfeb..8e9c03cd5b288 100644
 --- a/core/java/android/hardware/fingerprint/FingerprintServiceReceiver.java
 +++ b/core/java/android/hardware/fingerprint/FingerprintServiceReceiver.java
-@@ -39,6 +39,11 @@ public class FingerprintServiceReceiver extends IFingerprintServiceReceiver.Stub
+@@ -39,6 +39,17 @@ public class FingerprintServiceReceiver extends IFingerprintServiceReceiver.Stub
  
      }
  
@@ -76,33 +140,62 @@ index 89d710d4a..9116c3312 100644
 +            int originSerial, int destinationUserId, int destinationSerial, boolean strongBiometric)
 +            throws RemoteException {}
 +
++    @Override
++    public void onSecureSpaceIdentificationSucceeded(int sensorId, int fingerId, int originUserId,
++            int originSerial, long originForegroundGeneration, long originSessionEpoch,
++            long originProtectorId, int destinationUserId, int destinationSerial,
++            long destinationSecureUserId, long destinationProtectorId) throws RemoteException {}
++
      @Override
      public void onFingerprintDetected(int sensorId, int userId, boolean isStrongBiometric)
              throws RemoteException {
 diff --git a/core/java/android/hardware/fingerprint/IFingerprintService.aidl b/core/java/android/hardware/fingerprint/IFingerprintService.aidl
-index 370f097b6..42d2c61e9 100644
+index 370f097b68507..7506275e23ab0 100644
 --- a/core/java/android/hardware/fingerprint/IFingerprintService.aidl
 +++ b/core/java/android/hardware/fingerprint/IFingerprintService.aidl
-@@ -222,4 +222,6 @@ interface IFingerprintService {
+@@ -32,6 +32,7 @@ import android.hardware.fingerprint.FingerprintAuthenticateOptions;
+ import android.hardware.fingerprint.FingerprintEnrollOptions;
+ import android.hardware.fingerprint.FingerprintSensorPropertiesInternal;
+ import android.hardware.fingerprint.FingerprintSensorConfigurations;
++import com.android.internal.widget.ISecureSpaceCredentialAttempt;
+ import java.util.List;
+ 
+ /**
+@@ -222,4 +223,17 @@ interface IFingerprintService {
      // Ensures that the scheduler is not stuck.
      @EnforcePermission("USE_BIOMETRIC_INTERNAL")
      oneway void scheduleWatchdog();
 +    // Trusted keyguard-only union availability; no public user/template metadata.
 +    boolean hasSecureSpaceRoutingCandidate(String opPackageName);
++    // Trusted keyguard-only freshness check before an identification-only concealed-user switch.
++    boolean isSecureSpaceIdentificationCurrent(String opPackageName, int sensorId, int fingerId,
++            int originUserId, int originSerial, long originForegroundGeneration,
++            long originSessionEpoch, long originProtectorId, int destinationUserId,
++            int destinationSerial, long destinationSecureUserId, long destinationProtectorId);
++    // Trusted keyguard-only atomic switch; refuses instead of queuing behind another user switch.
++    boolean switchSecureSpaceIdentification(String opPackageName, int sensorId, int fingerId,
++            int originUserId, int originSerial, long originForegroundGeneration,
++            long originSessionEpoch, long originProtectorId, int destinationUserId,
++            int destinationSerial, long destinationSecureUserId, long destinationProtectorId,
++            ISecureSpaceCredentialAttempt witness);
  }
 diff --git a/core/java/android/hardware/fingerprint/IFingerprintServiceReceiver.aidl b/core/java/android/hardware/fingerprint/IFingerprintServiceReceiver.aidl
-index 91a32d783..b6ecbaa6e 100644
+index 91a32d78314c2..9d4087e101c91 100644
 --- a/core/java/android/hardware/fingerprint/IFingerprintServiceReceiver.aidl
 +++ b/core/java/android/hardware/fingerprint/IFingerprintServiceReceiver.aidl
-@@ -33,4 +33,6 @@ oneway interface IFingerprintServiceReceiver {
+@@ -33,4 +33,10 @@ oneway interface IFingerprintServiceReceiver {
      void onUdfpsPointerDown(int sensorId);
      void onUdfpsPointerUp(int sensorId);
      void onUdfpsOverlayShown();
 +    void onSecureSpaceAuthenticationSucceeded(IBinder token, int originUserId, int originSerial,
 +            int destinationUserId, int destinationSerial, boolean strongBiometric);
++    void onSecureSpaceIdentificationSucceeded(int sensorId, int fingerId, int originUserId,
++            int originSerial, long originForegroundGeneration, long originSessionEpoch,
++            long originProtectorId, int destinationUserId, int destinationSerial,
++            long destinationSecureUserId, long destinationProtectorId);
  }
 diff --git a/keystore/java/android/security/KeyStoreAuthorization.java b/keystore/java/android/security/KeyStoreAuthorization.java
-index e865d6dc8..d0370568b 100644
+index e865d6dc80f05..d0370568be9c2 100644
 --- a/keystore/java/android/security/KeyStoreAuthorization.java
 +++ b/keystore/java/android/security/KeyStoreAuthorization.java
 @@ -76,6 +76,19 @@ public class KeyStoreAuthorization {
@@ -126,7 +219,7 @@ index e865d6dc8..d0370568b 100644
          return addAuthToken(AuthTokenUtils.toHardwareAuthToken(authToken));
      }
 diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorTest.kt
-index 1cd37c1fb..848464895 100644
+index 1cd37c1fb1511..84846489553d0 100644
 --- a/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorTest.kt
 +++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractorTest.kt
 @@ -59,6 +59,35 @@ class DeviceEntryHapticsInteractorTest : SysuiTestCase() {
@@ -166,7 +259,7 @@ index 1cd37c1fb..848464895 100644
      fun powerButtonFPS_vibrateSuccess() =
          kosmos.runTest {
 diff --git a/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractor.kt b/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractor.kt
-index 452cc435a..8249862c9 100644
+index 452cc435a36db..8249862c97cb3 100644
 --- a/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractor.kt
 +++ b/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceEntryHapticsInteractor.kt
 @@ -31,6 +31,7 @@ import com.android.systemui.util.kotlin.sample
@@ -245,7 +338,7 @@ index 452cc435a..8249862c9 100644
          merge(
                  deviceEntryFingerprintAuthInteractor.fingerprintFailure,
 diff --git a/services/core/java/com/android/server/biometrics/AuthService.java b/services/core/java/com/android/server/biometrics/AuthService.java
-index 393b67e84..cfdd68b68 100644
+index 393b67e84620d..cfdd68b68b783 100644
 --- a/services/core/java/com/android/server/biometrics/AuthService.java
 +++ b/services/core/java/com/android/server/biometrics/AuthService.java
 @@ -301,6 +301,16 @@ public class AuthService extends SystemService {
@@ -266,7 +359,7 @@ index 393b67e84..cfdd68b68 100644
              final int callingUserId = UserHandle.getCallingUserId();
              final int callingUid = Binder.getCallingUid();
 diff --git a/services/core/java/com/android/server/biometrics/AuthSession.java b/services/core/java/com/android/server/biometrics/AuthSession.java
-index ee2f0fc2f..13c966e7d 100644
+index ee2f0fc2fe35c..13c966e7d5e0a 100644
 --- a/services/core/java/com/android/server/biometrics/AuthSession.java
 +++ b/services/core/java/com/android/server/biometrics/AuthSession.java
 @@ -915,7 +915,7 @@ public final class AuthSession implements IBinder.DeathRecipient {
@@ -279,7 +372,7 @@ index ee2f0fc2f..13c966e7d 100644
                      } else {
                          Slog.e(TAG, "mTokenEscrow is null");
 diff --git a/services/core/java/com/android/server/biometrics/BiometricService.java b/services/core/java/com/android/server/biometrics/BiometricService.java
-index 43891f57f..ce84d6bac 100644
+index 43891f57ffabc..ce84d6bac6f5c 100644
 --- a/services/core/java/com/android/server/biometrics/BiometricService.java
 +++ b/services/core/java/com/android/server/biometrics/BiometricService.java
 @@ -1006,6 +1006,16 @@ public class BiometricService extends SystemService {
@@ -301,7 +394,7 @@ index 43891f57f..ce84d6bac 100644
                  Slog.e(TAG, "Unable to authenticate, one or more null arguments");
 diff --git a/services/core/java/com/android/server/biometrics/BiometricUserScope.java b/services/core/java/com/android/server/biometrics/BiometricUserScope.java
 new file mode 100644
-index 000000000..112c11304
+index 0000000000000..112c113040a16
 --- /dev/null
 +++ b/services/core/java/com/android/server/biometrics/BiometricUserScope.java
 @@ -0,0 +1,43 @@
@@ -349,7 +442,7 @@ index 000000000..112c11304
 +    }
 +}
 diff --git a/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java b/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java
-index 48b35269c..a855f8c50 100644
+index 48b35269c7496..a855f8c50893e 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java
 @@ -173,6 +173,21 @@ public abstract class AuthenticationClient<T, O extends AuthenticateOptions>
@@ -385,10 +478,10 @@ index 48b35269c..a855f8c50 100644
                      Slog.d(TAG, "Error adding auth token : " + result);
                  } else {
 diff --git a/services/core/java/com/android/server/biometrics/sensors/ClientMonitorCallbackConverter.java b/services/core/java/com/android/server/biometrics/sensors/ClientMonitorCallbackConverter.java
-index 1fc7c70de..6afaeceff 100644
+index 1fc7c70de8fb0..75757c40f8c67 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/ClientMonitorCallbackConverter.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/ClientMonitorCallbackConverter.java
-@@ -45,6 +45,16 @@ public class ClientMonitorCallbackConverter {
+@@ -45,6 +45,29 @@ public class ClientMonitorCallbackConverter {
      private final IFaceServiceReceiver mFaceServiceReceiver; // FaceManager
      private final IFingerprintServiceReceiver mFingerprintServiceReceiver; // FingerprintManager
  
@@ -402,14 +495,43 @@ index 1fc7c70de..6afaeceff 100644
 +                originSerial, destinationUserId, destinationSerial, strongBiometric);
 +    }
 +
++    public void onSecureSpaceIdentificationSucceeded(int sensorId, int fingerId, int originUserId,
++            int originSerial, long originForegroundGeneration, long originSessionEpoch,
++            long originProtectorId, int destinationUserId, int destinationSerial,
++            long destinationSecureUserId, long destinationProtectorId) throws android.os.RemoteException {
++        if (mFingerprintServiceReceiver == null) {
++            throw new IllegalStateException("Only a trusted keyguard fingerprint receiver can route");
++        }
++        mFingerprintServiceReceiver.onSecureSpaceIdentificationSucceeded(sensorId, fingerId,
++                originUserId, originSerial, originForegroundGeneration, originSessionEpoch,
++                originProtectorId, destinationUserId, destinationSerial, destinationSecureUserId,
++                destinationProtectorId);
++    }
++
      public ClientMonitorCallbackConverter(IBiometricSensorReceiver sensorReceiver) {
          mSensorReceiver = sensorReceiver;
          mFaceServiceReceiver = null;
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java
-index 29c126753..26dcdab1a 100644
+index 29c12675361ad..ef0a82abab2c7 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java
-@@ -264,6 +264,30 @@ public class FingerprintService extends SystemService {
+@@ -31,6 +31,7 @@ import static android.hardware.fingerprint.FingerprintSensorConfigurations.getIF
+ import android.annotation.NonNull;
+ import android.annotation.Nullable;
+ import android.app.ActivityManager;
++import android.app.ActivityManagerInternal;
+ import android.app.AppOpsManager;
+ import android.content.Context;
+ import android.content.pm.PackageManager;
+@@ -82,6 +83,7 @@ import com.android.internal.annotations.VisibleForTesting;
+ import com.android.internal.util.ArrayUtils;
+ import com.android.internal.util.DumpUtils;
+ import com.android.internal.widget.LockPatternUtils;
++import com.android.server.LocalServices;
+ import com.android.server.SystemService;
+ import com.android.server.biometrics.Utils;
+ import com.android.server.biometrics.log.BiometricContext;
+@@ -264,6 +266,84 @@ public class FingerprintService extends SystemService {
          }
  
          @SuppressWarnings("deprecation")
@@ -422,6 +544,60 @@ index 29c126753..26dcdab1a 100644
 +            final long identity = Binder.clearCallingIdentity();
 +            try {
 +                return hasSecureSpaceRoutingCandidateInternal();
++            } finally {
++                Binder.restoreCallingIdentity(identity);
++            }
++        }
++
++        @SuppressWarnings("deprecation")
++        @Override
++        public boolean isSecureSpaceIdentificationCurrent(String packageName, int sensorId,
++                int fingerId, int originUserId, int originSerial,
++                long originForegroundGeneration, long originSessionEpoch, long originProtectorId,
++                int destinationUserId, int destinationSerial, long destinationSecureUserId,
++                long destinationProtectorId) {
++            mAppOps.checkPackage(Binder.getCallingUid(), packageName);
++            if (!Utils.isKeyguard(getContext(), packageName)) {
++                throw new SecurityException("Fingerprint identification freshness is keyguard-only");
++            }
++            final long identity = Binder.clearCallingIdentity();
++            try {
++                return SecureSpaceFingerprintPool.isIdentificationSwitchEligible(getContext(),
++                        sensorId, fingerId, originUserId, originSerial, originForegroundGeneration,
++                        originSessionEpoch, originProtectorId, destinationUserId, destinationSerial,
++                        destinationSecureUserId, destinationProtectorId);
++            } finally {
++                Binder.restoreCallingIdentity(identity);
++            }
++        }
++
++        @SuppressWarnings("deprecation")
++        @Override
++        public boolean switchSecureSpaceIdentification(String packageName, int sensorId,
++                int fingerId, int originUserId, int originSerial,
++                long originForegroundGeneration, long originSessionEpoch, long originProtectorId,
++                int destinationUserId, int destinationSerial, long destinationSecureUserId,
++                long destinationProtectorId,
++                com.android.internal.widget.ISecureSpaceCredentialAttempt witness) {
++            mAppOps.checkPackage(Binder.getCallingUid(), packageName);
++            if (!Utils.isKeyguard(getContext(), packageName)) {
++                throw new SecurityException("Fingerprint identification switch is keyguard-only");
++            }
++            final long identity = Binder.clearCallingIdentity();
++            try {
++                if (witness == null || !witness.isActive()) return false;
++                if (!SecureSpaceFingerprintPool.isIdentificationSwitchEligible(getContext(),
++                        sensorId, fingerId, originUserId, originSerial,
++                        originForegroundGeneration, originSessionEpoch, originProtectorId,
++                        destinationUserId, destinationSerial, destinationSecureUserId,
++                        destinationProtectorId)) {
++                    return false;
++                }
++                if (!witness.isActive()) return false;
++                ActivityManagerInternal am = LocalServices.getService(ActivityManagerInternal.class);
++                return am != null && am.switchUserIfCurrent(originUserId, destinationUserId);
++            } catch (RemoteException error) {
++                return false;
 +            } finally {
 +                Binder.restoreCallingIdentity(identity);
 +            }
@@ -440,7 +616,7 @@ index 29c126753..26dcdab1a 100644
          @Override // Binder call
          public long authenticate(
                  final IBinder token,
-@@ -276,6 +300,14 @@ public class FingerprintService extends SystemService {
+@@ -276,6 +356,14 @@ public class FingerprintService extends SystemService {
              final String opPackageName = options.getOpPackageName();
              final String attributionTag = options.getAttributionTag();
              final int userId = options.getUserId();
@@ -455,7 +631,7 @@ index 29c126753..26dcdab1a 100644
  
              if (!canUseFingerprint(
                      opPackageName,
-@@ -290,12 +322,11 @@ public class FingerprintService extends SystemService {
+@@ -290,12 +378,11 @@ public class FingerprintService extends SystemService {
  
              // Keyguard check must be done on the caller's binder identity, since it also checks
              // permission.
@@ -470,7 +646,7 @@ index 29c126753..26dcdab1a 100644
                      // If this happens, something in KeyguardUpdateMonitor is wrong.
                      // SafetyNet for b/79776455
                      EventLog.writeEvent(0x534e4554, "79776455");
-@@ -1170,6 +1201,9 @@ public class FingerprintService extends SystemService {
+@@ -1170,6 +1257,9 @@ public class FingerprintService extends SystemService {
              int uid,
              int pid,
              int userId) {
@@ -482,10 +658,10 @@ index 29c126753..26dcdab1a 100644
              Utils.checkPermission(getContext(), USE_BIOMETRIC);
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/SecureSpaceFingerprintPolicy.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/SecureSpaceFingerprintPolicy.java
 new file mode 100644
-index 000000000..fd84540fc
+index 0000000000000..3176cf0ff1ea6
 --- /dev/null
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/SecureSpaceFingerprintPolicy.java
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,43 @@
 +/* Copyright (C) 2026 The Android Open Source Project
 + * SPDX-License-Identifier: Apache-2.0
 + */
@@ -500,6 +676,21 @@ index 000000000..fd84540fc
 +
 +    static Template resolve(List<Template> templates, int fingerId, long signedSecureUserId,
 +            int requestedUserId, boolean trustedKeyguard) {
++        Template owner = identify(templates, fingerId, signedSecureUserId);
++        if (owner == null) return null;
++        if (trustedKeyguard) {
++            return owner.storageUnlocked() && owner.strongAuthAllowed() ? owner : null;
++        }
++        return owner.userId() == requestedUserId ? owner : null;
++    }
++
++    /**
++     * Resolves only the cryptographic/native ownership of a template.
++     *
++     * This deliberately does not grant authentication. Keyguard may use the result to select a
++     * separately locked Secure Space and then require that user's primary credential.
++     */
++    static Template identify(List<Template> templates, int fingerId, long signedSecureUserId) {
 +        // Native template IDs are opaque uint32 values represented by signed Java ints.
 +        if (fingerId == 0 || signedSecureUserId == 0) return null;
 +        Template owner = null;
@@ -511,31 +702,33 @@ index 000000000..fd84540fc
 +        }
 +        if (owner == null || !owner.bindingCurrent() || owner.secureUserId() == 0
 +                || owner.secureUserId() != signedSecureUserId) return null;
-+        if (trustedKeyguard) {
-+            return owner.storageUnlocked() && owner.strongAuthAllowed() ? owner : null;
-+        }
-+        return owner.userId() == requestedUserId ? owner : null;
++        return owner;
 +    }
 +}
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/SecureSpaceFingerprintPool.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/SecureSpaceFingerprintPool.java
 new file mode 100644
-index 000000000..c029dbd68
+index 0000000000000..68ff313a0cfc2
 --- /dev/null
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/SecureSpaceFingerprintPool.java
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,316 @@
 +/* Copyright (C) 2026 The Android Open Source Project
 + * SPDX-License-Identifier: Apache-2.0
 + */
 +package com.android.server.biometrics.sensors.fingerprint;
 +
 +import android.content.Context;
++import android.app.ActivityManagerInternal;
++import android.app.admin.DevicePolicyManager;
 +import android.content.pm.UserInfo;
 +import android.hardware.fingerprint.Fingerprint;
++import android.os.UserHandle;
 +import android.os.UserManager;
++import android.provider.Settings;
 +import android.util.Slog;
 +import com.android.server.LocalServices;
 +import com.android.server.biometrics.HardwareAuthTokenUtils;
 +import com.android.server.locksettings.LockSettingsInternal;
++import com.android.server.security.authenticationpolicy.SecureLockDeviceServiceInternal;
 +import java.util.ArrayList;
 +import java.util.List;
 +
@@ -596,22 +789,61 @@ index 000000000..c029dbd68
 +    public static LockSettingsInternal.SecureSpaceFingerprintIdentity resolve(
 +            Context context, int sensorId, int fingerId, byte[] hardwareToken,
 +            int requestedUser, boolean trustedKeyguard) {
++        return resolveInternal(context, sensorId, fingerId, hardwareToken, requestedUser,
++                trustedKeyguard, false);
++    }
++
++    /**
++     * Identifies a foreign Secure Space whose primary credential is still required.
++     *
++     * The current/origin user must already be fully unlocked and strong-auth eligible. The
++     * returned destination is ownership metadata only; callers must not turn it into biometric
++     * authentication or unlock CE storage with it.
++     */
++    public static LockSettingsInternal.SecureSpaceFingerprintIdentity resolveIdentification(
++            Context context, int sensorId, int fingerId, byte[] hardwareToken,
++            int requestedUser) {
++        LockSettingsInternal locks = LocalServices.getService(LockSettingsInternal.class);
++        if (locks == null) return null;
++        var origin = locks.getSecureSpaceFingerprintIdentity(requestedUser);
++        if (origin == null || !origin.storageUnlocked() || !origin.strongAuthAllowed()) {
++            Slog.w(TAG, "Identification rejected: origin not primary-authenticated");
++            return null;
++        }
++        var destination = resolveInternal(context, sensorId, fingerId, hardwareToken,
++                requestedUser, true, true);
++        if (destination == null || destination.userId() == requestedUser
++                || !isSecureSpaceUser(context, destination.userId())
++                || !isKeyguardFingerprintAllowed(context, destination.userId())
++                || (destination.storageUnlocked() && destination.strongAuthAllowed())) {
++            return null;
++        }
++        return destination;
++    }
++
++    private static LockSettingsInternal.SecureSpaceFingerprintIdentity resolveInternal(
++            Context context, int sensorId, int fingerId, byte[] hardwareToken,
++            int requestedUser, boolean trustedKeyguard, boolean identificationOnly) {
 +        if (hasUnreadableMetadata(context, sensorId)) {
-+            Slog.w(TAG, "Authentication rejected: fingerprint metadata unavailable");
++            Slog.w(TAG, (identificationOnly ? "Identification" : "Authentication")
++                    + " rejected: fingerprint metadata unavailable");
 +            return null;
 +        }
 +        if (hardwareToken == null || hardwareToken.length != 69 || hardwareToken[0] != 0) {
-+            Slog.w(TAG, "Authentication rejected: signed hardware token unavailable");
++            Slog.w(TAG, (identificationOnly ? "Identification" : "Authentication")
++                    + " rejected: signed hardware token unavailable");
 +            return null;
 +        }
 +        var hat = HardwareAuthTokenUtils.toHardwareAuthToken(hardwareToken);
 +        if ((hat.authenticatorType & 2) == 0 || hat.userId == 0) {
-+            Slog.w(TAG, "Authentication rejected: signed fingerprint identity unavailable");
++            Slog.w(TAG, (identificationOnly ? "Identification" : "Authentication")
++                    + " rejected: signed fingerprint identity unavailable");
 +            return null;
 +        }
 +        LockSettingsInternal locks = LocalServices.getService(LockSettingsInternal.class);
 +        if (locks == null) {
-+            Slog.w(TAG, "Authentication rejected: lock service unavailable");
++            Slog.w(TAG, (identificationOnly ? "Identification" : "Authentication")
++                    + " rejected: lock service unavailable");
 +            return null;
 +        }
 +        List<SecureSpaceFingerprintPolicy.Template> templates = new ArrayList<>();
@@ -636,8 +868,10 @@ index 000000000..c029dbd68
 +                        identity.storageUnlocked(), identity.strongAuthAllowed()));
 +            }
 +        }
-+        var selected = SecureSpaceFingerprintPolicy.resolve(templates, fingerId, hat.userId,
-+                requestedUser, trustedKeyguard);
++        var selected = identificationOnly
++                ? SecureSpaceFingerprintPolicy.identify(templates, fingerId, hat.userId)
++                : SecureSpaceFingerprintPolicy.resolve(templates, fingerId, hat.userId,
++                        requestedUser, trustedKeyguard);
 +        if (selected == null) {
 +            boolean matchingTemplate = false;
 +            boolean signedSidMatch = false;
@@ -652,7 +886,8 @@ index 000000000..c029dbd68
 +                storageUnlocked |= candidate.storageUnlocked();
 +                strongAuthAllowed |= candidate.strongAuthAllowed();
 +            }
-+            Slog.w(TAG, "Authentication rejected: template=" + matchingTemplate
++            Slog.w(TAG, (identificationOnly ? "Identification" : "Authentication")
++                    + " rejected: template=" + matchingTemplate
 +                    + " signedSid=" + signedSidMatch + " binding=" + bindingCurrent
 +                    + " storage=" + storageUnlocked + " strongAuth=" + strongAuthAllowed);
 +            return null;
@@ -684,14 +919,105 @@ index 000000000..c029dbd68
 +        return false;
 +    }
 +
++    private static boolean isKeyguardFingerprintAllowed(Context context, int userId) {
++        int biometricDefault = Settings.Secure.getIntForUser(context.getContentResolver(),
++                Settings.Secure.BIOMETRIC_KEYGUARD_ENABLED, 1, userId);
++        boolean enabled = Settings.Secure.getIntForUser(context.getContentResolver(),
++                Settings.Secure.FINGERPRINT_KEYGUARD_ENABLED,
++                biometricDefault == 1 ? 1 : 0, userId) != 0;
++        int disabled = context.getSystemService(DevicePolicyManager.class)
++                .getKeyguardDisabledFeatures(null, userId);
++        return enabled && (disabled & DevicePolicyManager.KEYGUARD_DISABLE_FINGERPRINT) == 0;
++    }
++
++    private static boolean isSecureSpaceUser(Context context, int userId) {
++        UserInfo user = context.getSystemService(UserManager.class).getUserInfo(userId);
++        return user != null && !user.partial && !user.preCreated && user.isFull()
++                && user.isEnabled() && user.isInitialized()
++                && UserManager.USER_TYPE_FULL_SECURE_SPACE.equals(user.userType);
++    }
++
++    private static boolean isCurrentUserWithoutPendingSwitch(int userId) {
++        ActivityManagerInternal am = LocalServices.getService(ActivityManagerInternal.class);
++        if (am == null) return false;
++        var users = am.getCurrentAndTargetUserIds();
++        return users != null && users.first == userId && users.second == UserHandle.USER_NULL;
++    }
++
++    /** Fresh server-side recheck used immediately before an identification-only user switch. */
++    public static boolean isIdentificationSwitchEligible(Context context, int sensorId, int fingerId,
++            int originUser, int originSerial, long originForegroundGeneration,
++            long originSessionEpoch, long originProtectorId, int destinationUser,
++            int destinationSerial, long destinationSecureUserId, long destinationProtectorId) {
++        if (sensorId < 0 || fingerId == 0 || destinationSecureUserId == 0
++                || destinationProtectorId == 0 || originUser == destinationUser
++                || !isCurrentUserWithoutPendingSwitch(originUser)
++                || !isSecureSpaceUser(context, destinationUser)
++                || !isKeyguardFingerprintAllowed(context, destinationUser)) {
++            return false;
++        }
++        LockSettingsInternal locks = LocalServices.getService(LockSettingsInternal.class);
++        if (locks == null) return false;
++        var originSnapshot = new LockSettingsInternal.SecureSpaceFingerprintOrigin(originUser,
++                originSerial, originForegroundGeneration, originSessionEpoch, originProtectorId);
++        if (!locks.isSecureSpaceFingerprintOriginCurrent(originSnapshot)) return false;
++        SecureLockDeviceServiceInternal secureLock =
++                LocalServices.getService(SecureLockDeviceServiceInternal.class);
++        if (secureLock != null && secureLock.isSecureLockDeviceEnabled()) return false;
++        var destination = locks.getSecureSpaceFingerprintIdentity(destinationUser);
++        if (destination == null || destination.serialNumber() != destinationSerial
++                || destination.secureUserId() != destinationSecureUserId
++                || destination.protectorId() != destinationProtectorId
++                || (destination.storageUnlocked() && destination.strongAuthAllowed())) {
++            return false;
++        }
++        if (!ownsUniqueTemplate(context, sensorId, destinationUser, fingerId)
++                || !locks.isSecureSpaceFingerprintBindingCurrent(sensorId, fingerId, destination)) {
++            return false;
++        }
++        UserManager users = context.getSystemService(UserManager.class);
++        UserInfo originInfo = users.getUserInfo(originUser);
++        if (originInfo == null || users.hasUserRestriction(UserManager.DISALLOW_USER_SWITCH,
++                originInfo.getUserHandle())) {
++            return false;
++        }
++        // The checks above cross LockSettings, UserManager and fingerprint metadata. Re-sample the
++        // two externally mutable policy fences immediately before the final ActivityManager state
++        // check so a policy/Secure Lock change during those slower reads fails closed.
++        if (!isKeyguardFingerprintAllowed(context, destinationUser)) return false;
++        secureLock = LocalServices.getService(SecureLockDeviceServiceInternal.class);
++        if (secureLock != null && secureLock.isSecureLockDeviceEnabled()) return false;
++        if (!locks.isSecureSpaceFingerprintOriginCurrent(originSnapshot)) return false;
++        if (!locks.isSecureSpaceFingerprintIdentityCurrent(destination)) return false;
++        if (!ownsUniqueTemplate(context, sensorId, destinationUser, fingerId)
++                || !locks.isSecureSpaceFingerprintBindingCurrent(sensorId, fingerId, destination)) {
++            return false;
++        }
++        originInfo = users.getUserInfo(originUser);
++        if (originInfo == null || users.hasUserRestriction(UserManager.DISALLOW_USER_SWITCH,
++                originInfo.getUserHandle())) {
++            return false;
++        }
++        return isCurrentUserWithoutPendingSwitch(originUser);
++    }
++
 +    public static boolean hasRoutingCandidate(Context context, int sensorId) {
 +        if (hasUnreadableMetadata(context, sensorId)) return false;
 +        LockSettingsInternal locks = LocalServices.getService(LockSettingsInternal.class);
 +        if (locks == null) return false;
++        int currentUser = android.app.ActivityManager.getCurrentUser();
++        var origin = locks.getSecureSpaceFingerprintIdentity(currentUser);
++        boolean mayIdentifyLockedDestination = origin != null && origin.storageUnlocked()
++                && origin.strongAuthAllowed();
 +        FingerprintUtils utils = FingerprintUtils.getInstance(sensorId);
 +        for (UserInfo user : users(context)) {
 +            var identity = locks.getSecureSpaceFingerprintIdentity(user.id);
-+            if (identity == null || !identity.storageUnlocked() || !identity.strongAuthAllowed()) continue;
++            if (identity == null) continue;
++            boolean canAuthenticate = identity.storageUnlocked() && identity.strongAuthAllowed();
++            boolean canIdentify = mayIdentifyLockedDestination && user.id != currentUser
++                    && isSecureSpaceUser(context, user.id)
++                    && isKeyguardFingerprintAllowed(context, user.id);
++            if (!canAuthenticate && !canIdentify) continue;
 +            for (Fingerprint template : utils.getBiometricsForUser(context, user.id)) {
 +                if (ownsUniqueTemplate(context, sensorId, user.id, template.getBiometricId())
 +                        && locks.isSecureSpaceFingerprintBindingCurrent(sensorId,
@@ -702,7 +1028,7 @@ index 000000000..c029dbd68
 +    }
 +}
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/AidlSession.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/AidlSession.java
-index 0d4dac089..1f585e9f8 100644
+index 0d4dac0899078..1f585e9f82d85 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/AidlSession.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/AidlSession.java
 @@ -45,9 +45,14 @@ public class AidlSession {
@@ -723,10 +1049,10 @@ index 0d4dac089..1f585e9f8 100644
      }
  
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/BiometricTestSessionImpl.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/BiometricTestSessionImpl.java
-index fd3d9963c..5452ecd1d 100644
+index fd3d9963c5e3e..a5f1d3455f59d 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/BiometricTestSessionImpl.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/BiometricTestSessionImpl.java
-@@ -66,6 +66,12 @@ class BiometricTestSessionImpl extends ITestSession.Stub {
+@@ -66,6 +66,20 @@ class BiometricTestSessionImpl extends ITestSession.Stub {
       * the public FingerprintManager APIs and does not use this receiver.
       */
      private final IFingerprintServiceReceiver mReceiver = new IFingerprintServiceReceiver.Stub() {
@@ -736,11 +1062,19 @@ index fd3d9963c..5452ecd1d 100644
 +            // Enrollment-only test receivers cannot route device entry.
 +        }
 +
++        @Override
++        public void onSecureSpaceIdentificationSucceeded(int sensorId, int fingerId,
++                int originUserId, int originSerial, long originForegroundGeneration,
++                long originSessionEpoch, long originProtectorId, int destinationUserId,
++                int destinationSerial, long destinationSecureUserId, long destinationProtectorId) {
++            // Enrollment-only test receivers cannot route device entry.
++        }
++
          @Override
          public void onEnrollResult(Fingerprint fp, int remaining) {
  
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintAuthenticationClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintAuthenticationClient.java
-index 51fc0b3e0..7958aa830 100644
+index 51fc0b3e0da49..c6863b3904515 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintAuthenticationClient.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintAuthenticationClient.java
 @@ -45,6 +45,11 @@ import android.hardware.fingerprint.FingerprintManager;
@@ -790,7 +1124,7 @@ index 51fc0b3e0..7958aa830 100644
          super.start(callback);
  
          if (mSensorProps.isAnyUdfpsType()) {
-@@ -176,6 +202,71 @@ public class FingerprintAuthenticationClient
+@@ -176,6 +202,121 @@ public class FingerprintAuthenticationClient
              BiometricAuthenticator.Identifier identifier,
              boolean authenticated,
              ArrayList<Byte> token) {
@@ -806,11 +1140,61 @@ index 51fc0b3e0..7958aa830 100644
 +            // Ordinary keyguard without spaces keeps the existing native credential policy.
 +            boolean needsOwnership = concealed
 +                    || SecureSpaceFingerprintPool.hasConcealedUsers(getContext());
-+            var destination = needsOwnership && identifier != null
++            var lockSettings = LocalServices.getService(LockSettingsInternal.class);
++            boolean currentIdentificationOrigin = mSecureSpaceOrigin != null && lockSettings != null
++                    && lockSettings.isSecureSpaceFingerprintOriginCurrent(mSecureSpaceOrigin);
++            var identifiedDestination = concealed && needsOwnership && identifier != null
++                    && currentIdentificationOrigin
++                    ? SecureSpaceFingerprintPool.resolveIdentification(getContext(), getSensorId(),
++                            identifier.getBiometricId(), original, getTargetUserId())
++                    : null;
++            var destination = identifiedDestination == null && needsOwnership && identifier != null
 +                    ? SecureSpaceFingerprintPool.resolve(getContext(), getSensorId(),
 +                            identifier.getBiometricId(), original, getTargetUserId(), concealed)
 +                    : null;
-+            if (needsOwnership && destination == null) {
++            if (identifiedDestination != null) {
++                if (!lockSettings.isSecureSpaceFingerprintOriginCurrent(mSecureSpaceOrigin)) {
++                    Slog.w(TAG, "Secure fingerprint identification origin became stale");
++                    authenticated = false;
++                    token = null;
++                    rejectedSuccessfulMatch = true;
++                } else {
++                    var power = getContext().getSystemService(PowerManager.class);
++                    if (!power.isInteractive()) {
++                        power.wakeUp(SystemClock.uptimeMillis(), PowerManager.WAKE_REASON_BIOMETRIC,
++                                "android:SECURE_SPACE_FINGERPRINT_IDENTIFY");
++                    }
++                    try {
++                        getListener().onSecureSpaceIdentificationSucceeded(
++                                getSensorId(), identifier.getBiometricId(),
++                                mSecureSpaceOrigin.userId(), mSecureSpaceOrigin.serialNumber(),
++                                mSecureSpaceOrigin.foregroundGeneration(),
++                                mSecureSpaceOrigin.sessionEpoch(), mSecureSpaceOrigin.protectorId(),
++                                identifiedDestination.userId(), identifiedDestination.serialNumber(),
++                                identifiedDestination.secureUserId(),
++                                identifiedDestination.protectorId());
++                        Slog.i(TAG, "Secure Space fingerprint identified locked destination user="
++                                + identifiedDestination.userId());
++                    } catch (RemoteException | RuntimeException error) {
++                        Slog.w(TAG, "Secure fingerprint identification delivery failed");
++                        onError(BiometricFingerprintConstants.FINGERPRINT_ERROR_CANCELED, 0);
++                        return;
++                    }
++                    // Identification chooses which user should become foreground. It is explicitly
++                    // not authentication: no HAT is recorded, no trust is granted, and CE remains
++                    // locked until the destination's normal PIN/password bouncer succeeds.
++                    mState = STATE_STOPPED;
++                    mSensorOverlays.hide(getSensorId());
++                    mAuthenticationStateListeners.onAuthenticationStopped(
++                            new AuthenticationStoppedInfo.Builder(BiometricSourceType.FINGERPRINT,
++                                    getRequestReason()).build());
++                    // Finish the HAL operation, but do not tell AuthSessionCoordinator that this was
++                    // a successful biometric authentication. The match authorized identity selection
++                    // only; the destination still owes its primary credential.
++                    mCallback.onClientFinished(this, false);
++                    return;
++                }
++            } else if (needsOwnership && destination == null) {
 +                Slog.w(TAG, "Secure Space fingerprint ownership rejected");
 +                authenticated = false;
 +                token = null;
@@ -862,7 +1246,7 @@ index 51fc0b3e0..7958aa830 100644
          super.onAuthenticated(identifier, authenticated, token);
          handleLockout(authenticated);
          if (authenticated) {
-@@ -231,6 +322,14 @@ public class FingerprintAuthenticationClient
+@@ -231,6 +372,14 @@ public class FingerprintAuthenticationClient
  
      @Override
      public void onAcquired(@FingerprintAcquired int acquiredInfo, int vendorCode) {
@@ -877,7 +1261,7 @@ index 51fc0b3e0..7958aa830 100644
          mAuthenticationStateListeners.onAuthenticationAcquired(
                  new AuthenticationAcquiredInfo.Builder(BiometricSourceType.FINGERPRINT,
                          getRequestReason(), acquiredInfo).build()
-@@ -362,6 +461,7 @@ public class FingerprintAuthenticationClient
+@@ -362,6 +511,7 @@ public class FingerprintAuthenticationClient
      @Override
      public void onPointerDown(PointerContext pc) {
          try {
@@ -885,7 +1269,7 @@ index 51fc0b3e0..7958aa830 100644
              mIsPointerDown = true;
              mState = STATE_STARTED;
  
-@@ -382,6 +482,7 @@ public class FingerprintAuthenticationClient
+@@ -382,6 +532,7 @@ public class FingerprintAuthenticationClient
      @Override
      public void onPointerUp(PointerContext pc) {
          try {
@@ -894,7 +1278,7 @@ index 51fc0b3e0..7958aa830 100644
              mState = STATE_STARTED_PAUSED_ATTEMPTED;
  
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintEnrollClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintEnrollClient.java
-index 776435d5a..688e4883d 100644
+index 776435d5abc89..688e4883d4107 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintEnrollClient.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintEnrollClient.java
 @@ -25,6 +25,9 @@ import static android.hardware.fingerprint.FingerprintManager.getErrorString;
@@ -967,7 +1351,7 @@ index 776435d5a..688e4883d 100644
                  getRequestReasonFromFingerprintEnrollReason(mEnrollReason), this);
          mAuthenticationStateListeners.onAuthenticationStarted(new AuthenticationStartedInfo
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintGetAuthenticatorIdClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintGetAuthenticatorIdClient.java
-index f77e11600..7801719ec 100644
+index f77e11600502d..7801719ec9a4e 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintGetAuthenticatorIdClient.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintGetAuthenticatorIdClient.java
 @@ -18,6 +18,8 @@ package com.android.server.biometrics.sensors.fingerprint.aidl;
@@ -990,7 +1374,7 @@ index f77e11600..7801719ec 100644
      }
  
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInternalCleanupClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInternalCleanupClient.java
-index 77670ecca..ea3c72c1d 100644
+index 77670ecca1fcc..ea3c72c1dc36d 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInternalCleanupClient.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInternalCleanupClient.java
 @@ -18,6 +18,8 @@ package com.android.server.biometrics.sensors.fingerprint.aidl;
@@ -1046,7 +1430,7 @@ index 77670ecca..ea3c72c1d 100644
          mBiometricUtils.deleteStateForUser(getTargetUserId());
          BiometricNotificationUtils.showFingerprintLoeNotification(getContext());
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInternalEnumerateClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInternalEnumerateClient.java
-index 2849bd9c9..6b0d5082a 100644
+index 2849bd9c92a3c..6b0d5082a610d 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInternalEnumerateClient.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInternalEnumerateClient.java
 @@ -18,6 +18,8 @@ package com.android.server.biometrics.sensors.fingerprint.aidl;
@@ -1074,7 +1458,7 @@ index 2849bd9c9..6b0d5082a 100644
      protected int getModality() {
          return BiometricsProtoEnums.MODALITY_FINGERPRINT;
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInvalidationClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInvalidationClient.java
-index bc02897ef..524fb0713 100644
+index bc02897ef5c4d..524fb0713e54a 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInvalidationClient.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintInvalidationClient.java
 @@ -18,6 +18,8 @@ package com.android.server.biometrics.sensors.fingerprint.aidl;
@@ -1107,7 +1491,7 @@ index bc02897ef..524fb0713 100644
  
      @Override
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintRemovalClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintRemovalClient.java
-index c6b955acb..d13cb7bc0 100644
+index c6b955acbb8e1..d13cb7bc0d023 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintRemovalClient.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintRemovalClient.java
 @@ -19,6 +19,8 @@ package com.android.server.biometrics.sensors.fingerprint.aidl;
@@ -1178,7 +1562,7 @@ index c6b955acb..d13cb7bc0 100644
 +    }
  }
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintStartUserClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintStartUserClient.java
-index 52305a31a..3757134f8 100644
+index 52305a31a644f..3757134f83dc4 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintStartUserClient.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/FingerprintStartUserClient.java
 @@ -19,6 +19,8 @@ package com.android.server.biometrics.sensors.fingerprint.aidl;
@@ -1202,7 +1586,7 @@ index 52305a31a..3757134f8 100644
              getCallback().onClientFinished(this, true /* success */);
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/SharedFingerprintCleanupUtils.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/SharedFingerprintCleanupUtils.java
 new file mode 100644
-index 000000000..3e235cb8c
+index 0000000000000..3e235cb8c7eb9
 --- /dev/null
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/aidl/SharedFingerprintCleanupUtils.java
 @@ -0,0 +1,55 @@
@@ -1262,7 +1646,7 @@ index 000000000..3e235cb8c
 +    public void deleteStateForUser(int u) { delegate.deleteStateForUser(u); }
 +}
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintUpdateActiveUserClient.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintUpdateActiveUserClient.java
-index 87bd80754..92db077a9 100644
+index 87bd80754269f..92db077a96cff 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintUpdateActiveUserClient.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/FingerprintUpdateActiveUserClient.java
 @@ -18,6 +18,8 @@ package com.android.server.biometrics.sensors.fingerprint.hidl;
@@ -1308,7 +1692,7 @@ index 87bd80754..92db077a9 100644
              mCallback.onClientFinished(this, true /* success */);
          } catch (RemoteException e) {
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/HidlToAidlSensorAdapter.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/HidlToAidlSensorAdapter.java
-index 98fc293d4..aa3b6f5d6 100644
+index 98fc293d495ce..aa3b6f5d64d3c 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/HidlToAidlSensorAdapter.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/HidlToAidlSensorAdapter.java
 @@ -19,6 +19,8 @@ package com.android.server.biometrics.sensors.fingerprint.hidl;
@@ -1331,7 +1715,7 @@ index 98fc293d4..aa3b6f5d6 100644
      }
  
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/LockoutFrameworkImpl.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/LockoutFrameworkImpl.java
-index 38fadad05..0d7c1043c 100644
+index 38fadad05e970..0d7c1043ca34d 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/LockoutFrameworkImpl.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/hidl/LockoutFrameworkImpl.java
 @@ -24,6 +24,7 @@ import android.app.AlarmManager;
@@ -1397,10 +1781,10 @@ index 38fadad05..0d7c1043c 100644
      }
  }
 diff --git a/services/core/java/com/android/server/locksettings/LockSettingsInternal.java b/services/core/java/com/android/server/locksettings/LockSettingsInternal.java
-index 67224496e..e0eb64e77 100644
+index 67224496e48e4..7de4575e03cf2 100644
 --- a/services/core/java/com/android/server/locksettings/LockSettingsInternal.java
 +++ b/services/core/java/com/android/server/locksettings/LockSettingsInternal.java
-@@ -30,6 +30,27 @@ import java.lang.annotation.RetentionPolicy;
+@@ -30,6 +30,31 @@ import java.lang.annotation.RetentionPolicy;
   * LockSettingsService local system service interface.
   */
  public abstract class LockSettingsInternal {
@@ -1412,6 +1796,8 @@ index 67224496e..e0eb64e77 100644
 +    public SecureSpaceFingerprintIdentity getSecureSpaceFingerprintIdentity(int userId) {
 +        return null;
 +    }
++    public boolean isSecureSpaceFingerprintIdentityCurrent(
++            SecureSpaceFingerprintIdentity identity) { return false; }
 +    public boolean isSecureSpaceFingerprintBindingCurrent(int sensorId, int fingerId,
 +            SecureSpaceFingerprintIdentity identity) { return false; }
 +    public boolean recordSecureSpaceFingerprintEnrollment(int sensorId, int fingerId,
@@ -1420,6 +1806,8 @@ index 67224496e..e0eb64e77 100644
 +    public record SecureSpaceFingerprintOrigin(int userId, int serialNumber,
 +            long foregroundGeneration, long sessionEpoch, long protectorId) {}
 +    public SecureSpaceFingerprintOrigin captureSecureSpaceFingerprintOrigin(int userId) { return null; }
++    public boolean isSecureSpaceFingerprintOriginCurrent(
++            SecureSpaceFingerprintOrigin originSnapshot) { return false; }
 +
 +    public android.os.IBinder issueSecureSpaceFingerprintHandoff(
 +            SecureSpaceFingerprintIdentity destination, SecureSpaceFingerprintOrigin originSnapshot,
@@ -1430,7 +1818,7 @@ index 67224496e..e0eb64e77 100644
              ARM_REBOOT_ERROR_NONE,
 diff --git a/services/tests/secureauthfingerprint/Android.bp b/services/tests/secureauthfingerprint/Android.bp
 new file mode 100644
-index 000000000..da1127cbe
+index 0000000000000..da1127cbe291d
 --- /dev/null
 +++ b/services/tests/secureauthfingerprint/Android.bp
 @@ -0,0 +1,12 @@
@@ -1448,10 +1836,10 @@ index 000000000..da1127cbe
 +}
 diff --git a/services/tests/secureauthfingerprint/SecureSpaceFingerprintPolicyTest.java b/services/tests/secureauthfingerprint/SecureSpaceFingerprintPolicyTest.java
 new file mode 100644
-index 000000000..19c1a79ed
+index 0000000000000..1aed77c814154
 --- /dev/null
 +++ b/services/tests/secureauthfingerprint/SecureSpaceFingerprintPolicyTest.java
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,68 @@
 +package com.android.server.biometrics.sensors.fingerprint;
 +import static org.junit.Assert.*;
 +import java.util.List;
@@ -1492,6 +1880,19 @@ index 000000000..19c1a79ed
 +                List.of(template(7,10,50,true,false,true)), 7,50,0,true));
 +        assertNull(SecureSpaceFingerprintPolicy.resolve(
 +                List.of(template(7,10,50,true,true,false)), 7,50,0,true));
++    }
++    @Test public void keyguardIdentificationFindsLockedOwnerWithoutAuthenticatingIt() {
++        var locked = template(7, 10, 50, true, false, false);
++        assertEquals(locked, SecureSpaceFingerprintPolicy.identify(List.of(locked), 7, 50));
++        assertNull(SecureSpaceFingerprintPolicy.resolve(List.of(locked), 7, 50, 0, true));
++    }
++    @Test public void identificationStillRejectsStaleAmbiguousOrWrongSidOwnership() {
++        var locked = template(7, 10, 50, true, false, false);
++        assertNull(SecureSpaceFingerprintPolicy.identify(List.of(locked), 7, 51));
++        assertNull(SecureSpaceFingerprintPolicy.identify(
++                List.of(template(7,10,50,false,false,false)), 7, 50));
++        assertNull(SecureSpaceFingerprintPolicy.identify(
++                List.of(locked, template(7,0,55,true,true,true)), 7, 50));
 +    }
 +    @Test public void tokenSidCannotBeRelabelledToMetadataUser() {
 +        assertNull(SecureSpaceFingerprintPolicy.resolve(

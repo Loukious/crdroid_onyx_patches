@@ -1,5 +1,5 @@
 diff --git a/Android.bp b/Android.bp
-index 3d03e9000..1a7653812 100644
+index 3d03e90009f34..1a7653812380a 100644
 --- a/Android.bp
 +++ b/Android.bp
 @@ -804,3 +804,13 @@ filegroup {
@@ -17,7 +17,7 @@ index 3d03e9000..1a7653812 100644
 +    visibility: ["//frameworks/base/packages/SystemUI:__pkg__"],
 +}
 diff --git a/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt b/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt
-index eb5000541..f867083a1 100644
+index eb50005411726..f867083a13b09 100644
 --- a/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt
 +++ b/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt
 @@ -27,8 +27,13 @@ import androidx.compose.foundation.layout.union
@@ -59,7 +59,7 @@ index eb5000541..f867083a1 100644
      }
  }
 diff --git a/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java b/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java
-index 58bbdeb35..6b529f0a4 100644
+index 58bbdeb35ea08..6b529f0a41dda 100644
 --- a/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java
 +++ b/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java
 @@ -59,64 +59,77 @@ public class AdminSecondaryLockScreenController {
@@ -249,7 +249,7 @@ index 58bbdeb35..6b529f0a4 100644
                  hide();
              }
 diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardInputViewController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardInputViewController.java
-index 9ebe2f8c4..ac0842096 100644
+index 9ebe2f8c4c1dc..ac0842096f5bc 100644
 --- a/packages/SystemUI/src/com/android/keyguard/KeyguardInputViewController.java
 +++ b/packages/SystemUI/src/com/android/keyguard/KeyguardInputViewController.java
 @@ -216,6 +216,20 @@ public abstract class KeyguardInputViewController<T extends KeyguardInputView>
@@ -302,7 +302,7 @@ index 9ebe2f8c4..ac0842096 100644
                  return new KeyguardSimPinViewController((KeyguardSimPinView) keyguardInputView,
                          mKeyguardUpdateMonitor, securityMode, mLockPatternUtils,
 diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java
-index c7d93d79d..127afbbf5 100644
+index c7d93d79d1ec3..127afbbf5c1ac 100644
 --- a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java
 +++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityContainerController.java
 @@ -88,6 +88,7 @@ import com.android.systemui.classifier.FalsingA11yDelegate;
@@ -587,7 +587,7 @@ index c7d93d79d..127afbbf5 100644
                          targetUserId);
              }
 diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityModel.java b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityModel.java
-index 4b5d89753..e92342a2e 100644
+index 4b5d897534f32..e92342a2ecfa4 100644
 --- a/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityModel.java
 +++ b/packages/SystemUI/src/com/android/keyguard/KeyguardSecurityModel.java
 @@ -20,9 +20,13 @@ import static android.security.Flags.secureLockDevice;
@@ -666,7 +666,7 @@ index 4b5d89753..e92342a2e 100644
              case LockPatternUtils.CREDENTIAL_TYPE_PIN:
                  return SecurityMode.PIN;
 diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java b/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
-index ff3767b32..51ed6a5b7 100644
+index ff3767b32ab6e..e1331845c0314 100644
 --- a/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
 +++ b/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
 @@ -1112,6 +1112,10 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
@@ -749,7 +749,7 @@ index ff3767b32..51ed6a5b7 100644
      }
  
      /**
-@@ -1887,6 +1898,109 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+@@ -1887,6 +1898,153 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
          mFingerprintAuthenticationCallback.onUdfpsPointerUp(sensorId);
      }
  
@@ -853,13 +853,57 @@ index ff3767b32..51ed6a5b7 100644
 +                        });
 +                setFingerprintRunningState(BIOMETRIC_STATE_STOPPED);
 +            }
++            @Override public void onSecureSpaceIdentificationSucceeded(int sensorId, int fingerId,
++                    int origin, int originSerial, long originForegroundGeneration,
++                    long originSessionEpoch, long originProtectorId, int destination,
++                    int destinationSerial, long destinationSecureUserId,
++                    long destinationProtectorId) {
++                // A stale callback belongs to an older scan; do not clear a newer scan's state.
++                if (!current()) {
++                    return;
++                }
++                mFingerprintCancelSignal = null;
++                mHandler.removeCallbacks(mFpCancelNotReceived);
++                if (mSecureSpaceEntry == null || !mKeyguardShowing || mKeyguardGoingAway) {
++                    setFingerprintRunningState(BIOMETRIC_STATE_STOPPED);
++                    return;
++                }
++                boolean switchAccepted = mSecureSpaceEntry.acceptFingerprintIdentification(
++                        origin, originSerial, destination, destinationSerial,
++                        new com.android.systemui.securespaces.SecureSpaceEntryCoordinator.Callback() {
++                            @Override public boolean isActive() {
++                                return current() && mKeyguardShowing && !mKeyguardGoingAway;
++                            }
++                            @Override public boolean isIdentificationCurrent() {
++                                return mFpm != null && mFpm.isSecureSpaceIdentificationCurrent(
++                                        sensorId, fingerId, origin, originSerial,
++                                        originForegroundGeneration, originSessionEpoch,
++                                        originProtectorId, destination, destinationSerial,
++                                        destinationSecureUserId, destinationProtectorId);
++                            }
++                            @Override public boolean switchIdentification(
++                                    com.android.internal.widget.ISecureSpaceCredentialAttempt witness) {
++                                return mFpm != null && mFpm.switchSecureSpaceIdentification(
++                                        sensorId, fingerId, origin, originSerial,
++                                        originForegroundGeneration, originSessionEpoch,
++                                        originProtectorId, destination, destinationSerial,
++                                        destinationSecureUserId, destinationProtectorId, witness);
++                            }
++                            @Override public void onRejected(
++                                    com.android.internal.widget.SecureSpaceCredentialResponse ignored) {
++                                updateFingerprintListeningState(BIOMETRIC_ACTION_UPDATE);
++                            }
++                        });
++                setFingerprintRunningState(BIOMETRIC_STATE_STOPPED);
++                if (!switchAccepted) updateFingerprintListeningState(BIOMETRIC_ACTION_UPDATE);
++            }
 +        };
 +    }
 +
      @VisibleForTesting
      final FingerprintManager.AuthenticationCallback mFingerprintAuthenticationCallback
              = new AuthenticationCallback() {
-@@ -2805,6 +2919,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+@@ -2805,6 +2963,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
      }
  
      private void updateFingerprintListeningState(int action) {
@@ -867,7 +911,7 @@ index ff3767b32..51ed6a5b7 100644
          // If this message exists, we should not authenticate again until this message is
          // consumed by the handler
          if (mHandler.hasMessages(MSG_BIOMETRIC_AUTHENTICATION_CONTINUE)) {
-@@ -2821,7 +2936,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+@@ -2821,7 +2980,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
          final boolean running = mFingerprintRunningState == BIOMETRIC_STATE_RUNNING;
          final boolean runningOrRestarting = running
                  || mFingerprintRunningState == BIOMETRIC_STATE_CANCELLING_RESTARTING;
@@ -876,7 +920,7 @@ index ff3767b32..51ed6a5b7 100644
  
          if (runningOrRestarting && !shouldListenForFingerprint) {
              if (action == BIOMETRIC_ACTION_START) {
-@@ -3145,7 +3260,11 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+@@ -3145,7 +3304,11 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
  
      @VisibleForTesting
      protected boolean shouldListenForFingerprint(boolean isUdfps) {
@@ -888,7 +932,7 @@ index ff3767b32..51ed6a5b7 100644
          final boolean userDoesNotHaveTrust = !getUserHasTrust(user);
          final boolean shouldListenForFingerprintAssistant = shouldListenForFingerprintAssistant();
          final boolean shouldListenKeyguardState =
-@@ -3170,12 +3289,12 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+@@ -3170,12 +3333,12 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
          final boolean fingerprintDisabledForUser = isFingerprintDisabled(user);
          final boolean shouldListenUserState =
                  !mSwitchingUser
@@ -905,7 +949,7 @@ index ff3767b32..51ed6a5b7 100644
          final boolean shouldListenBouncerState =
                  !strongerAuthRequired || !isPrimaryBouncerShowingOrWillBeShowing();
          final boolean isUdfpsAuthRequiredOnCommunal =
-@@ -3250,8 +3369,13 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+@@ -3250,8 +3413,13 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
      }
  
      private void startListeningForFingerprint(boolean runDetect) {
@@ -920,7 +964,7 @@ index ff3767b32..51ed6a5b7 100644
          if (mFingerprintCancelSignal != null) {
              mLogger.logUnexpectedFpCancellationSignalState(
                      mFingerprintRunningState,
-@@ -3289,7 +3413,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+@@ -3289,7 +3457,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
              } else {
                  mLogger.v("startListeningForFingerprint");
                  mFpm.authenticate(null /* crypto */, mFingerprintCancelSignal,
@@ -929,7 +973,7 @@ index ff3767b32..51ed6a5b7 100644
                          null /* handler */,
                          fingerprintAuthenticateOptions);
                  mFingerprintDetectRunning = false;
-@@ -3373,6 +3497,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
+@@ -3373,6 +3541,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
      }
  
      private void stopListeningForFingerprint() {
@@ -938,7 +982,7 @@ index ff3767b32..51ed6a5b7 100644
          if (mFingerprintRunningState == BIOMETRIC_STATE_RUNNING) {
              if (mFingerprintCancelSignal != null) {
 diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/data/repository/KeyguardBouncerRepository.kt b/packages/SystemUI/src/com/android/systemui/bouncer/data/repository/KeyguardBouncerRepository.kt
-index 47a03754d..c4ee8c193 100644
+index 47a03754d89da..c4ee8c1938973 100644
 --- a/packages/SystemUI/src/com/android/systemui/bouncer/data/repository/KeyguardBouncerRepository.kt
 +++ b/packages/SystemUI/src/com/android/systemui/bouncer/data/repository/KeyguardBouncerRepository.kt
 @@ -153,14 +153,10 @@ constructor(
@@ -974,7 +1018,7 @@ index 47a03754d..c4ee8c193 100644
  
      override fun setPanelExpansion(panelExpansion: Float) {
 diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerInteractor.kt b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerInteractor.kt
-index 9cc689c53..6297f24c0 100644
+index 9cc689c53d556..6297f24c0960e 100644
 --- a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerInteractor.kt
 +++ b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerInteractor.kt
 @@ -52,11 +52,13 @@ import com.android.systemui.scene.shared.model.Scenes
@@ -1040,7 +1084,7 @@ index 9cc689c53..6297f24c0 100644
      }
  
 diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/PrimaryBouncerInteractor.kt b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/PrimaryBouncerInteractor.kt
-index 86903ca1b..b70289502 100644
+index 86903ca1b765d..b70289502b41c 100644
 --- a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/PrimaryBouncerInteractor.kt
 +++ b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/PrimaryBouncerInteractor.kt
 @@ -141,6 +141,14 @@ constructor(
@@ -1059,7 +1103,7 @@ index 86903ca1b..b70289502 100644
              Log.d(
                  TAG,
 diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/AuthMethodBouncerViewModel.kt b/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/AuthMethodBouncerViewModel.kt
-index b5df2382f..b3a6756ac 100644
+index b5df2382fb093..b3a6756ac0944 100644
 --- a/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/AuthMethodBouncerViewModel.kt
 +++ b/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/AuthMethodBouncerViewModel.kt
 @@ -101,6 +101,10 @@ sealed class AuthMethodBouncerViewModel(
@@ -1082,7 +1126,7 @@ index b5df2382f..b3a6756ac 100644
              wasSuccessfullyAuthenticated = false
          }
 diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/BouncerOverlayContentViewModel.kt b/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/BouncerOverlayContentViewModel.kt
-index fd8d7d44c..b800c9568 100644
+index fd8d7d44cb40e..b800c95682096 100644
 --- a/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/BouncerOverlayContentViewModel.kt
 +++ b/packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/BouncerOverlayContentViewModel.kt
 @@ -16,6 +16,7 @@
@@ -1137,7 +1181,7 @@ index fd8d7d44c..b800c9568 100644
              if (shouldSignOutOnGoBack()) {
                  userLogoutInteractor.logOutToSystemUser()
 diff --git a/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractor.kt b/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractor.kt
-index 450fe513a..a2beddcb9 100644
+index 450fe513a1264..a2beddcb9bf75 100644
 --- a/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractor.kt
 +++ b/packages/SystemUI/src/com/android/systemui/deviceentry/domain/interactor/DeviceUnlockedInteractor.kt
 @@ -51,6 +51,9 @@ import com.android.systemui.shared.settings.data.repository.SecureSettingsReposi
@@ -1209,7 +1253,7 @@ index 450fe513a..a2beddcb9 100644
      }
  
 diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt
-index 2626449a3..f0b7cbd1b 100644
+index 2626449a320d7..f0b7cbd1b628e 100644
 --- a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt
 +++ b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt
 @@ -18,8 +18,11 @@ package com.android.systemui.keyguard.domain.interactor
@@ -1331,7 +1375,7 @@ index 2626449a3..f0b7cbd1b 100644
          if (SceneContainerFlag.isEnabled) return
          scope.launch("$TAG#dismissKeyguard") {
 diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardDismissInteractor.kt b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardDismissInteractor.kt
-index 30e5a2c35..63604b6b9 100644
+index 30e5a2c35e7c7..63604b6b9abc4 100644
 --- a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardDismissInteractor.kt
 +++ b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardDismissInteractor.kt
 @@ -29,9 +29,14 @@ import com.android.systemui.keyguard.shared.model.KeyguardDone
@@ -1421,10 +1465,10 @@ index 30e5a2c35..63604b6b9 100644
          keyguardRepository.setKeyguardDone(keyguardDoneTiming)
 diff --git a/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinator.java b/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinator.java
 new file mode 100644
-index 000000000..8d9f636ef
+index 0000000000000..03fc6d89549ef
 --- /dev/null
 +++ b/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinator.java
-@@ -0,0 +1,738 @@
+@@ -0,0 +1,855 @@
 +/* Copyright (C) 2026 The Evolution X Project
 + * SPDX-License-Identifier: Apache-2.0
 + */
@@ -1480,11 +1524,16 @@ index 000000000..8d9f636ef
 +        void onRejected(SecureSpaceCredentialResponse response);
 +        /** The native match is now owned by this coordinator, not by the source coroutine. */
 +        default void onAccepted() {}
++        /** Server-side authorization for an identification switch, separate from UI liveness. */
++        default boolean isIdentificationCurrent() { return false; }
++        /** Atomic server-side switch which must refuse rather than queue behind another switch. */
++        default boolean switchIdentification(ISecureSpaceCredentialAttempt witness) { return false; }
 +        default boolean isActive() { return true; }
 +        default void onCurrentUserChecked(VerifyCredentialResponse response) {}
 +    }
 +
 +    private static final long LIFETIME_MS = 30_000;
++    private static final long IDENTIFICATION_SWITCH_TIMEOUT_MS = 10_000;
 +    interface Backend {
 +        int credentialType(int userId);
 +        SecureSpaceCredentialResponse check(LockscreenCredential input, int userId, int serial,
@@ -1562,6 +1611,10 @@ index 000000000..8d9f636ef
 +    private volatile Request mConsumedRequest;
 +    private record AggregateLockout(int userId, int serial, long endTime) {}
 +    private volatile AggregateLockout mAggregateLockout;
++    private record IdentificationSwitch(int origin, int originSerial, int destination,
++            int destinationSerial, Callback source, AtomicBoolean active,
++            ISecureSpaceCredentialAttempt witness) {}
++    private volatile IdentificationSwitch mIdentificationSwitch;
 +
 +    /** Hardware retry for one inactive user cannot disable healthy alternatives. */
 +    public long getLockoutEndTimeMillis() {
@@ -1651,6 +1704,10 @@ index 000000000..8d9f636ef
 +                if (proof != null) proof.active.set(false);
 +                mPublishedProof = null;
 +                mConsumedRequest = null;
++                IdentificationSwitch identification = mIdentificationSwitch;
++                if (identification != null && identification.destination() != newUser) {
++                    clearIdentificationSwitch(identification);
++                }
 +                Request request = mRequest;
 +                if (request != null && (!request.switchRequested.get()
 +                        || request.destination != newUser)) cancel();
@@ -1660,6 +1717,15 @@ index 000000000..8d9f636ef
 +        }
 +        @Override
 +        public void onUserChanged(int newUser, Context context) {
++            IdentificationSwitch identification = mIdentificationSwitch;
++            if (identification != null) {
++                if (identification.destination() == newUser) {
++                    Log.d(TAG, "Fingerprint identification switch completed; destination=" + newUser);
++                    clearIdentificationSwitch(identification);
++                } else if (identification.origin() != newUser) {
++                    clearIdentificationSwitch(identification);
++                }
++            }
 +            Request request = mRequest;
 +            if (request != null && request.switchRequested.get()
 +                    && request.destination == newUser) {
@@ -1782,6 +1848,7 @@ index 000000000..8d9f636ef
 +
 +    /** A deliberate prepared switch may destroy the source view without abandoning its proof. */
 +    public void onSourcePaused() {
++        if (mIdentificationSwitch != null) return;
 +        if (mConsumedRequest != null) { cancel(); return; }
 +        if (mRequest != null && !mRequest.switchRequested.get()) cancel();
 +    }
@@ -1808,8 +1875,14 @@ index 000000000..8d9f636ef
 +        return request != null && request.callback == callback && request.switchRequested.get();
 +    }
 +
-+    /** Native-proof-backed switch in progress; ordinary user switching remains unchanged. */
++    /** Coordinator-authorized concealed switch; ordinary public user switching is unchanged. */
 +    public boolean isAuthorizedSwitchTo(int userId) {
++        IdentificationSwitch identification = mIdentificationSwitch;
++        if (identification != null && identification.active().get()
++                && identification.destination() == userId
++                && hasIdentity(identification.destination(), identification.destinationSerial())) {
++            return true;
++        }
 +        Request request = mRequest;
 +        return request != null && request.token != null && request.switchRequested.get()
 +                && request.destination == userId && request.isActive()
@@ -1817,6 +1890,8 @@ index 000000000..8d9f636ef
 +    }
 +
 +    public boolean isSwitchInProgress() {
++        IdentificationSwitch identification = mIdentificationSwitch;
++        if (identification != null && identification.active().get()) return true;
 +        Request request = mRequest;
 +        return request != null && request.token != null && request.switchRequested.get()
 +                && request.isActive();
@@ -1834,6 +1909,8 @@ index 000000000..8d9f636ef
 +    public void cancel() {
 +        if (mRequest != null) Log.d(TAG, "Entry canceled; prepared=" + mRequest.prepared
 +                + ", token=" + (mRequest.token != null));
++        IdentificationSwitch identification = mIdentificationSwitch;
++        if (identification != null) clearIdentificationSwitch(identification);
 +        setSecondaryPolicyVisible(false);
 +        Request consumed = mConsumedRequest;
 +        mConsumedRequest = null;
@@ -1926,6 +2003,90 @@ index 000000000..8d9f636ef
 +            SecureSpaceCredentialResponse completed = response;
 +            mMain.execute(() -> onChecked(request, completed));
 +        });
++    }
++
++    /**
++     * Uses a cryptographically identified fingerprint only to choose a locked Secure Space.
++     * No authentication proof is created or consumed; the destination's normal primary
++     * credential remains mandatory after the switch.
++     */
++    public boolean acceptFingerprintIdentification(int origin, int originSerial, int destination,
++            int destinationSerial, Callback source) {
++        cancel();
++        if (source == null || destination == origin || isErasurePending() || !isAvailable()
++                || !source.isActive() || !mPower.isInteractive() || mUserTracker.isUserSwitching()
++                || mUserTracker.getUserId() != origin || mSelectedUser.getSelectedUserId() != origin
++                || mBackend.currentUser() != origin || !hasIdentity(origin, originSerial)
++                || !hasIdentity(destination, destinationSerial)
++                || !mUsers.isUserUnlocked(UserHandle.of(origin))
++                || mUsers.hasUserRestriction(UserManager.DISALLOW_USER_SWITCH,
++                        UserHandle.of(origin))) {
++            return false;
++        }
++        AtomicBoolean identificationActive = new AtomicBoolean(true);
++        ISecureSpaceCredentialAttempt identificationWitness =
++                new ISecureSpaceCredentialAttempt.Stub() {
++                    @Override public boolean isActive() { return identificationActive.get(); }
++                    @Override public void invalidate() { identificationActive.set(false); }
++                };
++        IdentificationSwitch identification = new IdentificationSwitch(origin, originSerial,
++                destination, destinationSerial, source, identificationActive,
++                identificationWitness);
++        mIdentificationSwitch = identification;
++        source.onAccepted();
++        mMain.executeDelayed(() -> {
++            if (mIdentificationSwitch != identification || !identification.active().get()) return;
++            Log.w(TAG, "Fingerprint identification switch timed out");
++            clearIdentificationSwitch(identification);
++            if (mSelectedUser.getSelectedUserId() == origin && source.isActive()) {
++                source.onRejected(SecureSpaceCredentialResponse.unavailable());
++            }
++        }, IDENTIFICATION_SWITCH_TIMEOUT_MS);
++        mBackground.execute(() -> {
++            boolean switched = false;
++            try {
++                boolean locallyCurrent = identification.active().get() && source.isActive()
++                        && mPower.isInteractive() && !mUserTracker.isUserSwitching()
++                        && mUserTracker.getUserId() == origin
++                        && mSelectedUser.getSelectedUserId() == origin
++                        && mBackend.currentUser() == origin;
++                boolean serverCurrent = locallyCurrent && source.isIdentificationCurrent();
++                // isIdentificationCurrent() may block on system_server. Cancellation, screen
++                // state, selected user, or another user switch can all change while it runs, so
++                // every local authorization input must be sampled again after that RPC.
++                switched = serverCurrent && identification.active().get() && source.isActive()
++                        && mPower.isInteractive() && !mUserTracker.isUserSwitching()
++                        && mUserTracker.getUserId() == origin
++                        && mSelectedUser.getSelectedUserId() == origin
++                        && mBackend.currentUser() == origin
++                        && !mUserTracker.isUserSwitching()
++                        && source.switchIdentification(identification.witness());
++            } catch (Exception error) {
++                switched = false;
++            }
++            final boolean accepted = switched;
++            mMain.execute(() -> {
++                if (mIdentificationSwitch != identification
++                        || !identification.active().get()) return;
++                if (!accepted) {
++                    Log.w(TAG, "Fingerprint identification user switch rejected");
++                    clearIdentificationSwitch(identification);
++                    if (mSelectedUser.getSelectedUserId() == origin && source.isActive()) {
++                        source.onRejected(SecureSpaceCredentialResponse.unavailable());
++                    }
++                    return;
++                }
++                Log.d(TAG, "Fingerprint identification switch requested; destination="
++                        + destination);
++            });
++        });
++        return true;
++    }
++
++    private void clearIdentificationSwitch(IdentificationSwitch identification) {
++        if (identification == null) return;
++        identification.active().set(false);
++        if (mIdentificationSwitch == identification) mIdentificationSwitch = null;
 +    }
 +
 +    public void acceptFingerprint(IBinder token, int origin, int originSerial, int destination,
@@ -2165,7 +2326,7 @@ index 000000000..8d9f636ef
 +}
 diff --git a/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceProofs.kt b/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceProofs.kt
 new file mode 100644
-index 000000000..e7963bfd6
+index 0000000000000..e7963bfd6f993
 --- /dev/null
 +++ b/packages/SystemUI/src/com/android/systemui/securespaces/SecureSpaceProofs.kt
 @@ -0,0 +1,18 @@
@@ -2188,7 +2349,7 @@ index 000000000..e7963bfd6
 +        awaitClose { removeProofListener(listener) }
 +    }.filter { isProofCurrent(it) }
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarKeyguardViewManager.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarKeyguardViewManager.java
-index 9a1089398..284da2c3f 100644
+index 9a1089398177b..284da2c3f5819 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarKeyguardViewManager.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarKeyguardViewManager.java
 @@ -1144,6 +1144,13 @@ public class StatusBarKeyguardViewManager implements RemoteInputController.Callb
@@ -2207,10 +2368,10 @@ index 9a1089398..284da2c3f 100644
          if (navBarView != null) {
 diff --git a/packages/SystemUI/tests/robolectric/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinatorTest.java b/packages/SystemUI/tests/robolectric/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinatorTest.java
 new file mode 100644
-index 000000000..e485c8497
+index 0000000000000..4de8c9708c920
 --- /dev/null
 +++ b/packages/SystemUI/tests/robolectric/src/com/android/systemui/securespaces/SecureSpaceEntryCoordinatorTest.java
-@@ -0,0 +1,479 @@
+@@ -0,0 +1,654 @@
 +/* Copyright (C) 2026 The Evolution X Project
 + * SPDX-License-Identifier: Apache-2.0
 + */
@@ -2259,6 +2420,8 @@ index 000000000..e485c8497
 +    private SecureSpaceEntryCoordinator mCoordinator;
 +    private PowerManager mPower;
 +    private UserManager mUsers;
++    private UserTracker mUserTracker;
++    private SelectedUserInteractor mSelectedUser;
 +    private SecureSpaceEntryCoordinator.Host mHost;
 +    private IBinder mToken;
 +    private ISecureSpaceCredentialAttempt mWitness;
@@ -2275,10 +2438,10 @@ index 000000000..e485c8497
 +        owner.serialNumber = 1;
 +        when(mUsers.getUserInfo(0)).thenReturn(owner);
 +        when(mUsers.isUserUnlocked(any(android.os.UserHandle.class))).thenReturn(true);
-+        UserTracker tracker = mock(UserTracker.class);
-+        when(tracker.getUserId()).thenReturn(0);
-+        SelectedUserInteractor selected = mock(SelectedUserInteractor.class);
-+        when(selected.getSelectedUserId()).thenReturn(0);
++        mUserTracker = mock(UserTracker.class);
++        when(mUserTracker.getUserId()).thenReturn(0);
++        mSelectedUser = mock(SelectedUserInteractor.class);
++        when(mSelectedUser.getSelectedUserId()).thenReturn(0);
 +        DelayableExecutor main = new DelayableExecutor() {
 +            public void execute(Runnable runnable) { mMain.add(runnable); }
 +            public Runnable executeDelayed(Runnable runnable, long delay, TimeUnit unit) {
@@ -2289,8 +2452,8 @@ index 000000000..e485c8497
 +                throw new AssertionError("Unexpected timer");
 +            }
 +        };
-+        mCoordinator = new SecureSpaceEntryCoordinator(mBackend, mUsers, mPower, tracker,
-+                selected, mBackground::add, main, mock(WakefulnessLifecycle.class));
++        mCoordinator = new SecureSpaceEntryCoordinator(mBackend, mUsers, mPower, mUserTracker,
++                mSelectedUser, mBackground::add, main, mock(WakefulnessLifecycle.class));
 +        mHost = mock(SecureSpaceEntryCoordinator.Host.class);
 +        when(mHost.isReady(0, 1)).thenReturn(true);
 +        mCoordinator.registerHost(mHost);
@@ -2592,6 +2755,161 @@ index 000000000..e485c8497
 +        when(mUsers.getUserInfo(10)).thenReturn(other);
 +    }
 +
++    private void addIdentificationAlternative() {
++        addAlternative();
++        when(mBackend.credentialType(0)).thenReturn(
++                com.android.internal.widget.LockPatternUtils.CREDENTIAL_TYPE_PIN);
++    }
++
++    @Test
++    public void fingerprintIdentification_switchesButNeverAuthenticates() throws Exception {
++        addIdentificationAlternative();
++
++        assertThat(mCoordinator.acceptFingerprintIdentification(0, 1, 10, 2, mCallback))
++                .isTrue();
++
++        assertThat(mCoordinator.isSwitchInProgress()).isTrue();
++        assertThat(mCoordinator.isAuthorizedSwitchTo(10)).isTrue();
++        drain();
++        assertThat(mCallback.identificationSwitches).isEqualTo(1);
++        verify(mBackend, never()).switchUser(anyInt());
++        verify(mBackend, never()).prepare(any());
++        verify(mBackend, never()).attachFingerprint(any(), anyInt(), anyInt(), anyInt(),
++                anyInt(), any());
++        verify(mBackend, never()).consumeFingerprint(any(), anyInt(), anyInt());
++        verify(mBackend, never()).consume(any(), anyInt(), anyInt());
++        verify(mHost, never()).completeBiometricAuthentication(anyInt(), anyInt(),
++                org.mockito.ArgumentMatchers.anyBoolean());
++        verify(mHost, never()).completePrimaryAuthentication(anyInt(), anyInt());
++        assertThat(mCallback.accepted).isEqualTo(1);
++    }
++
++    @Test
++    public void fingerprintIdentification_lockedOriginCannotSwitch() throws Exception {
++        addIdentificationAlternative();
++        when(mUsers.isUserUnlocked(android.os.UserHandle.of(0))).thenReturn(false);
++
++        assertThat(mCoordinator.acceptFingerprintIdentification(0, 1, 10, 2, mCallback))
++                .isFalse();
++        drain();
++
++        verify(mBackend, never()).switchUser(anyInt());
++        assertThat(mCoordinator.isSwitchInProgress()).isFalse();
++    }
++
++    @Test
++    public void fingerprintIdentification_staleServerAuthorizationRejectsAndRestartsSource()
++            throws Exception {
++        addIdentificationAlternative();
++        mCallback.identificationCurrent = false;
++
++        assertThat(mCoordinator.acceptFingerprintIdentification(0, 1, 10, 2, mCallback))
++                .isTrue();
++        drain();
++
++        verify(mBackend, never()).switchUser(anyInt());
++        assertThat(mCallback.identificationSwitches).isEqualTo(0);
++        assertThat(mCallback.accepted).isEqualTo(1);
++        assertThat(mCallback.rejected).isEqualTo(1);
++        assertThat(mCoordinator.isSwitchInProgress()).isFalse();
++    }
++
++    @Test
++    public void fingerprintIdentification_missingServerAuthorizationFailsClosed() throws Exception {
++        addIdentificationAlternative();
++        SecureSpaceEntryCoordinator.Callback callback =
++                new SecureSpaceEntryCoordinator.Callback() {
++                    @Override
++                    public boolean isActive() {
++                        return true;
++                    }
++
++                    @Override
++                    public void onRejected(SecureSpaceCredentialResponse response) {}
++                };
++
++        assertThat(mCoordinator.acceptFingerprintIdentification(0, 1, 10, 2, callback)).isTrue();
++        drain();
++
++        verify(mBackend, never()).switchUser(anyInt());
++        assertThat(mCoordinator.isSwitchInProgress()).isFalse();
++    }
++
++    @Test
++    public void fingerprintIdentification_userSwitchStartsBeforeBackgroundWork_doesNotQueue()
++            throws Exception {
++        addIdentificationAlternative();
++
++        assertThat(mCoordinator.acceptFingerprintIdentification(0, 1, 10, 2, mCallback))
++                .isTrue();
++        when(mUserTracker.isUserSwitching()).thenReturn(true);
++        drain();
++
++        verify(mBackend, never()).switchUser(anyInt());
++        assertThat(mCallback.identificationSwitches).isEqualTo(0);
++        assertThat(mCallback.rejected).isEqualTo(1);
++    }
++
++    @Test
++    public void fingerprintIdentification_cancelDuringServerCheck_doesNotSwitch() throws Exception {
++        addIdentificationAlternative();
++        mCallback.onIdentificationCheck = mCoordinator::cancel;
++
++        assertThat(mCoordinator.acceptFingerprintIdentification(0, 1, 10, 2, mCallback))
++                .isTrue();
++        drain();
++
++        verify(mBackend, never()).switchUser(anyInt());
++        assertThat(mCallback.identificationSwitches).isEqualTo(0);
++        assertThat(mCoordinator.isSwitchInProgress()).isFalse();
++    }
++
++    @Test
++    public void fingerprintIdentification_userSwitchStartsDuringServerCheck_doesNotQueue()
++            throws Exception {
++        addIdentificationAlternative();
++        mCallback.onIdentificationCheck =
++                () -> when(mUserTracker.isUserSwitching()).thenReturn(true);
++
++        assertThat(mCoordinator.acceptFingerprintIdentification(0, 1, 10, 2, mCallback))
++                .isTrue();
++        drain();
++
++        verify(mBackend, never()).switchUser(anyInt());
++        assertThat(mCallback.identificationSwitches).isEqualTo(0);
++        assertThat(mCallback.rejected).isEqualTo(1);
++    }
++
++    @Test
++    public void fingerprintIdentification_atomicServerSwitchRefusalDoesNotQueue() throws Exception {
++        addIdentificationAlternative();
++        mCallback.identificationSwitch = false;
++
++        assertThat(mCoordinator.acceptFingerprintIdentification(0, 1, 10, 2, mCallback))
++                .isTrue();
++        drain();
++
++        assertThat(mCallback.identificationSwitches).isEqualTo(1);
++        verify(mBackend, never()).switchUser(anyInt());
++        assertThat(mCallback.rejected).isEqualTo(1);
++        assertThat(mCoordinator.isSwitchInProgress()).isFalse();
++    }
++
++    @Test
++    public void fingerprintIdentification_cancelDuringFinalSwitchRpcRevokesWitness()
++            throws Exception {
++        addIdentificationAlternative();
++        mCallback.onIdentificationSwitch = mCoordinator::cancel;
++
++        assertThat(mCoordinator.acceptFingerprintIdentification(0, 1, 10, 2, mCallback))
++                .isTrue();
++        drain();
++
++        assertThat(mCallback.identificationSwitches).isEqualTo(1);
++        verify(mBackend, never()).switchUser(anyInt());
++        assertThat(mCoordinator.isSwitchInProgress()).isFalse();
++    }
++
 +    @Test
 +    public void completedUnionRejection_reportsInactivePolicyOnce() {
 +        addAlternative();
@@ -2683,7 +3001,25 @@ index 000000000..e485c8497
 +
 +    private static class Callback implements SecureSpaceEntryCoordinator.Callback {
 +        boolean active = true;
++        boolean identificationCurrent = true;
++        boolean identificationSwitch = true;
++        Runnable onIdentificationCheck;
++        Runnable onIdentificationSwitch;
++        int identificationSwitches;
 +        public boolean isActive() { return active; }
++        public boolean isIdentificationCurrent() {
++            if (onIdentificationCheck != null) onIdentificationCheck.run();
++            return identificationCurrent;
++        }
++        public boolean switchIdentification(ISecureSpaceCredentialAttempt witness) {
++            ++identificationSwitches;
++            if (onIdentificationSwitch != null) onIdentificationSwitch.run();
++            try {
++                return identificationSwitch && witness != null && witness.isActive();
++            } catch (android.os.RemoteException error) {
++                return false;
++            }
++        }
 +        int accepted;
 +        int rejected;
 +        public void onAccepted() { ++accepted; }
@@ -2691,7 +3027,7 @@ index 000000000..e485c8497
 +    }
 +}
 diff --git a/packages/SystemUI/tests/src/com/android/keyguard/AdminSecondaryLockScreenControllerTest.java b/packages/SystemUI/tests/src/com/android/keyguard/AdminSecondaryLockScreenControllerTest.java
-index cdd0eb0e2..632dcc6b4 100644
+index cdd0eb0e265df..632dcc6b4e2d1 100644
 --- a/packages/SystemUI/tests/src/com/android/keyguard/AdminSecondaryLockScreenControllerTest.java
 +++ b/packages/SystemUI/tests/src/com/android/keyguard/AdminSecondaryLockScreenControllerTest.java
 @@ -148,6 +148,24 @@ public class AdminSecondaryLockScreenControllerTest extends SysuiTestCase {
@@ -2720,7 +3056,7 @@ index cdd0eb0e2..632dcc6b4 100644
      public void testHide() throws Exception {
          // Show the view first, then hide.
 diff --git a/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java b/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java
-index be6d145bd..0f5185099 100644
+index be6d145bd764b..0f5185099dca4 100644
 --- a/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java
 +++ b/packages/SystemUI/tests/src/com/android/keyguard/KeyguardUpdateMonitorTest.java
 @@ -1559,7 +1559,7 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
@@ -2777,7 +3113,7 @@ index be6d145bd..0f5185099 100644
      public void testRegisterAuthControllerCallback() {
          assertThat(mKeyguardUpdateMonitor.isUdfpsEnrolled()).isFalse();
 diff --git a/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractorKosmos.kt b/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractorKosmos.kt
-index f2142e739..640077a43 100644
+index f2142e73965bd..640077a437481 100644
 --- a/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractorKosmos.kt
 +++ b/packages/SystemUI/tests/utils/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractorKosmos.kt
 @@ -16,6 +16,7 @@
