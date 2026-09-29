@@ -26,8 +26,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # feature commits requires intentionally updating these ranges too; this prevents
 # a later repo sync or unrelated local commit from silently changing generated
 # security-sensitive patches.
-FRAMEWORK_SECURE_BASE="${FRAMEWORK_SECURE_BASE:-4f5b74dd19f11e846536f5cda1004a54dba42a0a}"
-FRAMEWORK_SECURE_END="${FRAMEWORK_SECURE_END:-b726744f59a3b4d81763885b5142c872ac777736}"
+FRAMEWORK_SECURE_BASE="${FRAMEWORK_SECURE_BASE:-d5d4e643234708b7a3c280e7d41ba7fd385aaef1}"
+FRAMEWORK_SECURE_END="${FRAMEWORK_SECURE_END:-d7b3ceb5165ec23a70afadcaab9b5b396d9736b8}"
 SETTINGS_SECURE_BASE="${SETTINGS_SECURE_BASE:-36d32b115a6ce46e8b3098b62ccd1fe5a1f80fc0}"
 SETTINGS_SECURE_END="${SETTINGS_SECURE_END:-5abf5fa3c5bfce68f3e04f372db51bf94b6724df}"
 LINEAGE_SECURE_BASE="${LINEAGE_SECURE_BASE:-c3efc4ee11e2348a058f71b021e2ab4c403fdc64}"

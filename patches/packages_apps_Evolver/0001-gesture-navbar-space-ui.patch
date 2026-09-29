@@ -21,10 +21,10 @@ index c5822eb..7431b33 100644
 +    </string-array>
  </resources>
 diff --git a/res/values/evolution_strings.xml b/res/values/evolution_strings.xml
-index 1edc043..5654cc6 100644
+index 1370b7f..b59e110 100644
 --- a/res/values/evolution_strings.xml
 +++ b/res/values/evolution_strings.xml
-@@ -1815,6 +1815,13 @@
+@@ -1827,6 +1827,13 @@
      <string name="global_actions_use_compose_dialog_title">Redesigned power menu</string>
      <string name="global_actions_use_compose_dialog_summary">Use the new power menu with a customizable, draggable tile layout. Disable to use the classic power menu.</string>
      <string name="global_actions_advanced_reboot_title">Enable Advanced Reboot</string>
