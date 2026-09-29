@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Apply the Evolution X onyx patch set to a synced tree, overlay the OS3.0.302.0
+# Apply the Evolution X onyx patch set to a synced tree, overlay the Global 303 + China 305 modem
 # firmware blobs, and stage the Kono-Ha kernel Image that
 # vendor/extra/BoardConfigKernel.mk expects.
 #
@@ -214,7 +214,7 @@ apply_scripts() {
 
 # ------------------------------------------------------------- firmware overlay
 # vendor/xiaomi/onyx is synced from crDroid's upstream GitLab (4GB, hosted for
-# free by them). Only the ~350MB that actually differs -- the OS3.0.302.0 radio
+# free by them). Only the ~350MB that actually differs -- the Global 303 radio with the China 305 modem pair
 # images and the two LHDC byte-patched blobs -- lives in our own project, and
 # gets copied over the top here. A `repo sync --force-sync` reverts these; that
 # is fine, apply.sh runs after every sync.

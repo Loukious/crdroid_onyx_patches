@@ -465,7 +465,7 @@ APPEND=0
 emit device/xiaomi/onyx 0004-lhdc-aptx-props-and-blob-fixups.patch \
     properties/product.prop extract-files.py
 
-emit device/xiaomi/onyx 0005-firmware-os3.0.302.0.patch proprietary-firmware.txt
+emit device/xiaomi/onyx 0005-firmware-g303-cn305-hybrid.patch proprietary-firmware.txt
 
 # Keep CFR enabled in the WCN7750 vendor configuration.
 emit device/xiaomi/onyx 0015-enable-wifi-cfr.patch \
@@ -516,7 +516,7 @@ emit vendor/gms 0001-keep-aosp-dialer.patch gms_full.mk
 # copies in -- they are binaries and have no business in a patch. Android.mk is
 # text, so it stays a patch: if crDroid regenerates it upstream this conflicts
 # loudly instead of being silently clobbered.
-emit vendor/xiaomi/onyx 0001-firmware-sha1s-os3.0.302.0.patch Android.mk
+emit vendor/xiaomi/onyx 0001-firmware-sha1s-g303-cn305-hybrid.patch Android.mk
 
 echo
 echo "Done. Totals:"

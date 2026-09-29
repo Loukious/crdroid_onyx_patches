@@ -81,7 +81,7 @@ patches/build_release/                        0001-lhdc-aconfig-flag
 patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0002-release-config-bp4a
                                               0003-lhdc-aptx-props-and-blob-fixups
-                                              0004-firmware-os3.0.302.0
+                                              0005-firmware-g303-cn305-hybrid
 patches/external_iw/                         0001-vendor-nested-data-option
 patches/frameworks_base/                      0001-gesture-navbar-space
                                               0003-secure-spaces-full-user-type
@@ -104,7 +104,7 @@ patches/system_vold/                          0001-secure-auth-key-erasure
 patches/vendor_gms/                           0001-keep-aosp-dialer
 patches/vendor_lineage/                       0001-kernel-bin-override
 patches/vendor_qcom_opensource_interfaces/    0001-lhdc-aidl
-patches/vendor_xiaomi_onyx/                   0001-firmware-sha1s-os3.0.302.0
+patches/vendor_xiaomi_onyx/                   0001-firmware-sha1s-g303-cn305-hybrid
 ```
 
 The `external/iw` patch adds `[--nested]` after the vendor OUI and subcommand
@@ -151,8 +151,9 @@ and the Kono-Ha kernel with it. See that directory's README.
 ## What `apply.sh` does beyond patching
 
 **Firmware overlay.** `vendor/xiaomi/onyx` syncs from crDroid's upstream GitLab
-(4 GB, hosted free by them). Only the ~350 MB that differs — the OS3.0.302.0
-`radio/` images and the two LHDC byte-patched blobs — lives in
+(4 GB, hosted free by them). Only the ~350 MB that differs — Global
+OS3.0.303.0 `radio/` images with the modem pair replaced by China
+OS3.0.305.0, plus the two LHDC byte-patched blobs — lives in
 [`proprietary_vendor_xiaomi_onyx-firmware`](https://gitlab.com/Loukious/proprietary_vendor_xiaomi_onyx-firmware),
 synced to `vendor/xiaomi/onyx-firmware` and copied over the top here. The two
 images above every host's 100 MB plain-blob limit (`modem.img` 137 MB,

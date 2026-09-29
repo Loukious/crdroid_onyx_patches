@@ -116,7 +116,7 @@ say "syncing"
 sync_pruned || exit 1
 
 # -------------------------------------------------------------------- patches
-# Patch set + OS3.0.302.0 firmware overlay + the Kono-Ha kernel Image.
+# Patch set + G303/CN305 hybrid firmware overlay + the Kono-Ha kernel Image.
 # apply.sh is idempotent and exits non-zero on a genuine failure, so a
 # half-patched tree can never reach mka.
 say "applying the onyx patch set"
