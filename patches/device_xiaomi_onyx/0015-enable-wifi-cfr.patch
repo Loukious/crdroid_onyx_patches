@@ -1,0 +1,13 @@
+diff --git a/configs/wifi/WCNSS_qcom_cfg.ini b/configs/wifi/WCNSS_qcom_cfg.ini
+index 68ecad8..d1ea4b5 100644
+--- a/configs/wifi/WCNSS_qcom_cfg.ini
++++ b/configs/wifi/WCNSS_qcom_cfg.ini
+@@ -109,7 +109,7 @@ enable_mod_dtim_on_system_suspend=1
+ 
+ # Channel Rrequency Response
+ # Bitmap denoting the PDEVs for which CFR needs to be disabled
+-cfr_disable=7
++cfr_disable=0
+ 
+ # configure MAC address from the cfg file wlan_mac.bin
+ read_mac_addr_from_mac_file=1

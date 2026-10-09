@@ -155,7 +155,7 @@ requires anyway.
 
 **WLAN driver overlay.** The wlan driver the ROM ships is
 [`Loukious/vendor_qcom_opensource_wlan`](https://github.com/Loukious/vendor_qcom_opensource_wlan)
-(`onyx-v-oss-monitor-direct`): MiCode's qcacld with the annibale→onyx port plus
+(`onyx-v-oss-monitor-direct-konoha-abi`): MiCode's qcacld with the annibale→onyx port plus
 monitor mode and direct packet injection. It is synced standalone to
 `kernel/xiaomi/onyx-wlan` (repo cannot nest a project inside `sm8735-modules`)
 and `apply.sh` rsyncs its four driver dirs — `fw-api`, `platform`,
@@ -165,6 +165,13 @@ stock driver. The fork carries the sm8735-modules tree build wiring itself
 (`sun_gki_defconfig` includes, `USE_EXTERNAL_CONFIGS`, the
 `sun_gki_wcn7750` profile, `-D__ANDROID_COMMON_KERNEL__`), so the overlay needs
 no Makefile surgery on this side. `SKIP_WLAN=1` skips the overlay.
+
+**Wi-Fi CFR capture.** Device patch `0015-enable-wifi-cfr.patch` sets
+`cfr_disable=0` in the WCN7750 vendor INI. The WLAN fork enables streamfs
+capture output and uses the single DBR ring supported by WCN7750 firmware.
+Its ABI preparation enables kernel relay and debugfs support and rejects
+older caches without those options. Rebuild and install the ROM/module to
+use the source fixes; enabling CFR does not start a capture session by itself.
 
 **Dialer.** `vendor_gms/0001` drops GoogleDialer from `gms_full.mk`. Evo's
 GoogleDialer prebuilt carries `LOCAL_OVERRIDES_PACKAGES := Dialer`, which
