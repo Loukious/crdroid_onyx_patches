@@ -170,7 +170,11 @@ no Makefile surgery on this side. `SKIP_WLAN=1` skips the overlay.
 `cfr_disable=0` in the WCN7750 vendor INI. The WLAN fork enables streamfs
 capture output and uses the single DBR ring supported by WCN7750 firmware.
 Its ABI preparation enables kernel relay and debugfs support and rejects
-older caches without those options. Rebuild and install the ROM/module to
+older caches without those options. The device kernel hook also merges
+`configs/wifi/cfr-kernel.config` into the source-built kernel so its System.map
+contains the relay symbols used during vendor-module validation. This uses a
+separate fragment because `KERNEL_CONFIG_OVERRIDE` writes multiple options on
+one line. Rebuild and install the ROM/module to
 use the source fixes; enabling CFR does not start a capture session by itself.
 
 **Dialer.** `vendor_gms/0001` drops GoogleDialer from `gms_full.mk`. Evo's

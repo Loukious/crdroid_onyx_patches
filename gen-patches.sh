@@ -465,7 +465,8 @@ emit device/xiaomi/onyx 0004-lhdc-aptx-props-and-blob-fixups.patch \
 emit device/xiaomi/onyx 0005-firmware-os3.0.302.0.patch proprietary-firmware.txt
 
 # Keep CFR enabled in the WCN7750 vendor configuration.
-emit device/xiaomi/onyx 0015-enable-wifi-cfr.patch configs/wifi/WCNSS_qcom_cfg.ini
+emit device/xiaomi/onyx 0015-enable-wifi-cfr.patch \
+    configs/wifi/WCNSS_qcom_cfg.ini configs/wifi/cfr-kernel.config
 
 # ------------------------------------------------------------------- vendor/lineage
 # kernel.mk also contains 0006's target-files/module ordering dependency. Keep

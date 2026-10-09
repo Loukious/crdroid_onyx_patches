@@ -1,11 +1,15 @@
 diff --git a/BoardConfig.mk b/BoardConfig.mk
-index 08b8573..6410ac0 100644
+index 08b8573..80d1396 100644
 --- a/BoardConfig.mk
 +++ b/BoardConfig.mk
-@@ -283,3 +283,6 @@ include vendor/xiaomi/onyx/BoardConfigVendor.mk
+@@ -283,3 +283,10 @@ include vendor/xiaomi/onyx/BoardConfigVendor.mk
  
  # Vendor MiuiCamera
  -include device/xiaomi/onyx-miuicamera/BoardConfig.mk
 +
 +# Custom prebuilt kernel
 +-include vendor/extra/BoardConfigKernel.mk
++
++# CFR streamfs uses relay exports. The source-built kernel also supplies the
++# System.map used to validate vendor modules before packing the Kono-Ha ROM.
++TARGET_KERNEL_CONFIG_EXT += device/xiaomi/onyx/configs/wifi/cfr-kernel.config

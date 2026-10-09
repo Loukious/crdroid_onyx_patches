@@ -11,3 +11,9 @@ index 68ecad8..d1ea4b5 100644
  
  # configure MAC address from the cfg file wlan_mac.bin
  read_mac_addr_from_mac_file=1
+diff --git a/configs/wifi/cfr-kernel.config b/configs/wifi/cfr-kernel.config
+new file mode 100644
+--- /dev/null
++++ b/configs/wifi/cfr-kernel.config
+@@ -0,0 +1 @@
++CONFIG_RELAY=y
