@@ -208,7 +208,7 @@ emit_context_hunks() {
     printf '  %-42s %6d lines\n' "${proj//\//_}/$name" "$(wc -l < "$target")"
 }
 
-PROJECTS="build/release device/xiaomi/onyx frameworks/base hardware/nxp/nfc lineage-sdk system/vold system/security
+PROJECTS="build/release device/xiaomi/onyx external/iw frameworks/base hardware/nxp/nfc lineage-sdk system/vold system/security
 packages/apps/Settings packages/apps/Updater packages/apps/Evolver
 packages/modules/Bluetooth
 vendor/gms vendor/lineage vendor/qcom/opensource/interfaces
@@ -234,6 +234,9 @@ for p in $PROJECTS; do
 done
 
 echo "Generating patches into $OUT/patches"
+
+# ---------------------------------------------------------------- external/iw
+emit external/iw 0001-vendor-nested-data-option.patch vendor.c
 
 # ---------------------------------------------------------------- frameworks/base
 # Settings.java carries only GESTURE_NAVBAR_SPACE_MODE now, so no hunk filter.

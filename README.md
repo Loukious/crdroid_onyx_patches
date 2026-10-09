@@ -82,6 +82,7 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0002-release-config-bp4a
                                               0003-lhdc-aptx-props-and-blob-fixups
                                               0004-firmware-os3.0.302.0
+patches/external_iw/                         0001-vendor-nested-data-option
 patches/frameworks_base/                      0001-gesture-navbar-space
                                               0003-secure-spaces-full-user-type
                                               0004-authentication-user-identity
@@ -105,6 +106,17 @@ patches/vendor_lineage/                       0001-kernel-bin-override
 patches/vendor_qcom_opensource_interfaces/    0001-lhdc-aidl
 patches/vendor_xiaomi_onyx/                   0001-firmware-sha1s-os3.0.302.0
 ```
+
+The `external/iw` patch adds `[--nested]` after the vendor OUI and subcommand
+for `send`, `recv`, and `recvbin`. It sets `NLA_F_NESTED` on the vendor-data
+container for commands such as Qualcomm CFR, whose driver declares a Netlink
+attribute policy. Commands without the option continue to send raw bytes.
+For example: `iw dev wlan0 vendor send 0x001374 0xad --nested settings.bin`.
+The file, stdin (`-`), and hexadecimal-byte input modes all remain supported. The
+2026-10-09 local `m iw -j8` build passed. An ADB test on the flashed Onyx
+confirmed all three input modes across send/recv/recvbin, preserved raw-mode
+rejection for CFR, checked malformed/missing input, and collected 94 fresh
+successful CFR records with valid record boundaries and trailers.
 
 Most patches are generated from the working-tree diff. Secure Spaces is
 intentionally committed in local feature commits and mirrored in the user's

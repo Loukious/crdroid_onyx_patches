@@ -82,6 +82,7 @@ declare -A PROJECT=(
     [device_xiaomi_onyx]="device/xiaomi/onyx"
     [device_xiaomi_onyx-miuicamera]="device/xiaomi/onyx-miuicamera"
     [device_qcom_sepolicy_vndr_sm8750]="device/qcom/sepolicy_vndr/sm8750"
+    [external_iw]="external/iw"
     [frameworks_base]="frameworks/base"
     [hardware_nxp_nfc]="hardware/nxp/nfc"
     [hardware_qcom-caf_sm8750_audio_primary-hal]="hardware/qcom-caf/sm8750/audio/primary-hal"

@@ -1,0 +1,59 @@
+diff --git a/vendor.c b/vendor.c
+index d203d85..1b8c76f 100644
+--- a/vendor.c
++++ b/vendor.c
+@@ -78,6 +78,8 @@ static int handle_vendor(struct nl80211_state *state,
+ {
+ 	unsigned int oui;
+ 	unsigned int subcmd;
++	unsigned int data_arg = 2;
++	int data_type = NL80211_ATTR_VENDOR_DATA;
+ 	char buf[2048] = {};
+ 	int res, count = 0;
+ 	FILE *file = NULL;
+@@ -97,10 +99,17 @@ static int handle_vendor(struct nl80211_state *state,
+ 		return 2;
+ 	}
+ 
+-	if (!strcmp(argv[2], "-"))
++	if (!strcmp(argv[data_arg], "--nested")) {
++		data_type |= NLA_F_NESTED;
++		data_arg++;
++		if (argc <= data_arg)
++			return 1;
++	}
++
++	if (!strcmp(argv[data_arg], "-"))
+ 		file = stdin;
+ 	else
+-		file = fopen(argv[2], "r");
++		file = fopen(argv[data_arg], "r");
+ 
+ 	NLA_PUT_U32(msg, NL80211_ATTR_VENDOR_ID, oui);
+ 	NLA_PUT_U32(msg, NL80211_ATTR_VENDOR_SUBCMD, subcmd);
+@@ -110,13 +119,13 @@ static int handle_vendor(struct nl80211_state *state,
+ 		if (file != stdin)
+ 			fclose(file);
+ 	} else
+-		count = read_hex(argc - 2, &argv[2], buf, sizeof(buf));
++		count = read_hex(argc - data_arg, &argv[data_arg], buf, sizeof(buf));
+ 
+ 	if (count < 0)
+ 		return -EINVAL;
+ 
+ 	if (count > 0)
+-		NLA_PUT(msg, NL80211_ATTR_VENDOR_DATA, count, buf);
++		NLA_PUT(msg, data_type, count, buf);
+ 
+ 	return 0;
+ 
+@@ -142,6 +151,6 @@ static int handle_vendor_recv_bin(struct nl80211_state *state,
+ 	return handle_vendor(state, msg, argc, argv, id);
+ }
+ 
+-COMMAND(vendor, send, "<oui> <subcmd> <filename|-|hex data>", NL80211_CMD_VENDOR, 0, CIB_NETDEV, handle_vendor, "");
+-COMMAND(vendor, recv, "<oui> <subcmd> <filename|-|hex data>", NL80211_CMD_VENDOR, 0, CIB_NETDEV, handle_vendor_recv, "");
+-COMMAND(vendor, recvbin, "<oui> <subcmd> <filename|-|hex data>", NL80211_CMD_VENDOR, 0, CIB_NETDEV, handle_vendor_recv_bin, "");
++COMMAND(vendor, send, "<oui> <subcmd> [--nested] <filename|-|hex data>", NL80211_CMD_VENDOR, 0, CIB_NETDEV, handle_vendor, "Use --nested when the payload contains Netlink attributes; raw data is the default.");
++COMMAND(vendor, recv, "<oui> <subcmd> [--nested] <filename|-|hex data>", NL80211_CMD_VENDOR, 0, CIB_NETDEV, handle_vendor_recv, "Use --nested when the payload contains Netlink attributes; raw data is the default.");
++COMMAND(vendor, recvbin, "<oui> <subcmd> [--nested] <filename|-|hex data>", NL80211_CMD_VENDOR, 0, CIB_NETDEV, handle_vendor_recv_bin, "Use --nested when the payload contains Netlink attributes; raw data is the default.");
