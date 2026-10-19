@@ -132,11 +132,14 @@ apply_patches() {
                     ;;
             esac
 
-            # Already applied? Then the reverse patch applies cleanly.
+            # Already applied? Then the reverse patch applies cleanly.  Use the
+            # same fuzz allowance as the forward non-security path below so a
+            # context-shifted patch is not applied repeatedly just because its
+            # reverse probe was stricter than its forward application.
             if { [ "$exact" = 1 ] &&
                     git -C "$ROM/$proj" apply --reverse --check "$patch" >/dev/null 2>&1; } ||
                     { [ "$exact" = 0 ] &&
-                    patch -d "$ROM/$proj" -p1 -R --dry-run < "$patch" >/dev/null 2>&1; }; then
+                    patch -d "$ROM/$proj" -p1 -R --fuzz=3 --dry-run < "$patch" >/dev/null 2>&1; }; then
                 echo "   -- $n (already applied)"
                 already=$((already+1))
                 continue
@@ -584,12 +587,17 @@ fi
 
 [ -d "$ROM/.repo" ] || { red "FATAL: $ROM is not a repo tree (no .repo)"; exit 1; }
 
-apply_patches
+if [ "${SKIP_PATCHES:-0}" != "1" ]; then apply_patches; fi
 apply_scripts
 
 if [ "${SKIP_FIRMWARE:-0}" != "1" ]; then
     echo "== firmware overlay"
-    overlay_firmware || fail=1
+    if overlay_firmware; then
+        echo "== refresh staged radio SHA1s"
+        python3 "$HERE/ci/refresh-radio-sha1s.py" "$ROM/vendor/xiaomi/onyx" || fail=1
+    else
+        fail=1
+    fi
 fi
 
 if [ "${SKIP_WLAN:-0}" != "1" ]; then

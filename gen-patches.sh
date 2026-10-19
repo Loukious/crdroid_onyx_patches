@@ -27,7 +27,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # a later repo sync or unrelated local commit from silently changing generated
 # security-sensitive patches.
 FRAMEWORK_SECURE_BASE="${FRAMEWORK_SECURE_BASE:-d5d4e643234708b7a3c280e7d41ba7fd385aaef1}"
-FRAMEWORK_SECURE_END="${FRAMEWORK_SECURE_END:-d7b3ceb5165ec23a70afadcaab9b5b396d9736b8}"
+FRAMEWORK_SECURE_END="${FRAMEWORK_SECURE_END:-287bcdf81d534f35adbe154b2f83c9d93f2e6450}"
 SETTINGS_SECURE_BASE="${SETTINGS_SECURE_BASE:-36d32b115a6ce46e8b3098b62ccd1fe5a1f80fc0}"
 SETTINGS_SECURE_END="${SETTINGS_SECURE_END:-5abf5fa3c5bfce68f3e04f372db51bf94b6724df}"
 LINEAGE_SECURE_BASE="${LINEAGE_SECURE_BASE:-c3efc4ee11e2348a058f71b021e2ab4c403fdc64}"
@@ -208,11 +208,10 @@ emit_context_hunks() {
     printf '  %-42s %6d lines\n' "${proj//\//_}/$name" "$(wc -l < "$target")"
 }
 
-PROJECTS="build/release device/xiaomi/onyx external/iw frameworks/base hardware/nxp/nfc lineage-sdk system/vold system/security
+PROJECTS="build/release device/xiaomi/onyx external/iw frameworks/base kernel/xiaomi/sm8735 lineage-sdk system/vold system/security
 packages/apps/Settings packages/apps/Updater packages/apps/Evolver
 packages/modules/Bluetooth
-vendor/gms vendor/lineage vendor/qcom/opensource/interfaces
-vendor/xiaomi/onyx"
+vendor/gms vendor/lineage vendor/qcom/opensource/interfaces"
 
 cleanup() {
     for p in $PROJECTS; do
@@ -391,6 +390,7 @@ if [ -f "$ROM/frameworks/base/services/core/java/com/android/server/biometrics/s
         services/core/java/com/android/server/biometrics/AuthSession.java \
         services/core/java/com/android/server/biometrics/BiometricService.java \
         services/core/java/com/android/server/biometrics/BiometricUserScope.java \
+        services/core/java/com/android/server/biometrics/Utils.java \
         services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java \
         services/core/java/com/android/server/biometrics/sensors/ClientMonitorCallbackConverter.java \
         services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java \
@@ -433,16 +433,8 @@ if [ -f "$ROM/system/security/keystore2/src/biometric_user_scope.rs" ]; then
         keystore2/src/lib.rs
 fi
 
-# --------------------------------------------------------------- hardware/nxp/nfc
-# Keep the timer-visible client ID zeroing from the 2026 UAF fix, while giving
-# the legacy client thread a stable queue handle until it is joined. This avoids
-# the teardown race where the thread spins forever on msgrcv(0) after NFC closes.
-emit hardware/nxp/nfc 0001-fix-client-thread-teardown-race.patch \
-    snxxx/halimpl/hal/phNxpNciHal.cc \
-    snxxx/halimpl/hal/phNxpNciHal.h \
-    snxxx/halimpl/recovery/phNxpNciHal_Recovery.cc \
-    snxxx/halimpl/tml/phDal4Nfc_messageQueueLib.cc \
-    snxxx/halimpl/tml/phDal4Nfc_messageQueueLib.h
+# NFC teardown workaround retired: upstream reverted the regression.
+# Do not regenerate the retired patch (retired/hardware_nxp_nfc).
 
 # ------------------------------------------------------------------------- LHDC
 emit packages/modules/Bluetooth 0001-lhdc-v5-qti-offload.patch .
@@ -473,6 +465,12 @@ emit device/xiaomi/onyx 0005-firmware-g303-cn305-hybrid.patch proprietary-firmwa
 # Keep CFR enabled in the WCN7750 vendor configuration.
 emit device/xiaomi/onyx 0015-enable-wifi-cfr.patch \
     configs/wifi/WCNSS_qcom_cfg.ini configs/wifi/cfr-kernel.config
+
+# -------------------------------------------------------------- kernel/xiaomi/sm8735
+# Enable relay symbols in the source kernel used for WCN7750 module validation.
+# Do not rely exclusively on the custom Kono-Ha prebuilt (which already has RELAY).
+emit kernel/xiaomi/sm8735 0004-enable-relay-for-wcn7750-streamfs.patch \
+    arch/arm64/configs/vendor/onyx_perf.config
 
 # ------------------------------------------------------------------- vendor/lineage
 # kernel.mk also contains 0006's target-files/module ordering dependency. Keep
@@ -513,13 +511,9 @@ emit_selected_hunks packages/apps/Evolver 0001-gesture-navbar-space-ui.patch \
 # product package list lets the platform Dialer remain installed.
 emit vendor/gms 0001-keep-aosp-dialer.patch gms_full.mk
 
-# --------------------------------------------------------------- vendor/xiaomi/onyx
-# Only Android.mk. The 351MB of rebuilt radio/ images and the 2 byte-patched
-# LHDC blobs ship as a separate overlay project (onyx-firmware) that apply.sh
-# copies in -- they are binaries and have no business in a patch. Android.mk is
-# text, so it stays a patch: if crDroid regenerates it upstream this conflicts
-# loudly instead of being silently clobbered.
-emit vendor/xiaomi/onyx 0001-firmware-sha1s-g303-cn305-hybrid.patch Android.mk
+# Radio SHA1 digests are recalculated by ci/refresh-radio-sha1s.py AFTER
+# staging the actual firmware images in apply.sh. A static Android.mk patch
+# would be incorrect whenever the upstream radio list or blobs change.
 
 echo
 echo "Done. Totals:"

@@ -62,9 +62,11 @@ before disclosing space names and counts. The current stack includes the native
 key-erasure/duress path, shared-hardware lockscreen fingerprint routing,
 first-touch routing fences, anonymous user-switch transition handling, the
 main-thread bouncer fix, and a dedicated routed fingerprint success haptic. The
-NXP NFC teardown-race fix is preserved separately under
-`patches/hardware_nxp_nfc`. Post-flash runtime validation is still required for
-the patched NFC HAL and the routed fingerprint haptic. See
+The previous NXP NFC teardown-race workaround has been retired to
+`retired/hardware_nxp_nfc`: upstream LineageOS commit 66ef2f3 (2026-10-04)
+reverted the problematic f032114 teardown fix responsible for intermittent
+NFC logspam and battery drain. Do not reapply the workaround on the new base.
+Post-flash runtime validation is still required for NFC and the routed fingerprint haptic. See
 [`SECURE_AUTH_IMPLEMENTATION_NOTES.md`](../SECURE_AUTH_IMPLEMENTATION_NOTES.md)
 for scope and validation. The Android 17 focused integration build passes, and
 the full `mka evolution -j12` product build completed successfully on
@@ -92,7 +94,7 @@ patches/frameworks_base/                      0001-gesture-navbar-space
                                               0008-secure-auth-duress-verifier
                                               0009-secure-space-entry-coordinator
                                               0010-secure-space-fingerprint-routing
-patches/hardware_nxp_nfc/                     0001-fix-client-thread-teardown-race
+retired/hardware_nxp_nfc/                     0001-fix-client-thread-teardown-race (NOT applied)
 patches/lineage-sdk/                          0001-secure-space-user-switch-observer-acks
 patches/packages_apps_Evolver/                0001-gesture-navbar-space-ui
 patches/packages_apps_Settings/               0001-gesture-navbar-space-ui
@@ -104,7 +106,7 @@ patches/system_vold/                          0001-secure-auth-key-erasure
 patches/vendor_gms/                           0001-keep-aosp-dialer
 patches/vendor_lineage/                       0001-kernel-bin-override
 patches/vendor_qcom_opensource_interfaces/    0001-lhdc-aidl
-patches/vendor_xiaomi_onyx/                   0001-firmware-sha1s-g303-cn305-hybrid
+retired/vendor_xiaomi_onyx/                   0001-firmware-sha1s-g303-cn305-hybrid (NOT applied)
 ```
 
 The `external/iw` patch adds `[--nested]` after the vendor OUI and subcommand
@@ -301,5 +303,32 @@ secondary admin policy resolution. The public privacy patch additionally filters
 the power-menu count and public user identity; the Settings patch disables the
 standard Users page inside a Secure Space. The latest lifecycle/privacy changes
 passed the focused Android 17 integration build and the full Evolution X product
-build. Post-flash runtime verification remains for the new NFC teardown path,
+build. Post-flash runtime verification remains for upstream NFC without the retired workaround,
 routed fingerprint-success haptic, and LHDC V5 vendor/offload behavior.
+
+## October 19, 2026: reproducible security and device patch integration
+
+The October 19 Evolution X Android 17 (`cnb`) OTA was compiled after a full
+upstream sync and a manual reconciliation of Secure Spaces and duress changes.
+The framework feature branches were **not** checked out as the ROM base:
+`frameworks/base`, Settings, and `lineage-sdk` use the synced Evolution X
+revisions, plus the numbered patches above. The biometric `MANAGE_USERS`
+identity-resolution fix from `frameworks_base` commit `287bcdf` is included.
+
+Before publication of these rebased patches, they were applied in filename
+order to clean, unmodified files exported from the October 19 upstream Git
+HEADs. All 15 security/Settings/lineage patches passed and all 169 resulting
+source files were byte-for-byte identical to the locally built ROM tree.
+The remaining device/kernel/Soong/codec patches were also clean-apply tested.
+This is **patch application validation**, not a fresh complete ROM compilation
+or on-device regression suite. Future upstream changes may require rebasing.
+
+The Oct 19 source has the new WCN7750 CFR configuration and relay exports.
+`kernel_xiaomi_sm8735/0004` reproduces the kernel source fragment that was
+present in the successful local build; the device's CFR config extension is
+retained from newer remote commits. `ci/refresh-radio-sha1s.py` now replaces
+obsolete static SHA1s based on the actual staged firmware and must continue to
+run **after** overlaying the hybrid G303/CN305 radio images.
+
+Two obsolete patches are archived under `retired/` (NFC teardown and static
+firmware SHA1). The generator no longer resurrects them.

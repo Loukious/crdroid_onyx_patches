@@ -338,19 +338,18 @@ index 452cc435a36db..8249862c97cb3 100644
          merge(
                  deviceEntryFingerprintAuthInteractor.fingerprintFailure,
 diff --git a/services/core/java/com/android/server/biometrics/AuthService.java b/services/core/java/com/android/server/biometrics/AuthService.java
-index 393b67e84620d..cfdd68b68b783 100644
+index 393b67e84620d..252ad96839530 100644
 --- a/services/core/java/com/android/server/biometrics/AuthService.java
 +++ b/services/core/java/com/android/server/biometrics/AuthService.java
-@@ -301,6 +301,16 @@ public class AuthService extends SystemService {
+@@ -301,6 +301,15 @@ public class AuthService extends SystemService {
          public long authenticate(IBinder token, long sessionId, int userId,
                  IBiometricServiceReceiver receiver, String opPackageName, PromptInfo promptInfo)
                  throws RemoteException {
 +            int caller = android.os.Binder.getCallingUid();
 +            if (caller != android.os.Process.SYSTEM_UID
 +                    && !Utils.isKeyguard(getContext(), opPackageName)) {
-+                android.os.UserManager users = getContext().getSystemService(android.os.UserManager.class);
-+                if (users.getCredentialOwnerProfile(android.os.UserHandle.getUserId(caller))
-+                        != users.getCredentialOwnerProfile(userId)) {
++                if (!Utils.isSameCredentialOwner(getContext(), UserHandle.getUserId(caller),
++                        userId)) {
 +                    throw new SecurityException("App biometric authentication is scoped to its credential owner");
 +                }
 +            }
@@ -372,19 +371,18 @@ index ee2f0fc2fe35c..13c966e7d5e0a 100644
                      } else {
                          Slog.e(TAG, "mTokenEscrow is null");
 diff --git a/services/core/java/com/android/server/biometrics/BiometricService.java b/services/core/java/com/android/server/biometrics/BiometricService.java
-index 43891f57ffabc..ce84d6bac6f5c 100644
+index 43891f57ffabc..390eca2aa087c 100644
 --- a/services/core/java/com/android/server/biometrics/BiometricService.java
 +++ b/services/core/java/com/android/server/biometrics/BiometricService.java
-@@ -1006,6 +1006,16 @@ public class BiometricService extends SystemService {
+@@ -1006,6 +1006,15 @@ public class BiometricService extends SystemService {
                  IBiometricServiceReceiver receiver, String opPackageName, PromptInfo promptInfo) {
  
              super.authenticate_enforcePermission();
 +            int caller = android.os.Binder.getCallingUid();
 +            if (caller != android.os.Process.SYSTEM_UID
 +                    && !Utils.isKeyguard(getContext(), opPackageName)) {
-+                android.os.UserManager users = getContext().getSystemService(android.os.UserManager.class);
-+                if (users.getCredentialOwnerProfile(android.os.UserHandle.getUserId(caller))
-+                        != users.getCredentialOwnerProfile(userId)) {
++                if (!Utils.isSameCredentialOwner(getContext(), UserHandle.getUserId(caller),
++                        userId)) {
 +                    throw new SecurityException("App biometric authentication is scoped to its credential owner");
 +                }
 +            }
@@ -441,6 +439,34 @@ index 0000000000000..112c113040a16
 +        return authorization.addAuthTokenForUsers(scope, token);
 +    }
 +}
+diff --git a/services/core/java/com/android/server/biometrics/Utils.java b/services/core/java/com/android/server/biometrics/Utils.java
+index b9c99a35b5700..ae3d6a6095d4c 100644
+--- a/services/core/java/com/android/server/biometrics/Utils.java
++++ b/services/core/java/com/android/server/biometrics/Utils.java
+@@ -525,6 +525,23 @@ public class Utils {
+         }
+     }
+ 
++    /**
++     * Resolves credential ownership as the system, without changing the identity used for the
++     * caller's biometric permission and app-ops checks. UserManager requires MANAGE_USERS for
++     * this query, which ordinary biometric clients do not hold.
++     */
++    public static boolean isSameCredentialOwner(@NonNull Context context, int callingUserId,
++            int targetUserId) {
++        final long identity = Binder.clearCallingIdentity();
++        try {
++            final UserManager users = context.getSystemService(UserManager.class);
++            return users.getCredentialOwnerProfile(callingUserId)
++                    == users.getCredentialOwnerProfile(targetUserId);
++        } finally {
++            Binder.restoreCallingIdentity(identity);
++        }
++    }
++
+     /**
+      * Checks if a client package matches Keyguard and can perform internal biometric operations.
+      *
 diff --git a/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java b/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java
 index 48b35269c7496..a855f8c50893e 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/AuthenticationClient.java
@@ -512,7 +538,7 @@ index 1fc7c70de8fb0..75757c40f8c67 100644
          mSensorReceiver = sensorReceiver;
          mFaceServiceReceiver = null;
 diff --git a/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java b/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java
-index 29c12675361ad..ef0a82abab2c7 100644
+index 29c12675361ad..51405a4e0234a 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/fingerprint/FingerprintService.java
 @@ -31,6 +31,7 @@ import static android.hardware.fingerprint.FingerprintSensorConfigurations.getIF
@@ -616,22 +642,20 @@ index 29c12675361ad..ef0a82abab2c7 100644
          @Override // Binder call
          public long authenticate(
                  final IBinder token,
-@@ -276,6 +356,14 @@ public class FingerprintService extends SystemService {
+@@ -276,6 +356,12 @@ public class FingerprintService extends SystemService {
              final String opPackageName = options.getOpPackageName();
              final String attributionTag = options.getAttributionTag();
              final int userId = options.getUserId();
 +            final boolean isKeyguard = Utils.isKeyguard(getContext(), opPackageName);
 +            if (callingUid != Process.SYSTEM_UID && !isKeyguard) {
-+                android.os.UserManager users = getContext().getSystemService(android.os.UserManager.class);
-+                if (users.getCredentialOwnerProfile(callingUserId)
-+                        != users.getCredentialOwnerProfile(userId)) {
++                if (!Utils.isSameCredentialOwner(getContext(), callingUserId, userId)) {
 +                    throw new SecurityException("App fingerprint authentication is scoped to its credential owner");
 +                }
 +            }
  
              if (!canUseFingerprint(
                      opPackageName,
-@@ -290,12 +378,11 @@ public class FingerprintService extends SystemService {
+@@ -290,12 +376,11 @@ public class FingerprintService extends SystemService {
  
              // Keyguard check must be done on the caller's binder identity, since it also checks
              // permission.
@@ -646,7 +670,7 @@ index 29c12675361ad..ef0a82abab2c7 100644
                      // If this happens, something in KeyguardUpdateMonitor is wrong.
                      // SafetyNet for b/79776455
                      EventLog.writeEvent(0x534e4554, "79776455");
-@@ -1170,6 +1257,9 @@ public class FingerprintService extends SystemService {
+@@ -1170,6 +1255,9 @@ public class FingerprintService extends SystemService {
              int uid,
              int pid,
              int userId) {

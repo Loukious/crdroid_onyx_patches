@@ -1,0 +1,12 @@
+diff --git a/arch/arm64/configs/vendor/onyx_perf.config b/arch/arm64/configs/vendor/onyx_perf.config
+index f5fd08bba..45a2dc7b7 100644
+--- a/arch/arm64/configs/vendor/onyx_perf.config
++++ b/arch/arm64/configs/vendor/onyx_perf.config
+@@ -57,3 +57,7 @@ CONFIG_MCA_QCOM_SYSFS=m
+ CONFIG_MCA_QCOM_SMEM=m
+ CONFIG_MCA_QCOM_PANEL=m
+ CONFIG_MCA_UT_TEST=m
++
++# The WCN7750 streamfs interface requires relay_* exports. The ROM source
++# kernel builds vendor modules; the shipped Kono-Ha kernel already enables RELAY.
++CONFIG_RELAY=y

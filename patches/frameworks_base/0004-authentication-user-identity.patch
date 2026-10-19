@@ -592,7 +592,7 @@ index 3f23a4e7d..a0a393c3c 100644
  
      /**
       * Returns the current maximum number of login attempts that are allowed before the device or
-@@ -261,11 +269,18 @@ constructor(
+@@ -258,5 +258,12 @@ constructor(
      @SceneFrameworkTableLog private val tableLogBuffer: TableLogBuffer,
  ) : AuthenticationRepository {
  
@@ -605,14 +605,6 @@ index 3f23a4e7d..a0a393c3c 100644
 +
      override val hintedPinLength: Int = 6
  
-     /**
--     * Emits whenever the current user's lockscreen knowledge factor (credential) changes.
--     * Used to force-refresh cached pattern-related settings (size, dots, error path) that
-+     * Emits whenever the current user's lockscreen knowledge factor (credential) changes. Used to
-+     * force-refresh cached pattern-related settings (size, dots, error path) that
-      * LockSettingsService doesn't otherwise notify observers about.
-      */
-     private val lockscreenKnowledgeFactorChanged: Flow<Unit> =
 @@ -383,10 +398,16 @@ constructor(
          _failedAuthenticationAttempts.asStateFlow()
  
