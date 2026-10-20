@@ -91,12 +91,27 @@ sync_once() {
 }
 sync_pruned() {
     local round=1 out victims
+    local retried_vendor_gms=0
     while :; do
         out="$(mktemp)"
         sync_once >"$out" 2>&1
         local rc=$?
         cat "$out"
         [ "$rc" -eq 0 ] && { rm -f "$out"; return 0; }
+        # A reused Crave source tree once failed to initialize vendor_gms
+        # (build 304958), even after resync.sh retried. Recover ONLY that
+        # project with repo's own checkout repair flags; do not delete shared
+        # git object stores, unrelated trees, or the whole workspace.
+        if [ "$retried_vendor_gms" -eq 0 ] &&
+           grep -Eq 'Cannot initialize work tree for vendor_gms|Cannot checkout vendor_gms' "$out"; then
+            retried_vendor_gms=1
+            rm -f "$out"
+            say "repairing only vendor/gms checkout (one attempt)"
+            repo sync -c --force-sync --force-checkout --no-clone-bundle \
+                --no-tags -j1 vendor/gms || \
+              echo "warning: targeted vendor/gms retry failed; normal sync will diagnose"
+            continue
+        fi
         victims="$(grep -oE 'error: [^:]+: Cannot remove project: uncommitted changes' \
                    "$out" | sed 's/^error: //; s/: Cannot remove.*//' | sort -u)"
         rm -f "$out"

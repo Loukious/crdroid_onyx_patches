@@ -42,6 +42,12 @@ for d in $INDEX_DIRS; do [ -d "$d" ] && dirs+=("$d"); done
 {
   grep -rhoE '(class|interface|object|enum class|typealias|annotation class|@interface) +[A-Za-z_][A-Za-z0-9_]*' \
     --include=*.kt --include=*.java "${dirs[@]}" 2>/dev/null | awk '{print $NF}'
+  # AIDL interfaces are defined in .aidl source files and are compiled into
+  # Java interfaces by Soong. Previous checks ignored them, falsely claiming
+  # com.android.internal.widget.{ILockSettings,ISecureSpaceCredentialAttempt}
+  # were missing even though both were declared in the patched framework.
+  grep -rhoE '^[[:space:]]*(oneway[[:space:]]+)?(interface|parcelable|enum)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' \
+    --include='*.aidl' "${dirs[@]}" 2>/dev/null | awk '{print $NF}'
   # top-level functions, with or without an extension receiver
   grep -rhoE 'fun +([A-Za-z0-9_<>,.?]+\.)?[A-Za-z_][A-Za-z0-9_]*' \
     --include=*.kt "${dirs[@]}" 2>/dev/null | sed -E 's/^fun +//; s/^.*\.//'
