@@ -226,7 +226,11 @@ clang_bin="$(for d in prebuilts/clang/host/linux-x86/clang-*/bin; do
     [ -x "$d/clang" ] && printf '%s\n' "$d"
 done | sort -V | tail -1)"
 [ -n "$clang_bin" ] || { echo "FATAL: no prebuilts/clang/host/linux-x86/clang-* found"; exit 1; }
-CLANG_PATH="$PWD/$clang_bin" bash "$prep" || { echo "FATAL: konoha-abi prep failed"; exit 1; }
+# Keep ABI commands and diagnostics in reviewable source. The wrapper writes
+# directly to files and preserves the preparation exit status.
+CLANG_PATH="$PWD/$clang_bin" bash "$HERE/ci/crave-abi-trace.sh" "$prep"
+abi_rc=$?
+[ "$abi_rc" -eq 0 ] || { echo "FATAL: konoha-abi prep failed (exit $abi_rc; see ABI trace above)"; exit "$abi_rc"; }
 
 
 # ---------------------------------------------------------------------- build
