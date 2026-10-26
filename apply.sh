@@ -590,6 +590,20 @@ fi
 if [ "${SKIP_PATCHES:-0}" != "1" ]; then apply_patches; fi
 apply_scripts
 
+echo "== validating patched XML"
+xml_projects=()
+for key in "${!PROJECT[@]}"; do
+    if { [ -d "$HERE/patches/$key" ] || [ -d "$HERE/scripts/$key" ]; } &&
+            [ -d "$ROM/${PROJECT[$key]}" ]; then
+        xml_projects+=("$ROM/${PROJECT[$key]}")
+    fi
+done
+python3 "$HERE/ci/check-patched-xml.py" "${xml_projects[@]}" || fail=1
+if [ "$fail" -ne 0 ]; then
+    red "PATCHING FAILED - not safe to build"
+    exit 1
+fi
+
 if [ "${SKIP_FIRMWARE:-0}" != "1" ]; then
     echo "== firmware overlay"
     if overlay_firmware; then

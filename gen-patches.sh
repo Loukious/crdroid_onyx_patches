@@ -499,11 +499,10 @@ emit packages/apps/Updater 0001-self-hosted-ota-url.patch \
 # APK (Settings/Android.bp: "Evolver/res" in resource_dirs, --extra-packages
 # org.evolution.settings), which is why an @string reference from
 # res/xml/gesture_navigation_settings.xml resolves against Evolver's resources.
-# Evo splits strings and arrays across two files, so both are listed.
-emit_selected_hunks packages/apps/Evolver 0001-gesture-navbar-space-ui.patch \
-    'gesture_navbar_space' \
-    res/values/evolution_strings.xml \
-    res/values/evolution_arrays.xml
+# Keep this feature in its own resource file: fuzz-based insertion into the
+# shared upstream strings file once placed definitions after </resources>.
+emit packages/apps/Evolver 0001-gesture-navbar-space-ui.patch \
+    res/values/onyx_gesture_navigation.xml
 
 # --------------------------------------------------------------------- vendor/gms
 # Keep AOSP/Lineage Dialer as the only dialer. GoogleDialer's prebuilt declares

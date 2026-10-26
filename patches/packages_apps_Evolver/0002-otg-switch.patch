@@ -1,18 +1,13 @@
-diff --git a/res/values/evolution_strings.xml b/res/values/evolution_strings.xml
-index 5654cc6..ef08d36 100644
---- a/res/values/evolution_strings.xml
-+++ b/res/values/evolution_strings.xml
-@@ -1824,6 +1824,10 @@
-     <string name="gesture_navbar_space_minimal">Minimal</string>
-     <string name="global_actions_advanced_reboot_summary">Unlocks a new dialog that allows advanced rebooting</string>
- 
-+    <!-- OTG -->
+diff --git a/res/values/onyx_otg.xml b/res/values/onyx_otg.xml
+new file mode 100644
+--- /dev/null
++++ b/res/values/onyx_otg.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
 +    <string name="otg_toggle_title">OTG</string>
 +    <string name="otg_toggle_summary">Allow the USB Type-C port to detect OTG adapters. Turns off automatically after 10 minutes idle</string>
-+
-     <!-- Screenshots -->
-     <string name="screenshot_clipboard_only_title">Copy to clipboard only</string>
-     <string name="screenshot_clipboard_only_summary">Copy screenshot to clipboard instead of saving in storage</string>
++</resources>
 diff --git a/res/xml/evolution_settings_miscellaneous.xml b/res/xml/evolution_settings_miscellaneous.xml
 index 82a86fd..a5d7812 100644
 --- a/res/xml/evolution_settings_miscellaneous.xml

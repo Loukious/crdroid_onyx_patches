@@ -1,40 +1,25 @@
-diff --git a/res/values/evolution_arrays.xml b/res/values/evolution_arrays.xml
-index c5822eb..7431b33 100644
---- a/res/values/evolution_arrays.xml
-+++ b/res/values/evolution_arrays.xml
-@@ -1785,4 +1785,17 @@
-         <item>0</item>
-         <item>1</item>
-     </string-array>
-+
-+    <!-- Gesture navigation space -->
-+    <string-array name="gesture_navbar_space_entries">
-+        <item>@string/gesture_navbar_space_default</item>
-+        <item>@string/gesture_navbar_space_compact</item>
-+        <item>@string/gesture_navbar_space_minimal</item>
-+    </string-array>
-+
-+    <string-array name="gesture_navbar_space_values" translatable="false">
-+        <item>0</item>
-+        <item>1</item>
-+        <item>2</item>
-+    </string-array>
- </resources>
-diff --git a/res/values/evolution_strings.xml b/res/values/evolution_strings.xml
-index 1370b7f..b59e110 100644
---- a/res/values/evolution_strings.xml
-+++ b/res/values/evolution_strings.xml
-@@ -1827,6 +1827,13 @@
-     <string name="global_actions_use_compose_dialog_title">Redesigned power menu</string>
-     <string name="global_actions_use_compose_dialog_summary">Use the new power menu with a customizable, draggable tile layout. Disable to use the classic power menu.</string>
-     <string name="global_actions_advanced_reboot_title">Enable Advanced Reboot</string>
-+
+diff --git a/res/values/onyx_gesture_navigation.xml b/res/values/onyx_gesture_navigation.xml
+new file mode 100644
+--- /dev/null
++++ b/res/values/onyx_gesture_navigation.xml
+@@ -0,0 +1,20 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
 +    <!-- Gesture navigation space -->
 +    <string name="gesture_navbar_space_title">Gesture navigation space</string>
 +    <string name="gesture_navbar_space_summary">Control the space reserved at the bottom of the screen</string>
 +    <string name="gesture_navbar_space_default">Default</string>
 +    <string name="gesture_navbar_space_compact">Compact</string>
 +    <string name="gesture_navbar_space_minimal">Minimal</string>
-     <string name="global_actions_advanced_reboot_summary">Unlocks a new dialog that allows advanced rebooting</string>
- 
-     <!-- Screenshots -->
++
++    <string-array name="gesture_navbar_space_entries">
++        <item>@string/gesture_navbar_space_default</item>
++        <item>@string/gesture_navbar_space_compact</item>
++        <item>@string/gesture_navbar_space_minimal</item>
++    </string-array>
++    <string-array name="gesture_navbar_space_values" translatable="false">
++        <item>0</item>
++        <item>1</item>
++        <item>2</item>
++    </string-array>
++</resources>
