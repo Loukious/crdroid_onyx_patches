@@ -210,7 +210,7 @@ emit_context_hunks() {
 
 PROJECTS="build/release device/xiaomi/onyx external/iw frameworks/base kernel/xiaomi/sm8735 lineage-sdk system/vold system/security
 packages/apps/Settings packages/apps/Updater packages/apps/Evolver
-packages/modules/Bluetooth
+packages/modules/adb packages/modules/Bluetooth
 vendor/gms vendor/lineage vendor/qcom/opensource/interfaces"
 
 cleanup() {
@@ -436,6 +436,12 @@ fi
 # NFC teardown workaround retired: upstream reverted the regression.
 # Do not regenerate the retired patch (retired/hardware_nxp_nfc).
 
+# -------------------------------------------------------------------------- ADB
+# FunctionFS OS descriptors encode version 1.00 as a 16-bit BCD value. Keep
+# these two header fixes separate from any other local daemon changes.
+emit_context_hunks packages/modules/adb 0001-fix-functionfs-os-descriptor-bcd-version.patch \
+    'bcdVersion' daemon/usb_ffs.cpp
+
 # ------------------------------------------------------------------------- LHDC
 emit packages/modules/Bluetooth 0001-lhdc-v5-qti-offload.patch .
 
@@ -471,6 +477,11 @@ emit device/xiaomi/onyx 0015-enable-wifi-cfr.patch \
 # Do not rely exclusively on the custom Kono-Ha prebuilt (which already has RELAY).
 emit kernel/xiaomi/sm8735 0004-enable-relay-for-wcn7750-streamfs.patch \
     arch/arm64/configs/vendor/onyx_perf.config
+
+# Settings and the QTI gadget HAL both gate UVC on this property. Select only
+# its hunk so other vendor property changes stay in their own patches.
+emit_selected_hunks device/xiaomi/onyx 0016-enable-device-as-webcam.patch \
+    'ro[.]usb[.]uvc[.]enabled' properties/vendor.prop
 
 # ------------------------------------------------------------------- vendor/lineage
 # kernel.mk also contains 0006's target-files/module ordering dependency. Keep

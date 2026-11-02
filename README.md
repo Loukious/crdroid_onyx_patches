@@ -49,6 +49,15 @@ The old Android 16 aptX Adaptive/LHDCv2/LHDCv3/QHS source-list additions are not
 carried because those source files do not exist in the Android 17 Bluetooth tree
 and are not required for the V5 path.
 
+**USB webcam and ADB descriptors** — Onyx enables `ro.usb.uvc.enabled`, the
+flag read by both Settings and the QTI USB gadget HAL. The existing ROM includes
+DeviceAsWebcam and UVC configfs setup. The ADB daemon also encodes both Microsoft
+OS descriptor versions as 16-bit BCD `0x0100` (1.00), avoiding FunctionFS version
+warnings. The corrected ADB binary and vendor property artifact build locally;
+deploying these changes requires a rebuilt ROM. Webcam streaming and the
+corrected descriptors have not yet been tested on the phone. Kernel-only images
+do not include either ROM change.
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
@@ -84,6 +93,7 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0002-release-config-bp4a
                                               0003-lhdc-aptx-props-and-blob-fixups
                                               0005-firmware-g303-cn305-hybrid
+                                              0016-enable-device-as-webcam
 patches/external_iw/                         0001-vendor-nested-data-option
 patches/frameworks_base/                      0001-gesture-navbar-space
                                               0003-secure-spaces-full-user-type
@@ -100,6 +110,7 @@ patches/packages_apps_Evolver/                0001-gesture-navbar-space-ui
 patches/packages_apps_Settings/               0001-gesture-navbar-space-ui
                                               0002-secure-spaces-management
 patches/packages_apps_Updater/                0001-self-hosted-ota-url
+patches/packages_modules_adb/                 0001-fix-functionfs-os-descriptor-bcd-version
 patches/packages_modules_Bluetooth/           0001-lhdc-v5-qti-offload
 patches/system_security/                      0001-secure-auth-biometric-user-scope
 patches/system_vold/                          0001-secure-auth-key-erasure

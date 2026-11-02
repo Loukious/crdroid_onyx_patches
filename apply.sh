@@ -93,6 +93,7 @@ declare -A PROJECT=(
     [packages_apps_Evolver]="packages/apps/Evolver"
     [packages_apps_Settings]="packages/apps/Settings"
     [packages_apps_Updater]="packages/apps/Updater"
+    [packages_modules_adb]="packages/modules/adb"
     [packages_modules_Bluetooth]="packages/modules/Bluetooth"
     [system_sepolicy]="system/sepolicy"
     [system_vold]="system/vold"
