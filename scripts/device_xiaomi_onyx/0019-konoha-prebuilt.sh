@@ -33,6 +33,8 @@ BOARD_MKBOOTIMG_INIT_ARGS += --header_version $(BOARD_INIT_BOOT_HEADER_VERSION)
 '''+assignment('BOARD_KERNEL_CMDLINE')+'\n'+assignment('BOARD_BOOTCONFIG')+'\n'
     s=s[:start]+block+s[end:]
 # Remove legacy Image-only hooks, including duplicate hooks from older patch runs.
+s=s.replace('# Custom prebuilt kernel\n', '')
+s=s.replace('# CFR streamfs uses relay exports. The source-built kernel also supplies the\n# System.map used to validate vendor modules before packing the Kono-Ha ROM.\n', '')
 s=re.sub(r'(?m)^-?include vendor/extra/BoardConfigKernel\.mk\n?','',s)
 s=re.sub(r'(?m)^TARGET_KERNEL_CONFIG_EXT \+= device/xiaomi/onyx/configs/wifi/cfr-kernel\.config\n?','',s)
 s=re.sub(r'(?m)^# Matched kernel, modules and device trees, after all vendor configuration\.\n?','',s)
