@@ -1,0 +1,9 @@
+diff --git a/sepolicy/vendor/vendor_modprobe.te b/sepolicy/vendor/vendor_modprobe.te
+new file mode 100644
+index 0000000..4e90756
+--- /dev/null
++++ b/sepolicy/vendor/vendor_modprobe.te
+@@ -0,0 +1,3 @@
++# Native block2mtd resolves its backing path while vendor_modprobe loads it.
++# Permit directory traversal for that lookup.
++allow vendor_modprobe block_device:dir search;

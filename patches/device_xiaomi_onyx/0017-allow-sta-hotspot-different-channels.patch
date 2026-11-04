@@ -1,0 +1,13 @@
+diff --git a/configs/wifi/WCNSS_qcom_cfg.ini b/configs/wifi/WCNSS_qcom_cfg.ini
+index 68ecad8..0142aed 100644
+--- a/configs/wifi/WCNSS_qcom_cfg.ini
++++ b/configs/wifi/WCNSS_qcom_cfg.ini
+@@ -19,7 +19,7 @@ gChannelBondingMode5GHz=1
+ gAllowDFSChannelRoam=1
+ gSetTxChainmask1x1=1
+ gSetRxChainmask1x1=1
+-gWlanMccToSccSwitchMode = 3
++gWlanMccToSccSwitchMode = 0
+ gEnableTXSTBC=1
+ gEnableTxBFeeSAP=1
+ gEnableTxBFin20MHz=1

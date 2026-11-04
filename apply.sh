@@ -65,6 +65,12 @@ ROM="$(cd "${1:-$PWD}" && pwd)"
 DEVICE="${DEVICE:-onyx}"
 KERNEL_REPO="${KERNEL_REPO:-Loukious/konoha-kernel-gki}"
 KERNEL_DEST="vendor/extra/kernel/onyx/Image"
+# This branch consumes a matched prebuilt project directly from repo sync.
+export KONOHA_PREBUILT="${KONOHA_PREBUILT:-1}"
+if [ "$KONOHA_PREBUILT" = 1 ]; then
+    SKIP_KERNEL=1
+    SKIP_WLAN=1
+fi
 
 _TMPS=()
 cleanup() { local d; for d in ${_TMPS[@]+"${_TMPS[@]}"}; do rm -rf "$d"; done; }
@@ -113,6 +119,12 @@ apply_patches() {
         [ -d "$pdir" ] || continue   # unexpanded glob: no patch dirs at all
         key="$(basename "$pdir")"
         proj="${PROJECT[$key]:-}"
+        if [ "$KONOHA_PREBUILT" = 1 ]; then
+            case "$key" in
+                kernel_xiaomi_sm8735|kernel_xiaomi_sm8735-modules|kernel_xiaomi_onyx-wlan)
+                    echo "== $key (source-kernel patches omitted: matched prebuilts)"; continue ;;
+            esac
+        fi
         if [ -z "$proj" ]; then
             red "FATAL: no project mapping for patches/$key"; fail=1; continue
         fi
@@ -124,6 +136,9 @@ apply_patches() {
         for patch in "$pdir"*.patch; do
             [ -e "$patch" ] || continue
             n="$(basename "$patch")"
+            if [ "$KONOHA_PREBUILT" = 1 ] && { [ "$key/$n" = device_xiaomi_onyx/0001-vendor-extra-kernel-hook.patch ] || [ "$key/$n" = vendor_lineage/0002-kernel-source-rw-allowlist.patch ]; }; then
+                echo "   -- $n (replaced by matched prebuilt configuration)"; continue
+            fi
             exact=0
             case "$key/$n" in
                 frameworks_base/000[3-9]-*|frameworks_base/0010-*|\
@@ -195,6 +210,12 @@ apply_scripts() {
         [ -d "$sdir" ] || continue
         key="$(basename "$sdir")"
         proj="${PROJECT[$key]:-}"
+        if [ "$KONOHA_PREBUILT" = 1 ]; then
+            case "$key" in
+                kernel_xiaomi_sm8735|kernel_xiaomi_sm8735-modules|kernel_xiaomi_onyx-wlan)
+                    echo "== $key (source-kernel patches omitted: matched prebuilts)"; continue ;;
+            esac
+        fi
         if [ -z "$proj" ]; then
             red "FATAL: no project mapping for scripts/$key"; fail=1; continue
         fi
@@ -587,6 +608,9 @@ if [ "$PREFLIGHT" = 1 ]; then
 fi
 
 [ -d "$ROM/.repo" ] || { red "FATAL: $ROM is not a repo tree (no .repo)"; exit 1; }
+if [ "$KONOHA_PREBUILT" = 1 ]; then
+    python3 "$HERE/ci/verify-konoha-prebuilt.py" "$ROM/device/xiaomi/onyx-kernel" || exit 1
+fi
 
 if [ "${SKIP_PATCHES:-0}" != "1" ]; then apply_patches; fi
 apply_scripts

@@ -1,0 +1,43 @@
+# Matched Konoha 6.18 kernel/module/DT inputs. Included after Onyx BoardConfig.
+KONOHA_PREBUILT_PATH := device/xiaomi/onyx-kernel
+ifeq ($(wildcard $(KONOHA_PREBUILT_PATH)/prebuilt.json),)
+$(error Matched Konoha prebuilts missing; sync the Konoha local manifest)
+endif
+TARGET_KERNEL_SOURCE :=
+TARGET_KERNEL_CONFIG :=
+TARGET_KERNEL_CONFIG_EXT :=
+TARGET_KERNEL_EXT_MODULE_ROOT :=
+TARGET_KERNEL_EXT_MODULES :=
+TARGET_KERNEL_PLATFORM_TARGET :=
+TARGET_KERNEL_VERSION := 6.18
+TARGET_FORCE_PREBUILT_KERNEL := true
+TARGET_PREBUILT_KERNEL := $(KONOHA_PREBUILT_PATH)/Image
+TARGET_OVERRIDE_KERNEL_BIN :=
+BOARD_USES_QCOM_MERGE_DTBS_SCRIPT := false
+BOARD_PREBUILT_DTBIMAGE_DIR := $(KONOHA_PREBUILT_PATH)/dtb
+BOARD_PREBUILT_DTBOIMAGE := $(KONOHA_PREBUILT_PATH)/dtbo.img
+BOARD_KERNEL_CMDLINE += android_arch_task_struct_size=512 sched_proxy_exec=0
+BOOT_KERNEL_MODULES :=
+SYSTEM_KERNEL_MODULES :=
+BOARD_SYSTEM_DLKM_SRC :=
+BOARD_SYSTEM_KERNEL_MODULES := $(wildcard $(KONOHA_PREBUILT_PATH)/system_dlkm/lib/modules/*.ko)
+BOARD_VENDOR_KERNEL_MODULES := $(wildcard $(KONOHA_PREBUILT_PATH)/vendor_dlkm/lib/modules/*.ko)
+BOARD_VENDOR_RAMDISK_KERNEL_MODULES := $(wildcard $(KONOHA_PREBUILT_PATH)/vendor_ramdisk/lib/modules/*.ko)
+BOARD_RECOVERY_KERNEL_MODULES := $(BOARD_VENDOR_RAMDISK_KERNEL_MODULES)
+BOARD_SYSTEM_KERNEL_MODULES_LOAD := $(strip $(shell cat $(KONOHA_PREBUILT_PATH)/system_dlkm/lib/modules/modules.load))
+BOARD_VENDOR_KERNEL_MODULES_LOAD := $(strip $(shell cat $(KONOHA_PREBUILT_PATH)/vendor_dlkm/lib/modules/modules.load))
+BOARD_VENDOR_RAMDISK_KERNEL_MODULES_LOAD := $(strip $(shell cat $(KONOHA_PREBUILT_PATH)/vendor_ramdisk/lib/modules/modules.load))
+BOARD_VENDOR_RAMDISK_RECOVERY_KERNEL_MODULES_LOAD := $(strip $(shell cat $(KONOHA_PREBUILT_PATH)/vendor_ramdisk/lib/modules/modules.load.recovery))
+BOARD_RECOVERY_KERNEL_MODULES_LOAD := $(BOARD_VENDOR_RAMDISK_RECOVERY_KERNEL_MODULES_LOAD)
+# Preserve signed module bytes; Android will regenerate depmod metadata.
+BOARD_DO_NOT_STRIP_VENDOR_MODULES := true
+BOARD_DO_NOT_STRIP_VENDOR_RAMDISK_MODULES := true
+BOARD_DO_NOT_STRIP_RECOVERY_MODULES := true
+BOARD_SYSTEM_KERNEL_MODULES_BLOCKLIST_FILE := $(wildcard $(KONOHA_PREBUILT_PATH)/system_dlkm/lib/modules/modules.blocklist)
+BOARD_VENDOR_KERNEL_MODULES_BLOCKLIST_FILE := $(wildcard $(KONOHA_PREBUILT_PATH)/vendor_dlkm/lib/modules/modules.blocklist)
+BOARD_VENDOR_RAMDISK_KERNEL_MODULES_BLOCKLIST_FILE := $(wildcard $(KONOHA_PREBUILT_PATH)/vendor_ramdisk/lib/modules/modules.blocklist)
+BOARD_RECOVERY_KERNEL_MODULES_BLOCKLIST_FILE := $(BOARD_VENDOR_RAMDISK_KERNEL_MODULES_BLOCKLIST_FILE)
+BOARD_SYSTEM_KERNEL_MODULES_OPTIONS_FILE := $(wildcard $(KONOHA_PREBUILT_PATH)/system_dlkm/lib/modules/modules.options)
+BOARD_VENDOR_KERNEL_MODULES_OPTIONS_FILE := $(wildcard $(KONOHA_PREBUILT_PATH)/vendor_dlkm/lib/modules/modules.options)
+BOARD_VENDOR_RAMDISK_KERNEL_MODULES_OPTIONS_FILE := $(wildcard $(KONOHA_PREBUILT_PATH)/vendor_ramdisk/lib/modules/modules.options)
+BOARD_RECOVERY_KERNEL_MODULES_OPTIONS_FILE := $(BOARD_VENDOR_RAMDISK_KERNEL_MODULES_OPTIONS_FILE)

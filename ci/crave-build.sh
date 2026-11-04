@@ -29,7 +29,7 @@ set -euo pipefail
 MANIFEST_URL="${MANIFEST_URL:-https://github.com/Evolution-X/manifest.git}"
 MANIFEST_BRANCH="${MANIFEST_BRANCH:-cnb}"
 LOCAL_MANIFESTS="${LOCAL_MANIFESTS:-https://github.com/Loukious/local_manifests_onyx}"
-LOCAL_MANIFESTS_BRANCH="${LOCAL_MANIFESTS_BRANCH:-evolution-cnb}"
+LOCAL_MANIFESTS_BRANCH="${LOCAL_MANIFESTS_BRANCH:-evolution-cnb-konoha618}"
 DEVICE="${DEVICE:-onyx}"
 SYNC_ONLY="${SYNC_ONLY:-0}"
 
@@ -212,6 +212,9 @@ fi
 # /usr/lib/llvm-* fallback does not exist on the build servers. This is still
 # a crave run on the build server, not a Devspace build -- the rules only
 # forbid make/mka in the Devspace CLI.
+if [ -f device/xiaomi/onyx-kernel/prebuilt.json ]; then
+    say "using matched Konoha prebuilts; no kernel or WLAN ABI source build"
+else
 say "preparing the Kono-Ha kernel-ABI tree (before mka)"
 # Pin the Module.symvers to the kernel release apply.sh staged for THIS build
 # (the release's own asset, not the manual wlan-kernel-symbols release).
@@ -232,6 +235,8 @@ CLANG_PATH="$PWD/$clang_bin" bash "$HERE/ci/crave-abi-trace.sh" "$prep"
 abi_rc=$?
 [ "$abi_rc" -eq 0 ] || { echo "FATAL: konoha-abi prep failed (exit $abi_rc; see ABI trace above)"; exit "$abi_rc"; }
 
+
+fi
 
 # ---------------------------------------------------------------------- build
 # installclean, NOT `make clean` / `rm -rf out`: it drops the installed image

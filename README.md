@@ -343,3 +343,37 @@ run **after** overlaying the hybrid G303/CN305 radio images.
 
 Two obsolete patches are archived under `retired/` (NFC teardown and static
 firmware SHA1). The generator no longer resurrects them.
+
+## Manifest-synced Konoha 6.18 prebuilts
+
+This integration branch uses `local_manifests_onyx:evolution-cnb-konoha618`.
+`device/xiaomi/onyx-kernel` is a pinned `prebuilt-onyx` commit of
+`Loukious/konoha-android17-6.18`. Repo sync downloads the kernel, all 471 unique
+modules and corrected device trees directly. It does not fetch crDroid's three
+kernel source repositories or the legacy standalone WLAN source.
+
+`apply.sh` verifies the prebuilt checksums before editing the tree, switches
+Onyx to its prebuilt BoardConfig, removes source-kernel dependencies and skips
+the old kernel patches, Image downloader, WLAN overlay and ABI preparation.
+Android still generates the ROM's ramdisks, DLKM partitions, AVB and OTA metadata.
+No prebuilt partition images or external diagnostic mounts are injected.
+
+Local maintenance (sync and patch only):
+
+```sh
+ci/sync-local.py ~/Android/custom-rom --jobs 8
+```
+
+The initial binaries reuse the accepted 6.18.38 / 391-platform-module /
+471-total-module artifact, with matching common/module source snapshots,
+vermagic and imported symbol CRCs checked. A ROM build and boot test with this
+new packaging configuration remain required; activation itself does not build.
+The previously accepted phone package used serial diagnostic loaders. This
+integration uses Android's normal module packaging/load lists and does not
+claim that the unbuilt ROM has inherited the prior package's runtime validation.
+
+To update, use `ci/export-konoha-prebuilt.py --help` with an existing verified
+artifact and partitioned bundle, publish a new prebuilt commit, then update the
+manifest pin. The exporter copies/verifies binaries and never compiles or builds
+partition images. Prebuilt updates are deliberately pinned rather than silently
+following the newest CI output.
