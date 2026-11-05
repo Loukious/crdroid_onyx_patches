@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import tarfile
 
 root=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else Path(__file__).resolve().parent
 expected={}
@@ -25,4 +26,22 @@ for name,wanted in expected.items():
 meta=json.loads((root/'prebuilt.json').read_text())
 if meta['device']!='onyx' or not meta['kernel_release'].startswith('6.18.'):
     raise ValueError('Unexpected prebuilt target')
+if 'uapi_headers' in meta:
+    headers=meta['uapi_headers']
+    archive=root/headers['archive']
+    receipt=json.loads((root/headers['receipt']).read_text())
+    if headers['sha256']!=expected.get(headers['archive']) or receipt['archive_sha256']!=headers['sha256']:
+        raise ValueError('UAPI archive provenance mismatch')
+    if receipt['source_revision']!=meta['source_revision'] or headers['source_revision']!=meta['source_revision']:
+        raise ValueError('UAPI source revision mismatch')
+    with tarfile.open(archive) as tar:
+        members=tar.getmembers()
+        if any(not m.isfile() or Path(m.name).is_absolute() or '..' in Path(m.name).parts or not m.name.startswith('usr/include/') for m in members):
+            raise ValueError('Unsafe UAPI archive entry')
+        names={m.name for m in members}
+        if len(names)!=len(members) or len(names)!=headers['headers'] or len(names)!=receipt['headers']:
+            raise ValueError('UAPI header inventory mismatch')
+        required={'usr/include/'+h for h in ['linux/msm_ipa.h','linux/ion.h','linux/msm_ion.h','linux/msm_ion_ids.h','asm/signal.h','asm-generic/signal.h','linux/eventpoll.h']}
+        if not required<=names:
+            raise ValueError('Missing required userspace headers: '+str(required-names))
 print(f'Konoha prebuilts verified: {meta["kernel_release"]}, {meta["modules"]} modules')

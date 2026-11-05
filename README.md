@@ -374,6 +374,11 @@ claim that the unbuilt ROM has inherited the prior package's runtime validation.
 
 To update, use `ci/export-konoha-prebuilt.py --help` with an existing verified
 artifact and partitioned bundle, publish a new prebuilt commit, then update the
-manifest pin. The exporter copies/verifies binaries and never compiles or builds
+manifest pin. Pass `--baseline-root` for the pinned kernel ABI baseline used to
+export legacy ION syscall constants. The prebuilt bundle also includes sanitized
+GKI and matching Qualcomm module UAPI headers; Soong extracts them for existing
+`generated_kernel_headers` users without compiling a kernel. Header archive
+checksums, inventory and source revision are verified before the build.
+The exporter copies/verifies binaries and never compiles or builds
 partition images. Prebuilt updates are deliberately pinned rather than silently
 following the newest CI output.

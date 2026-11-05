@@ -15,7 +15,7 @@ def digest(p):
         return hashlib.file_digest(f, 'sha256').hexdigest()
 
 
-def export(artifact, bundle, output, revision, source_root):
+def export(artifact, bundle, output, revision, source_root, baseline_root):
     if not re.fullmatch('[0-9a-f]{40}', revision):
         raise ValueError('Exact source commit required')
     if output.exists() and any(output.iterdir()):
@@ -86,6 +86,19 @@ def export(artifact, bundle, output, revision, source_root):
         'partition_counts':{p:len(list((output/p/'lib/modules').glob('*.ko'))) for p in ['system_dlkm','vendor_dlkm','vendor_ramdisk']},
         'limits':'Existing binaries only. ROM integration statically checked; a new ROM build and hardware validation remain required.'
     },indent=2)+'\n')
+    # Include syscall headers from the same GKI/module snapshot before hashing.
+    spec = importlib.util.spec_from_file_location('export_konoha_headers', Path(__file__).with_name('export-konoha-headers.py'))
+    headers = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(headers)
+    archive = output/'kernel-uapi-headers.tar.gz'
+    headers.export(artifact, source_root, revision, baseline_root, archive)
+    receipt = json.loads(archive.with_suffix(archive.suffix+'.json').read_text())
+    meta_path = output/'prebuilt.json'
+    meta = json.loads(meta_path.read_text())
+    meta['uapi_headers'] = {'archive':archive.name, 'receipt':archive.name+'.json',
+                            'sha256':receipt['archive_sha256'], 'headers':receipt['headers'],
+                            'source_revision':receipt['source_revision']}
+    meta_path.write_text(json.dumps(meta, indent=2)+'\n')
     template=Path(__file__).with_name('konoha-prebuilt-BoardConfig.mk')
     shutil.copyfile(template,output/'BoardConfig.mk')
     shutil.copyfile(Path(__file__).with_name('verify-konoha-prebuilt.py'),output/'verify.py')
@@ -106,4 +119,5 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--artifact',required=True,type=Path);p.add_argument('--bundle',required=True,type=Path)
     p.add_argument('--output',required=True,type=Path);p.add_argument('--source-revision',required=True);p.add_argument('--source-root',required=True,type=Path)
-    a=p.parse_args();export(a.artifact.resolve(),a.bundle.resolve(),a.output.resolve(),a.source_revision,a.source_root.resolve())
+    p.add_argument('--baseline-root',required=True,type=Path,help='Pinned kernel/xiaomi/sm8735 ABI baseline, for legacy ION UAPI only')
+    a=p.parse_args();export(a.artifact.resolve(),a.bundle.resolve(),a.output.resolve(),a.source_revision,a.source_root.resolve(),a.baseline_root.resolve())

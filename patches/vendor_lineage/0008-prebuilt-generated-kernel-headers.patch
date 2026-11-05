@@ -1,0 +1,48 @@
+diff --git a/build/soong/Android.bp b/build/soong/Android.bp
+index e69a6a1..47d8675 100644
+--- a/build/soong/Android.bp
++++ b/build/soong/Android.bp
+@@ -24,7 +24,10 @@ lineage_generator {
+     // The headers make command
+     cmd: "set -e; " +
+          "(cd $(KERNEL_BUILD_OUT_PREFIX).; " +
+-         "if [ -n \"$(TARGET_KERNEL_PLATFORM_TARGET)\" ]; then " +
++         "if [ -n \"$(TARGET_PREBUILT_KERNEL_HEADERS)\" ]; then " +
++         "    mkdir -p $(genDir); " +
++         "    tar -xzf $(TARGET_PREBUILT_KERNEL_HEADERS) -C $(genDir); " +
++         "elif [ -n \"$(TARGET_KERNEL_PLATFORM_TARGET)\" ]; then " +
+          "    pushd $(KERNEL_PATH); " +
+          "    ./tools/bazel --output_user_root=$(KERNEL_BUILD_OUT_PREFIX)$(genDir)/bazel-out --output_root=$(KERNEL_BUILD_OUT_PREFIX)$(genDir)/bazel-out run --experimental_convenience_symlinks=ignore --cpu=$(KERNEL_ARCH) //$(TARGET_KERNEL_SOURCE):$(TARGET_KERNEL_PLATFORM_TARGET)_uapi_headers_dist -- --destdir=$(KERNEL_BUILD_OUT_PREFIX)$(genDir); " +
+          "    popd; " +
+@@ -45,8 +48,9 @@ lineage_generator {
+     ],
+ 
+     // Sources for dependency tracking
+-    dep_root: "$(TARGET_KERNEL_SOURCE)",
++    dep_root: "$(TARGET_KERNEL_HEADERS_SOURCE)",
+     dep_files: [
++        "*.tar.gz",
+         "Makefile",
+         "include/**/*",
+         "arch/$(KERNEL_ARCH)/include/**/*",
+diff --git a/config/BoardConfigSoong.mk b/config/BoardConfigSoong.mk
+index 7b87cee..e068a09 100644
+--- a/config/BoardConfigSoong.mk
++++ b/config/BoardConfigSoong.mk
+@@ -1,5 +1,8 @@
+ PATH_OVERRIDE_SOONG := $(shell echo $(TOOLS_PATH_OVERRIDE))
+ 
++# Track the archive when generated headers come from a prebuilt kernel.
++TARGET_KERNEL_HEADERS_SOURCE := $(if $(TARGET_PREBUILT_KERNEL_HEADERS),$(dir $(TARGET_PREBUILT_KERNEL_HEADERS)),$(TARGET_KERNEL_SOURCE))
++
+ # Add variables that we wish to make available to soong here.
+ EXPORT_TO_SOONG := \
+     KERNEL_ARCH \
+@@ -11,6 +14,7 @@ EXPORT_TO_SOONG := \
+     PATH_OVERRIDE_SOONG \
+     TARGET_KERNEL_CONFIG \
+     TARGET_KERNEL_SOURCE \
++    TARGET_KERNEL_HEADERS_SOURCE \
+     TARGET_KERNEL_PLATFORM_TARGET \
+     TARGET_MAX_PAGE_SIZE_SUPPORTED \
+     TARGET_PREBUILT_KERNEL_HEADERS
