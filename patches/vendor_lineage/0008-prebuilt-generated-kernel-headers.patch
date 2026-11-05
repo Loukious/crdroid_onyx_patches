@@ -1,20 +1,24 @@
 diff --git a/build/soong/Android.bp b/build/soong/Android.bp
-index e69a6a1..47d8675 100644
+index e69a6a1..0ec3960 100644
 --- a/build/soong/Android.bp
 +++ b/build/soong/Android.bp
-@@ -24,7 +24,10 @@ lineage_generator {
+@@ -22,9 +22,13 @@ lineage_generator {
+     name: "generated_kernel_includes",
+ 
      // The headers make command
-     cmd: "set -e; " +
+-    cmd: "set -e; " +
++    cmd: "set -e -o pipefail; " +
           "(cd $(KERNEL_BUILD_OUT_PREFIX).; " +
 -         "if [ -n \"$(TARGET_KERNEL_PLATFORM_TARGET)\" ]; then " +
 +         "if [ -n \"$(TARGET_PREBUILT_KERNEL_HEADERS)\" ]; then " +
 +         "    mkdir -p $(genDir); " +
-+         "    tar -xzf $(TARGET_PREBUILT_KERNEL_HEADERS) -C $(genDir); " +
++         "    gzip -d < $(TARGET_PREBUILT_KERNEL_HEADERS) | tar -x -C $(genDir); " +
++         "    test -f $(genDir)/usr/include/linux/types.h; " +
 +         "elif [ -n \"$(TARGET_KERNEL_PLATFORM_TARGET)\" ]; then " +
           "    pushd $(KERNEL_PATH); " +
           "    ./tools/bazel --output_user_root=$(KERNEL_BUILD_OUT_PREFIX)$(genDir)/bazel-out --output_root=$(KERNEL_BUILD_OUT_PREFIX)$(genDir)/bazel-out run --experimental_convenience_symlinks=ignore --cpu=$(KERNEL_ARCH) //$(TARGET_KERNEL_SOURCE):$(TARGET_KERNEL_PLATFORM_TARGET)_uapi_headers_dist -- --destdir=$(KERNEL_BUILD_OUT_PREFIX)$(genDir); " +
           "    popd; " +
-@@ -45,8 +48,9 @@ lineage_generator {
+@@ -45,8 +49,9 @@ lineage_generator {
      ],
  
      // Sources for dependency tracking
@@ -25,6 +29,28 @@ index e69a6a1..47d8675 100644
          "Makefile",
          "include/**/*",
          "arch/$(KERNEL_ARCH)/include/**/*",
+@@ -60,9 +65,9 @@ lineage_generator {
+     name: "prebuilt_kernel_includes",
+ 
+     // The headers extract command
+-    cmd: "set -e; " +
++    cmd: "set -e -o pipefail; " +
+          "(cd $(KERNEL_BUILD_OUT_PREFIX).; " +
+-         "mkdir -p $(genDir) && gzip -d < $(TARGET_PREBUILT_KERNEL_HEADERS) | tar -x -C $(genDir) && vendor/lineage/tools/clean_headers.sh $(KERNEL_BUILD_OUT_PREFIX)$(genDir))",
++         "mkdir -p $(genDir) && gzip -d < $(TARGET_PREBUILT_KERNEL_HEADERS) | tar -x -C $(genDir) && test -f $(genDir)/usr/include/linux/types.h && vendor/lineage/tools/clean_headers.sh $(KERNEL_BUILD_OUT_PREFIX)$(genDir))",
+ 
+     // Directories that can be imported by a cc_* module generated_headers property
+     export_include_dirs: [
+@@ -73,6 +78,9 @@ lineage_generator {
+         "usr/techpack/audio/include",
+     ],
+ 
++    dep_root: "$(TARGET_KERNEL_HEADERS_SOURCE)",
++    dep_files: ["*.tar.gz"],
++
+     tool_files: [":clean_headers.sh"],
+ }
+ 
 diff --git a/config/BoardConfigSoong.mk b/config/BoardConfigSoong.mk
 index 7b87cee..e068a09 100644
 --- a/config/BoardConfigSoong.mk
