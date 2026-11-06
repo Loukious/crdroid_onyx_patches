@@ -159,6 +159,12 @@ else
     fi
 fi
 
+# The source recipe emits hashes for the exact kernel, DTs and every module.
+if [ -f "$TREE/kernel/platform/kernel-6.18/port/rom/build.py" ]; then
+    python3 "$HERE/verify-source-kernel.py" "$TREE" "$TMP" \
+        || fail "shipped kernel/modules do not match the current source build"
+fi
+
 # ------------------------------------------------------------------ staleness
 # Nothing staged into the module dirs may be newer than the image that is
 # supposed to contain it. A newer staged module means the kernel recipe ran

@@ -50,11 +50,18 @@ print(f'Backup and recovery state: {backup}', flush=True)
 if state['phase'] == 'backup':
     if a.resume:
         raise SystemExit('Interrupted during backup: inspect state.json before continuing; no checkout sync was started.')
-    run(['repo', 'manifest', '-r', '-o', str(backup / 'manifest-before.xml')])
+    paths = run(['repo', 'list', '--all', '-p'], stdout=subprocess.PIPE, text=True).stdout.splitlines()
+    missing = [path for path in paths if not (rom / path / '.git').exists()]
+    flags = [] if missing else ['-r']
+    run(['repo', 'manifest', *flags, '-o', str(backup / 'manifest-before.xml')])
+    if missing:
+        print('New manifest projects will be checked out: ' + ', '.join(missing), flush=True)
+        heads = {path: git(rom / path, 'rev-parse', 'HEAD').decode().strip()
+                 for path in paths if path not in missing}
+        (backup / 'project-heads-before.json').write_text(json.dumps(heads, indent=2) + '\n')
     # Preserve manifest overrides as-is; repo sync updates the upstream manifest.
     with tarfile.open(backup / 'local-manifests.tar', 'w') as t:
         t.add(rom / '.repo/local_manifests', arcname='local_manifests')
-    paths = run(['repo', 'list', '-p'], stdout=subprocess.PIPE, text=True).stdout.splitlines()
     # Backup every dirty project before any checkout is changed. Ignored outputs stay in place.
     for path in paths:
         project = rom / path

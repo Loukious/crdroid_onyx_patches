@@ -23,6 +23,7 @@ Writes <OUTDIR>/payload_vendor_boot.img and <OUTDIR>/payload_info
 """
 import bz2
 import hashlib
+import json
 import lzma
 import struct
 import sys
@@ -135,6 +136,10 @@ with zipfile.ZipFile(OTA_ZIP) as z:
         partitions = [parse_partition(p) for p in many(manifest_body, 13)]
         if not partitions:
             die("payload manifest lists no partitions")
+
+        with open(f"{OUTDIR}/payload-manifest.json", "w") as metadata:
+            json.dump({p['name']: {'size': p['size'], 'sha256': p['hash'].hex()}
+                       for p in partitions}, metadata, indent=2)
 
         vdlkm = next((p for p in partitions if p["name"] == "vendor_dlkm"), None)
         if vdlkm is None:
