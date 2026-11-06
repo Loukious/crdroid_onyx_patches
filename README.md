@@ -379,5 +379,5 @@ objects are cached under `out/target/product/onyx/obj/KERNEL_BAZEL_OUT/kleaf-cac
 using Kleaf's supported incremental mode. The first build is cold; subsequent
 builds reuse unchanged objects while repeating source, module and ABI checks.
 The source-build receipt is `obj/KERNEL_OBJ/onyx-source-build.json` under the
-product output directory. The old `prebuilt-onyx` branch remains an archived
-binary integration input and is no longer selected by the active manifest.
+product output directory. The obsolete prebuilt branch has been removed; the source branch is the active
+ROM kernel input.
