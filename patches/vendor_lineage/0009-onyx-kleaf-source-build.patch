@@ -1,8 +1,8 @@
 diff --git a/build/soong/Android.bp b/build/soong/Android.bp
-index 0ec3960e66804de8a78d5fceb83eab24b7b99ee1..6f52e6fc979a129f24524560edde6ab39023c9a9 100644
+index 0ec3960e66804de8a78d5fceb83eab24b7b99ee1..6601aca96bf33fc514f39b30653871fa205c335c 100644
 --- a/build/soong/Android.bp
 +++ b/build/soong/Android.bp
-@@ -24,7 +24,9 @@ lineage_generator {
+@@ -24,9 +24,11 @@ lineage_generator {
      // The headers make command
      cmd: "set -e -o pipefail; " +
           "(cd $(KERNEL_BUILD_OUT_PREFIX).; " +
@@ -11,8 +11,11 @@ index 0ec3960e66804de8a78d5fceb83eab24b7b99ee1..6f52e6fc979a129f24524560edde6ab3
 +         "    python3 $(TARGET_KERNEL_PORT_HEADERS) --source $(KERNEL_PATH) --output $(KERNEL_BUILD_OUT_PREFIX)$(genDir); " +
 +         "elif [ -n \"$(TARGET_PREBUILT_KERNEL_HEADERS)\" ]; then " +
           "    mkdir -p $(genDir); " +
-          "    gzip -d < $(TARGET_PREBUILT_KERNEL_HEADERS) | tar -x -C $(genDir); " +
+-         "    gzip -d < $(TARGET_PREBUILT_KERNEL_HEADERS) | tar -x -C $(genDir); " +
++         "    gzip -d < \"$(TARGET_PREBUILT_KERNEL_HEADERS)\" | tar -x -C $(genDir); " +
           "    test -f $(genDir)/usr/include/linux/types.h; " +
+          "elif [ -n \"$(TARGET_KERNEL_PLATFORM_TARGET)\" ]; then " +
+          "    pushd $(KERNEL_PATH); " +
 @@ -53,6 +55,14 @@ lineage_generator {
      dep_files: [
          "*.tar.gz",
@@ -28,6 +31,15 @@ index 0ec3960e66804de8a78d5fceb83eab24b7b99ee1..6f52e6fc979a129f24524560edde6ab3
          "include/**/*",
          "arch/$(KERNEL_ARCH)/include/**/*",
          "techpack/audio/include/**/*",
+@@ -67,7 +77,7 @@ lineage_generator {
+     // The headers extract command
+     cmd: "set -e -o pipefail; " +
+          "(cd $(KERNEL_BUILD_OUT_PREFIX).; " +
+-         "mkdir -p $(genDir) && gzip -d < $(TARGET_PREBUILT_KERNEL_HEADERS) | tar -x -C $(genDir) && test -f $(genDir)/usr/include/linux/types.h && vendor/lineage/tools/clean_headers.sh $(KERNEL_BUILD_OUT_PREFIX)$(genDir))",
++         "mkdir -p $(genDir) && gzip -d < \"$(TARGET_PREBUILT_KERNEL_HEADERS)\" | tar -x -C $(genDir) && test -f $(genDir)/usr/include/linux/types.h && vendor/lineage/tools/clean_headers.sh $(KERNEL_BUILD_OUT_PREFIX)$(genDir))",
+ 
+     // Directories that can be imported by a cc_* module generated_headers property
+     export_include_dirs: [
 diff --git a/build/tasks/kernel.mk b/build/tasks/kernel.mk
 index a36edcb8f90fd075c539b100e772f03280789095..0f19e2c4b072717803cb5c8b9ee465d3065321e7 100644
 --- a/build/tasks/kernel.mk
