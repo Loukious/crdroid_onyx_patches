@@ -58,6 +58,12 @@ deploying these changes requires a rebuilt ROM. Webcam streaming and the
 corrected descriptors have not yet been tested on the phone. Kernel-only images
 do not include either ROM change.
 
+**Modem networking on newer kernels** — Onyx patch `0020` translates
+`vendor_nicmd`’s existing route and IPsec netlink permissions into explicit
+message grants. This restores creation of the modem data interfaces and stops
+the demonstrated modem retry/wakeup loop with `netlink_xperm` enabled.
+SELinux remains enforcing. See [the validation notes](notes/nicmd-netlink.md).
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
