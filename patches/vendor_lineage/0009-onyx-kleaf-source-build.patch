@@ -29,16 +29,17 @@ index 0ec3960e66804de8a78d5fceb83eab24b7b99ee1..6f52e6fc979a129f24524560edde6ab3
          "arch/$(KERNEL_ARCH)/include/**/*",
          "techpack/audio/include/**/*",
 diff --git a/build/tasks/kernel.mk b/build/tasks/kernel.mk
-index a36edcb8f90fd075c539b100e772f03280789095..a4c887e962043707e307852dcee22712610673e3 100644
+index a36edcb8f90fd075c539b100e772f03280789095..0f19e2c4b072717803cb5c8b9ee465d3065321e7 100644
 --- a/build/tasks/kernel.mk
 +++ b/build/tasks/kernel.mk
-@@ -769,7 +769,28 @@ else
+@@ -769,7 +769,29 @@ else
  KERNEL_REPO_MANIFEST := $(abspath $(KERNEL_PATH)):$(abspath $(KERNEL_OUT)/manifest.xml)
  endif
  
 +ifneq ($(TARGET_KERNEL_PORT_BUILD),)
-+.PHONY: onyx-kernel-source-force
-+$(TARGET_PREBUILT_INT_KERNEL): onyx-kernel-source-force
++# Android refreshes this real input on every build invocation. Revalidate
++# source/KernelSU inputs each time; Kleaf reuses unchanged compiled outputs.
++$(TARGET_PREBUILT_INT_KERNEL): $(BUILD_DATETIME_FILE) $(TARGET_KERNEL_PORT_BUILD)
 +endif
 +
  $(TARGET_PREBUILT_INT_KERNEL): $(DEPMOD) $(KERNEL_MODULES_PARTITION_FILE_LIST) $(SYSTEM_KERNEL_MODULES_PARTITION_FILE_LIST)
@@ -61,7 +62,7 @@ index a36edcb8f90fd075c539b100e772f03280789095..a4c887e962043707e307852dcee22712
  	@echo "Building $(BOARD_KERNEL_IMAGE_NAME)"
  	$(hide) rm -rf $(KERNEL_OUT)
  	@mkdir -p $(KERNEL_OUT) $(KERNEL_BAZEL_OUT)
-@@ -801,6 +822,8 @@ $(TARGET_PREBUILT_INT_KERNEL): $(DEPMOD) $(KERNEL_MODULES_PARTITION_FILE_LIST) $
+@@ -801,6 +823,8 @@ $(TARGET_PREBUILT_INT_KERNEL): $(DEPMOD) $(KERNEL_MODULES_PARTITION_FILE_LIST) $
  	vendor_modules=$$(comm -23 <(find $(KERNEL_OUT) -maxdepth 1 -type f -name '*.ko' | awk -F'/' '{ print $$NF }' | sort) <(awk -F'/' '{ print $$NF }' $(KERNEL_OUT)/system_dlkm.modules.load | sort) | sed 's|^|$(KERNEL_OUT)/|'); \
  	($(call build-image-kernel-modules-lineage,$$vendor_modules,$(KERNEL_MODULES_OUT),$(KERNEL_MODULE_MOUNTPOINT)/,$(KERNEL_DEPMOD_STAGING_DIR),$(BOARD_VENDOR_KERNEL_MODULES_LOAD),,$(KERNEL_MODULES_PARTITION_FILE_LIST),$(SYSTEM_KERNEL_DEPMOD_STAGING_DIR)/lib/modules/0.0/$(SYSTEM_KERNEL_MODULE_MOUNTPOINT)))
  
