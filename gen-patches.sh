@@ -472,6 +472,10 @@ emit device/xiaomi/onyx 0005-firmware-g303-cn305-hybrid.patch proprietary-firmwa
 emit device/xiaomi/onyx 0015-enable-wifi-cfr.patch \
     configs/wifi/WCNSS_qcom_cfg.ini configs/wifi/cfr-kernel.config
 
+# Preserve nicmd network setup with the netlink_xperm kernel ABI.
+emit device/xiaomi/onyx 0020-nicmd-netlink-xperms.patch \
+    sepolicy/vendor/vendor_nicmd.te
+
 # -------------------------------------------------------------- kernel/xiaomi/sm8735
 # Enable relay symbols in the source kernel used for WCN7750 module validation.
 # Do not rely exclusively on the custom Kono-Ha prebuilt (which already has RELAY).

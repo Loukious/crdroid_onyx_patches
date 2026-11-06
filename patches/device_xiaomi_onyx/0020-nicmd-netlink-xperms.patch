@@ -1,0 +1,110 @@
+diff --git a/sepolicy/vendor/vendor_nicmd.te b/sepolicy/vendor/vendor_nicmd.te
+new file mode 100644
+index 0000000..56d03c8
+--- /dev/null
++++ b/sepolicy/vendor/vendor_nicmd.te
+@@ -0,0 +1,104 @@
++# Preserve nicmd's existing legacy route read/write/readpriv/getneigh and
++# XFRM read/write permissions under the Linux >= 6.13 netlink_xperm ABI.
++# Only this daemon and its own sockets are affected. Keep legacy rules.
++
++allow vendor_nicmd self:netlink_route_socket nlmsg;
++allowxperm vendor_nicmd self:netlink_route_socket nlmsg {
++    RTM_NEWLINK
++    RTM_DELLINK
++    RTM_GETLINK
++    RTM_SETLINK
++    RTM_NEWADDR
++    RTM_DELADDR
++    RTM_GETADDR
++    RTM_NEWROUTE
++    RTM_DELROUTE
++    RTM_GETROUTE
++    RTM_NEWNEIGH
++    RTM_DELNEIGH
++    RTM_GETNEIGH
++    RTM_NEWRULE
++    RTM_DELRULE
++    RTM_GETRULE
++    RTM_NEWQDISC
++    RTM_DELQDISC
++    RTM_GETQDISC
++    RTM_NEWTCLASS
++    RTM_DELTCLASS
++    RTM_GETTCLASS
++    RTM_NEWTFILTER
++    RTM_DELTFILTER
++    RTM_GETTFILTER
++    RTM_NEWACTION
++    RTM_DELACTION
++    RTM_GETACTION
++    RTM_NEWPREFIX
++    RTM_GETMULTICAST
++    RTM_GETANYCAST
++    RTM_GETNEIGHTBL
++    RTM_SETNEIGHTBL
++    RTM_NEWADDRLABEL
++    RTM_DELADDRLABEL
++    RTM_GETADDRLABEL
++    RTM_GETDCB
++    RTM_SETDCB
++    RTM_NEWNETCONF
++    RTM_DELNETCONF
++    RTM_GETNETCONF
++    RTM_NEWMDB
++    RTM_DELMDB
++    RTM_GETMDB
++    RTM_NEWNSID
++    RTM_DELNSID
++    RTM_GETNSID
++    RTM_NEWSTATS
++    RTM_GETSTATS
++    RTM_SETSTATS
++    RTM_NEWCACHEREPORT
++    RTM_NEWCHAIN
++    RTM_DELCHAIN
++    RTM_GETCHAIN
++    RTM_NEWNEXTHOP
++    RTM_DELNEXTHOP
++    RTM_GETNEXTHOP
++    RTM_NEWLINKPROP
++    RTM_DELLINKPROP
++    RTM_NEWVLAN
++    RTM_DELVLAN
++    RTM_GETVLAN
++    RTM_NEWNEXTHOPBUCKET
++    RTM_DELNEXTHOPBUCKET
++    RTM_GETNEXTHOPBUCKET
++    RTM_NEWTUNNEL
++    RTM_DELTUNNEL
++    RTM_GETTUNNEL
++};
++
++allow vendor_nicmd self:netlink_xfrm_socket nlmsg;
++allowxperm vendor_nicmd self:netlink_xfrm_socket nlmsg {
++    XFRM_MSG_NEWSA
++    XFRM_MSG_DELSA
++    XFRM_MSG_GETSA
++    XFRM_MSG_NEWPOLICY
++    XFRM_MSG_DELPOLICY
++    XFRM_MSG_GETPOLICY
++    XFRM_MSG_ALLOCSPI
++    XFRM_MSG_ACQUIRE
++    XFRM_MSG_EXPIRE
++    XFRM_MSG_UPDPOLICY
++    XFRM_MSG_UPDSA
++    XFRM_MSG_POLEXPIRE
++    XFRM_MSG_FLUSHSA
++    XFRM_MSG_FLUSHPOLICY
++    XFRM_MSG_NEWAE
++    XFRM_MSG_GETAE
++    XFRM_MSG_REPORT
++    XFRM_MSG_MIGRATE
++    XFRM_MSG_NEWSADINFO
++    XFRM_MSG_GETSADINFO
++    XFRM_MSG_NEWSPDINFO
++    XFRM_MSG_GETSPDINFO
++    XFRM_MSG_MAPPING
++    XFRM_MSG_SETDEFAULT
++    XFRM_MSG_GETDEFAULT
++};
