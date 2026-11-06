@@ -354,7 +354,7 @@ firmware SHA1). The generator no longer resurrects them.
 
 This integration branch uses `local_manifests_onyx:evolution-cnb-konoha618`.
 `device/xiaomi/onyx-kernel` is a pinned `prebuilt-onyx` commit of
-`Loukious/konoha-android17-6.18`. Repo sync downloads the kernel, all 471 unique
+`Loukious/onyx-android17-6.18`. Repo sync downloads the kernel, all 471 unique
 modules and corrected device trees directly. It does not fetch crDroid's three
 kernel source repositories or the legacy standalone WLAN source.
 

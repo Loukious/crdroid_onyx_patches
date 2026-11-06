@@ -79,7 +79,7 @@ def export(artifact, bundle, output, revision, source_root, baseline_root):
     (output/'module-verification.json').write_text(json.dumps(verified,indent=2)+'\n')
     # Record the unchanged upstream build and packaging evidence without local machine paths.
     (output/'prebuilt.json').write_text(json.dumps({
-        'format':1,'device':'onyx','kernel_release':release,'source_repository':'Loukious/konoha-android17-6.18',
+        'format':1,'device':'onyx','kernel_release':release,'source_repository':'Loukious/onyx-android17-6.18',
         'source_revision':revision,'platform_modules':len(report['module_verification']),'modules':len(unique),
         'source_snapshot_verified':True,'artifact_report_sha256':digest(artifact/'report.json'),'bundle_report_sha256':digest(bundle/'report.json'),
         'kernel_sha256':digest(output/'Image'),'kernelsu_next':report.get('kernelsu_next'),
@@ -106,7 +106,7 @@ def export(artifact, bundle, output, revision, source_root, baseline_root):
         'Consumed at `device/xiaomi/onyx-kernel` by the Konoha local manifest.\n'
         'Image, corrected device trees and all modules come from the same accepted artifact set.\n'
         'See prebuilt.json for exact source and input identities; `python3 verify.py` checks file hashes.\n'
-        'Source: https://github.com/Loukious/konoha-android17-6.18/tree/'+revision+'\n\n'
+        'Source: https://github.com/Loukious/onyx-android17-6.18/tree/'+revision+'\n\n'
         'Normal Android packaging generates boot/vendor_boot/recovery/DLKM and AVB/OTA metadata.\n'
         'No prebuilt ROM partition images or device-specific diagnostic metadata mounts are shipped.\n'
         'Kernel and module sources retain their upstream licenses; consult the source branch.\n')
