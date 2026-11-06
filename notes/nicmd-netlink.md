@@ -56,11 +56,21 @@ Decompiling the resulting complete policies confirmed that only nicmd's own
 route/XFRM grants changed, with the same semantic delta as the phone-tested
 candidate. The expanded lists exactly match all 68 route and 25 XFRM IDs.
 
-A fresh Soong build of `vendor_sepolicy.cil sepolicy_tests` stopped before
-policy compilation because `libwifi_hal_vendor_impl_defaults` cannot resolve
-`libwifi-hal-qcom` in the current exported namespaces. No WLAN build settings
-were changed. The focused checks validate the rule against cached policy;
-they do not replace a fresh build or establish that `sepolicy_tests` passed.
+A fresh Soong invocation for `vendor_sepolicy.cil sepolicy_tests` initially
+stopped before policy compilation because the direct command omitted
+`LINEAGE_BUILD=onyx`. That skipped `BoardConfigLineage.mk` and consequently
+Qualcomm's WLAN namespace setup. This was a validation-command error, not a
+demonstrated ROM configuration defect.
+
+Repeating the check through `ci/local-compile-check.sh`, which sources
+`build/envsetup.sh` and runs `lunch lineage_onyx-bp4a-userdebug`, restored both
+Qualcomm WLAN namespaces and passed that failure point. Soong then stopped
+because Canvas and Etar request SDK 37 but this checkout cannot resolve
+`sdk_public_37.0_system_modules`. Neither attempt reached policy compilation.
+No WLAN or application build settings were changed. The focused checks validate
+the rule against cached policy; they do not replace a fresh build. Also,
+`sepolicy_tests` is the test executable target; the genrule that runs it is
+`sepolicy_test`, which has not run here.
 
 Detailed receipts, commands and input hashes are saved locally under
 `/home/loukious/Android/konoha-wlan-wow-20261106/root-cause-052811/`:
