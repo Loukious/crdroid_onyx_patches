@@ -65,9 +65,9 @@ ROM="$(cd "${1:-$PWD}" && pwd)"
 DEVICE="${DEVICE:-onyx}"
 KERNEL_REPO="${KERNEL_REPO:-Loukious/konoha-kernel-gki}"
 KERNEL_DEST="vendor/extra/kernel/onyx/Image"
-# This branch consumes a matched prebuilt project directly from repo sync.
-export KONOHA_PREBUILT="${KONOHA_PREBUILT:-1}"
-if [ "$KONOHA_PREBUILT" = 1 ]; then
+# This branch builds the synced 6.18 source and all matching modules with Kleaf.
+export KONOHA_SOURCE_BUILD="${KONOHA_SOURCE_BUILD:-1}"
+if [ "$KONOHA_SOURCE_BUILD" = 1 ]; then
     SKIP_KERNEL=1
     SKIP_WLAN=1
 fi
@@ -119,10 +119,10 @@ apply_patches() {
         [ -d "$pdir" ] || continue   # unexpanded glob: no patch dirs at all
         key="$(basename "$pdir")"
         proj="${PROJECT[$key]:-}"
-        if [ "$KONOHA_PREBUILT" = 1 ]; then
+        if [ "$KONOHA_SOURCE_BUILD" = 1 ]; then
             case "$key" in
                 kernel_xiaomi_sm8735|kernel_xiaomi_sm8735-modules|kernel_xiaomi_onyx-wlan)
-                    echo "== $key (source-kernel patches omitted: matched prebuilts)"; continue ;;
+                    echo "== $key (legacy 6.6 patches omitted: Onyx 6.18 source recipe)"; continue ;;
             esac
         fi
         if [ -z "$proj" ]; then
@@ -136,8 +136,8 @@ apply_patches() {
         for patch in "$pdir"*.patch; do
             [ -e "$patch" ] || continue
             n="$(basename "$patch")"
-            if [ "$KONOHA_PREBUILT" = 1 ] && { [ "$key/$n" = device_xiaomi_onyx/0001-vendor-extra-kernel-hook.patch ] || [ "$key/$n" = vendor_lineage/0002-kernel-source-rw-allowlist.patch ]; }; then
-                echo "   -- $n (replaced by matched prebuilt configuration)"; continue
+            if [ "$KONOHA_SOURCE_BUILD" = 1 ] && { [ "$key/$n" = device_xiaomi_onyx/0001-vendor-extra-kernel-hook.patch ] || [ "$key/$n" = vendor_lineage/0002-kernel-source-rw-allowlist.patch ]; }; then
+                echo "   -- $n (replaced by the Onyx source-build configuration)"; continue
             fi
             exact=0
             case "$key/$n" in
@@ -210,10 +210,10 @@ apply_scripts() {
         [ -d "$sdir" ] || continue
         key="$(basename "$sdir")"
         proj="${PROJECT[$key]:-}"
-        if [ "$KONOHA_PREBUILT" = 1 ]; then
+        if [ "$KONOHA_SOURCE_BUILD" = 1 ]; then
             case "$key" in
                 kernel_xiaomi_sm8735|kernel_xiaomi_sm8735-modules|kernel_xiaomi_onyx-wlan)
-                    echo "== $key (source-kernel patches omitted: matched prebuilts)"; continue ;;
+                    echo "== $key (legacy 6.6 patches omitted: Onyx 6.18 source recipe)"; continue ;;
             esac
         fi
         if [ -z "$proj" ]; then
@@ -608,8 +608,8 @@ if [ "$PREFLIGHT" = 1 ]; then
 fi
 
 [ -d "$ROM/.repo" ] || { red "FATAL: $ROM is not a repo tree (no .repo)"; exit 1; }
-if [ "$KONOHA_PREBUILT" = 1 ]; then
-    python3 "$HERE/ci/verify-konoha-prebuilt.py" "$ROM/device/xiaomi/onyx-kernel" || exit 1
+if [ "$KONOHA_SOURCE_BUILD" = 1 ]; then
+    [ -f "$ROM/kernel/platform/kernel-6.18/port/rom/build.py" ] || { red "FATAL: sync the Onyx kernel source project first"; exit 1; }
 fi
 
 if [ "${SKIP_PATCHES:-0}" != "1" ]; then apply_patches; fi

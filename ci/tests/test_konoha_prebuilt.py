@@ -59,7 +59,7 @@ class PrebuiltTests(unittest.TestCase):
             (prebuilt/'prebuilt.json').write_text('{}')
             (device/'BoardConfig.mk').write_text('# Kernel\nTARGET_KERNEL_SOURCE := kernel/xiaomi/sm8735\nBOARD_KERNEL_CMDLINE := keep=1\nBOARD_BOOTCONFIG := androidboot.hardware=qcom\n# Partitions\nBOARD_BOOTIMAGE_PARTITION_SIZE := 100663296\n-include vendor/extra/BoardConfigKernel.mk\n')
             (device/'crdroid.dependencies').write_text(json.dumps([{'target_path':'kernel/xiaomi/sm8735'},{'target_path':'hardware/xiaomi'}]))
-            cmd=['bash',str(ROOT/'scripts/device_xiaomi_onyx/0019-konoha-prebuilt.sh'),str(device)]
+            cmd=['bash',str(ROOT/'scripts/device_xiaomi_onyx/0019-konoha-source-build.sh'),str(device)]
             subprocess.run(cmd,check=True,capture_output=True)
             first=(device/'BoardConfig.mk').read_text()
             subprocess.run(cmd,check=True,capture_output=True)
@@ -67,6 +67,7 @@ class PrebuiltTests(unittest.TestCase):
             self.assertNotIn('kernel/xiaomi/sm8735',first)
             self.assertNotIn('vendor/extra/BoardConfigKernel.mk',first)
             self.assertIn('BOARD_KERNEL_CMDLINE := keep=1',first)
+            self.assertEqual(first.count('include kernel/platform/kernel-6.18/port/rom/BoardConfig.mk'),2)
             self.assertEqual(json.loads((device/'crdroid.dependencies').read_text()),[{'target_path':'hardware/xiaomi'}])
 
 if __name__=='__main__':unittest.main()

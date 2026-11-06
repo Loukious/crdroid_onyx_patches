@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-[ "${KONOHA_PREBUILT:-1}" = 1 ] || exit 0
+[ "${KONOHA_SOURCE_BUILD:-1}" = 1 ] || exit 0
 python3 - "$1" <<'PY'
 from pathlib import Path
 import sys

@@ -350,41 +350,34 @@ run **after** overlaying the hybrid G303/CN305 radio images.
 Two obsolete patches are archived under `retired/` (NFC teardown and static
 firmware SHA1). The generator no longer resurrects them.
 
-## Manifest-synced Konoha 6.18 prebuilts
+## Manifest-synced Onyx 6.18 source builds
 
-This integration branch uses `local_manifests_onyx:evolution-cnb-konoha618`.
-`device/xiaomi/onyx-kernel` is a pinned `prebuilt-onyx` commit of
-`Loukious/onyx-android17-6.18`. Repo sync downloads the kernel, all 471 unique
-modules and corrected device trees directly. It does not fetch crDroid's three
-kernel source repositories or the legacy standalone WLAN source.
+Use `local_manifests_onyx:evolution-cnb-konoha618` with this branch. The manifest
+syncs `Loukious/onyx-android17-6.18:android17-6.18-lts` into
+`kernel/platform/kernel-6.18`. `apply.sh` selects its `port/rom/BoardConfig.mk`
+and skips the older 6.6 source patches, release Image download and WLAN overlay.
+The legacy options and Image-only flow documented above apply to older branches.
 
-`apply.sh` verifies the prebuilt checksums before editing the tree, switches
-Onyx to its prebuilt BoardConfig, removes source-kernel dependencies and skips
-the old kernel patches, Image downloader, WLAN overlay and ABI preparation.
-Android still generates the ROM's ramdisks, DLKM partitions, AVB and OTA metadata.
-No prebuilt partition images or external diagnostic mounts are injected.
-
-Local maintenance (sync and patch only):
+The normal ROM build compiles the synced GKI, all matching native/platform modules
+and corrected device trees through the source repository's verified Kleaf recipe.
+Android generates its ramdisks, boot/DT images, DLKM partitions, AVB and OTA metadata.
+Userspace headers are generated from the same GKI/module source; the adapter
+retains three pinned legacy ION syscall headers needed by the vendor userspace.
+Normal parallel module loading remains enabled.
 
 ```sh
 ci/sync-local.py ~/Android/custom-rom --jobs 8
+cd ~/Android/custom-rom
+source build/envsetup.sh
+breakfast onyx userdebug
+m evolution -j8
 ```
 
-The initial binaries reuse the accepted 6.18.38 / 391-platform-module /
-471-total-module artifact, with matching common/module source snapshots,
-vermagic and imported symbol CRCs checked. A ROM build and boot test with this
-new packaging configuration remain required; activation itself does not build.
-The previously accepted phone package used serial diagnostic loaders. This
-integration uses Android's normal module packaging/load lists and does not
-claim that the unbuilt ROM has inherited the prior package's runtime validation.
-
-To update, use `ci/export-konoha-prebuilt.py --help` with an existing verified
-artifact and partitioned bundle, publish a new prebuilt commit, then update the
-manifest pin. Pass `--baseline-root` for the pinned kernel ABI baseline used to
-export legacy ION syscall constants. The prebuilt bundle also includes sanitized
-GKI and matching Qualcomm module UAPI headers; Soong extracts them for existing
-`generated_kernel_headers` users without compiling a kernel. Header archive
-checksums, inventory and source revision are verified before the build.
-The exporter copies/verifies binaries and never compiles or builds
-partition images. Prebuilt updates are deliberately pinned rather than silently
-following the newest CI output.
+The sync helper preserves local changes before fetching all manifest updates and
+reapplying this patch set. KernelSU Next dev is resolved at build time. Kernel
+objects are cached under `out/target/product/onyx/obj/KERNEL_BAZEL_OUT/kleaf-cache`
+using Kleaf's supported incremental mode. The first build is cold; subsequent
+builds reuse unchanged objects while repeating source, module and ABI checks.
+The source-build receipt is `obj/KERNEL_OBJ/onyx-source-build.json` under the
+product output directory. The old `prebuilt-onyx` branch remains an archived
+binary integration input and is no longer selected by the active manifest.

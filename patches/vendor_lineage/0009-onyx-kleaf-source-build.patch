@@ -1,0 +1,93 @@
+diff --git a/build/soong/Android.bp b/build/soong/Android.bp
+index 0ec3960e66804de8a78d5fceb83eab24b7b99ee1..6f52e6fc979a129f24524560edde6ab39023c9a9 100644
+--- a/build/soong/Android.bp
++++ b/build/soong/Android.bp
+@@ -24,7 +24,9 @@ lineage_generator {
+     // The headers make command
+     cmd: "set -e -o pipefail; " +
+          "(cd $(KERNEL_BUILD_OUT_PREFIX).; " +
+-         "if [ -n \"$(TARGET_PREBUILT_KERNEL_HEADERS)\" ]; then " +
++         "if [ -n \"$(TARGET_KERNEL_PORT_HEADERS)\" ]; then " +
++         "    python3 $(TARGET_KERNEL_PORT_HEADERS) --source $(KERNEL_PATH) --output $(KERNEL_BUILD_OUT_PREFIX)$(genDir); " +
++         "elif [ -n \"$(TARGET_PREBUILT_KERNEL_HEADERS)\" ]; then " +
+          "    mkdir -p $(genDir); " +
+          "    gzip -d < $(TARGET_PREBUILT_KERNEL_HEADERS) | tar -x -C $(genDir); " +
+          "    test -f $(genDir)/usr/include/linux/types.h; " +
+@@ -53,6 +55,14 @@ lineage_generator {
+     dep_files: [
+         "*.tar.gz",
+         "Makefile",
++        "common/Makefile",
++        "common/include/**/*",
++        "common/arch/arm64/include/**/*",
++        "common/arch/arm64/tools/**/*",
++        "common/scripts/**/*",
++        "modules/**/*",
++        "port/rom/**/*",
++        "port/sources.json",
+         "include/**/*",
+         "arch/$(KERNEL_ARCH)/include/**/*",
+         "techpack/audio/include/**/*",
+diff --git a/build/tasks/kernel.mk b/build/tasks/kernel.mk
+index a36edcb8f90fd075c539b100e772f03280789095..a4c887e962043707e307852dcee22712610673e3 100644
+--- a/build/tasks/kernel.mk
++++ b/build/tasks/kernel.mk
+@@ -769,7 +769,28 @@ else
+ KERNEL_REPO_MANIFEST := $(abspath $(KERNEL_PATH)):$(abspath $(KERNEL_OUT)/manifest.xml)
+ endif
+ 
++ifneq ($(TARGET_KERNEL_PORT_BUILD),)
++.PHONY: onyx-kernel-source-force
++$(TARGET_PREBUILT_INT_KERNEL): onyx-kernel-source-force
++endif
++
+ $(TARGET_PREBUILT_INT_KERNEL): $(DEPMOD) $(KERNEL_MODULES_PARTITION_FILE_LIST) $(SYSTEM_KERNEL_MODULES_PARTITION_FILE_LIST)
++ifneq ($(TARGET_KERNEL_PORT_BUILD),)
++	@echo "Building Onyx GKI, all matching modules and device trees from source"
++	$(hide) python3 $(TARGET_KERNEL_PORT_BUILD) --source $(KERNEL_PATH) \
++		--workspace $(abspath $(KERNEL_BAZEL_OUT)) --output $(abspath $(KERNEL_OUT)) \
++		--jobs $(TARGET_KERNEL_PORT_JOBS) --memory-mb $(TARGET_KERNEL_PORT_MEMORY_MB)
++	$(hide) for dir in "$(SYSTEM_KERNEL_MODULES_OUT)" "$(KERNEL_MODULES_OUT)" "$(KERNEL_VENDOR_RAMDISK_MODULES_OUT)" "$(KERNEL_RECOVERY_MODULES_OUT)"; do \
++		case "$$dir" in "$(PRODUCT_OUT)"/*) rm -f "$$dir"/lib/modules/*.ko ;; *) echo "Invalid module output directory: $$dir" >&2; exit 1 ;; esac; \
++	done
++	$(hide) sed -i -E '/^lib\/modules\/(.*\.ko|modules\.(alias|dep|load|softdep))$$/d' $(KERNEL_MODULES_PARTITION_FILE_LIST) $(SYSTEM_KERNEL_MODULES_PARTITION_FILE_LIST)
++	$(call build-image-kernel-modules-lineage,$$(sed 's|^|$(KERNEL_OUT)/|' $(KERNEL_OUT)/system_dlkm.modules),$(SYSTEM_KERNEL_MODULES_OUT),$(SYSTEM_KERNEL_MODULE_MOUNTPOINT)/,$(SYSTEM_KERNEL_DEPMOD_STAGING_DIR),$$(cat $(KERNEL_OUT)/system_dlkm.modules.load),,$(SYSTEM_KERNEL_MODULES_PARTITION_FILE_LIST),)
++	$(call build-image-kernel-modules-lineage,$$(sed 's|^|$(KERNEL_OUT)/|' $(KERNEL_OUT)/vendor_dlkm.modules),$(KERNEL_MODULES_OUT),$(KERNEL_MODULE_MOUNTPOINT)/,$(KERNEL_DEPMOD_STAGING_DIR),$$(cat $(KERNEL_OUT)/vendor_dlkm.modules.load),,$(KERNEL_MODULES_PARTITION_FILE_LIST),$(SYSTEM_KERNEL_DEPMOD_STAGING_DIR)/lib/modules/0.0/$(SYSTEM_KERNEL_MODULE_MOUNTPOINT))
++	$(call build-image-kernel-modules-lineage,$$(sed 's|^|$(KERNEL_OUT)/|' $(KERNEL_OUT)/vendor_ramdisk.modules),$(KERNEL_VENDOR_RAMDISK_MODULES_OUT),,$(KERNEL_VENDOR_RAMDISK_DEPMOD_STAGING_DIR),$$(cat $(KERNEL_OUT)/vendor_ramdisk.modules.load),,,)
++	$(call build-image-kernel-modules-lineage,$$(sed 's|^|$(KERNEL_OUT)/|' $(KERNEL_OUT)/vendor_ramdisk.modules),$(KERNEL_RECOVERY_MODULES_OUT),,$(KERNEL_RECOVERY_DEPMOD_STAGING_DIR),$$(cat $(KERNEL_OUT)/vendor_ramdisk.modules.load.recovery),,,)
++	$(hide) cp $(KERNEL_OUT)/vendor_ramdisk.modules.load.recovery $(KERNEL_VENDOR_RAMDISK_MODULES_OUT)/lib/modules/modules.load.recovery
++	$(hide) cp $(KERNEL_OUT)/vendor_ramdisk.modules.load.recovery $(KERNEL_RECOVERY_MODULES_OUT)/lib/modules/modules.load.recovery
++else
+ 	@echo "Building $(BOARD_KERNEL_IMAGE_NAME)"
+ 	$(hide) rm -rf $(KERNEL_OUT)
+ 	@mkdir -p $(KERNEL_OUT) $(KERNEL_BAZEL_OUT)
+@@ -801,6 +822,8 @@ $(TARGET_PREBUILT_INT_KERNEL): $(DEPMOD) $(KERNEL_MODULES_PARTITION_FILE_LIST) $
+ 	vendor_modules=$$(comm -23 <(find $(KERNEL_OUT) -maxdepth 1 -type f -name '*.ko' | awk -F'/' '{ print $$NF }' | sort) <(awk -F'/' '{ print $$NF }' $(KERNEL_OUT)/system_dlkm.modules.load | sort) | sed 's|^|$(KERNEL_OUT)/|'); \
+ 	($(call build-image-kernel-modules-lineage,$$vendor_modules,$(KERNEL_MODULES_OUT),$(KERNEL_MODULE_MOUNTPOINT)/,$(KERNEL_DEPMOD_STAGING_DIR),$(BOARD_VENDOR_KERNEL_MODULES_LOAD),,$(KERNEL_MODULES_PARTITION_FILE_LIST),$(SYSTEM_KERNEL_DEPMOD_STAGING_DIR)/lib/modules/0.0/$(SYSTEM_KERNEL_MODULE_MOUNTPOINT)))
+ 
++endif
++
+ ifeq ($(BOARD_INCLUDE_DTB_IN_BOOTIMG),true)
+ $(INSTALLED_DTBIMAGE_TARGET): $(TARGET_PREBUILT_INT_KERNEL)
+ 	@rm -f $@
+diff --git a/config/BoardConfigSoong.mk b/config/BoardConfigSoong.mk
+index e068a09e53a900685844e3e6fa17cf35d926831f..776501b9324a33bbada256cd33e7de41326dd6e3 100644
+--- a/config/BoardConfigSoong.mk
++++ b/config/BoardConfigSoong.mk
+@@ -1,7 +1,7 @@
+ PATH_OVERRIDE_SOONG := $(shell echo $(TOOLS_PATH_OVERRIDE))
+ 
+ # Track the archive when generated headers come from a prebuilt kernel.
+-TARGET_KERNEL_HEADERS_SOURCE := $(if $(TARGET_PREBUILT_KERNEL_HEADERS),$(dir $(TARGET_PREBUILT_KERNEL_HEADERS)),$(TARGET_KERNEL_SOURCE))
++TARGET_KERNEL_HEADERS_SOURCE := $(if $(TARGET_KERNEL_PORT_HEADERS),kernel/platform/kernel-$(TARGET_KERNEL_VERSION),$(if $(TARGET_PREBUILT_KERNEL_HEADERS),$(dir $(TARGET_PREBUILT_KERNEL_HEADERS)),$(TARGET_KERNEL_SOURCE)))
+ 
+ # Add variables that we wish to make available to soong here.
+ EXPORT_TO_SOONG := \
+@@ -15,6 +15,7 @@ EXPORT_TO_SOONG := \
+     TARGET_KERNEL_CONFIG \
+     TARGET_KERNEL_SOURCE \
+     TARGET_KERNEL_HEADERS_SOURCE \
++    TARGET_KERNEL_PORT_HEADERS \
+     TARGET_KERNEL_PLATFORM_TARGET \
+     TARGET_MAX_PAGE_SIZE_SUPPORTED \
+     TARGET_PREBUILT_KERNEL_HEADERS

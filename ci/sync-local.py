@@ -125,7 +125,7 @@ if state['phase'] == 'restore':
     state['phase'] = 'patch'
     save()
 if state['phase'] == 'patch':
-    # The Konoha manifest already supplies the matched kernel and modules.
+    # The Onyx source recipe builds the kernel and modules; never fetch a release Image.
     env = {**os.environ, 'SKIP_KERNEL': '1'}
     run(['bash', str(patches / 'apply.sh'), str(rom)], env=env)
     run(['bash', str(patches / 'ci/check-imports.sh'), str(rom)])
