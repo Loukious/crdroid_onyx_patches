@@ -34,12 +34,11 @@ def verify(rom, payload):
             raise ValueError('Source manifest changed after build: ' + name)
 
     manifest = json.loads((payload / 'payload-manifest.json').read_text())
-    images = {part: product / (part + '.img') for part in
-              ['boot', 'vendor_boot', 'vendor_dlkm', 'system_dlkm', 'dtbo']}
-    images['vendor_boot'] = payload / 'payload_vendor_boot.img'
+    images = {part: payload / ('payload_' + part + '.img') for part in
+              ['boot', 'vendor_boot', 'vendor_dlkm', 'system_dlkm', 'dtbo', 'recovery']}
     for part, path in images.items():
         if sha(path) != manifest[part]['sha256']:
-            raise ValueError('OTA image differs from verified loose image: ' + part)
+            raise ValueError('Reconstructed OTA image differs from its payload hash: ' + part)
 
     sys.path.insert(0, str(source / 'port'))
     spec = importlib.util.spec_from_file_location('onyx_cpio', source / 'port/recovery/generate.py')
@@ -49,9 +48,9 @@ def verify(rom, payload):
     def run(*args):
         return subprocess.check_output([str(a) for a in args])
 
-    def check_modules(part, modules):
+    def check_modules(part, modules, layout=None):
         expected = {name: receipt['sha256'][name] for name in
-                    (output / (part + '.modules')).read_text().splitlines()}
+                    (output / ((layout or part) + '.modules')).read_text().splitlines()}
         if modules != expected:
             missing = sorted(set(expected) - set(modules))
             extra = sorted(set(modules) - set(expected))
@@ -85,10 +84,32 @@ def verify(rom, payload):
                         raise ValueError('Duplicate vendor ramdisk module: ' + short)
                     modules[short] = hashlib.sha256(contents).hexdigest()
         check_modules('vendor_ramdisk', modules)
+        run(host / 'unpack_bootimg', '--boot_img', images['recovery'], '--out', work / 'recovery')
+        recovery_kernel = work / 'recovery/kernel'
+        if recovery_kernel.is_file() and recovery_kernel.stat().st_size:
+            if sha(recovery_kernel) != receipt['sha256']['Image']:
+                raise ValueError('Shipped recovery embeds a different kernel')
+        ramdisk = work / 'recovery/ramdisk'
+        data = ramdisk.read_bytes()
+        if not data.startswith(b'07070'):
+            data = run(host / 'lz4', '-dc', ramdisk)
+        recovery_modules = {}
+        for name, (_, contents, _) in cpio.cpio_entries(data).items():
+            if name.endswith('.ko'):
+                short = Path(name).name
+                if short in recovery_modules:
+                    raise ValueError('Duplicate recovery module: ' + short)
+                recovery_modules[short] = hashlib.sha256(contents).hexdigest()
+        check_modules('recovery', recovery_modules, 'vendor_ramdisk')
         for part in ['vendor_dlkm', 'system_dlkm']:
             tree = work / part
             run(host / 'fsck.erofs', '--extract=' + str(tree), '--no-preserve-owner', images[part])
-            check_modules(part, {p.name: sha(p) for p in tree.rglob('*.ko')})
+            modules = {}
+            for module in tree.rglob('*.ko'):
+                if module.is_symlink() or module.name in modules:
+                    raise ValueError('Duplicate or linked ' + part + ' module: ' + str(module))
+                modules[module.name] = sha(module)
+            check_modules(part, modules)
     print('Verified OTA kernel, device trees and every module against source ' + revision)
 
 

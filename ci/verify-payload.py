@@ -12,7 +12,8 @@ artifact that cannot lie is the shipped zip itself.
 This script parses the payload manifest straight from the protobuf wire
 format (no google.protobuf import: ota_from_target_files.py does not use it,
 so nothing proves the build server's python3 has it installed) and
-reconstructs the vendor_boot partition image from its install operations.
+reconstructs the boot, vendor_boot, recovery, DTBO and DLKM partition images
+from their install operations.
 The reconstruction is self-checking: the sha256 of the rebuilt image must
 equal the hash delta_generator recorded in the manifest, so a parsing bug
 cannot silently produce a wrong-but-passing image.
@@ -130,6 +131,9 @@ with zipfile.ZipFile(OTA_ZIP) as z:
         sig_size = struct.unpack(">I", f.read(4))[0]
         manifest_body = f.read(manifest_size)
         data_start = 24 + manifest_size + sig_size
+        BLOCK_SIZE = one(manifest_body, 3, 4096)
+        if BLOCK_SIZE < 512 or BLOCK_SIZE > 65536 or BLOCK_SIZE & (BLOCK_SIZE - 1):
+            die("unsupported payload block size")
         print(f"payload: version={version} manifest={manifest_size}B "
               f"blobs@{data_start}")
 
@@ -146,59 +150,70 @@ with zipfile.ZipFile(OTA_ZIP) as z:
             die("payload has no vendor_dlkm partition")
         print(f"payload vendor_dlkm: {vdlkm['size']} bytes")
 
-        vb = next((p for p in partitions if p["name"] == "vendor_boot"), None)
-        if vb is None:
-            die("payload has no vendor_boot partition")
-        if not vb["hash"]:
-            die("payload manifest has no vendor_boot hash -- cannot self-check")
-        print(f"payload vendor_boot: {len(vb['ops'])} ops, {vb['size']} bytes")
+        selected = [p for p in partitions if p['name'] in {
+            'boot', 'vendor_boot', 'vendor_dlkm', 'system_dlkm', 'dtbo', 'recovery'}]
+        if not any(p['name'] == 'vendor_boot' for p in selected):
+            die('payload has no vendor_boot partition')
+        if len({p['name'] for p in partitions}) != len(partitions):
+            die('duplicate payload partition')
+        # Follow the payload's partition order to avoid unnecessary ZIP rescans.
+        for part in selected:
+            name = part['name']
+            if not part["hash"]:
+                die(f"payload manifest has no {name} hash -- cannot self-check")
+            print(f"payload {name}: {len(part['ops'])} ops, {part['size']} bytes")
 
-        out_path = f"{OUTDIR}/payload_vendor_boot.img"
-        with open(out_path, "wb") as out:
-            out.truncate(vb["size"])   # ZERO/DISCARD extents read back as 0
+            out_path = f"{OUTDIR}/payload_{name}.img"
+            with open(out_path, "wb") as out:
+                out.truncate(part["size"])   # ZERO/DISCARD extents read back as 0
+                digest = hashlib.sha256()
+                # The image is sparse in the sense that ops target scattered
+                # dst_extents; hash it sequentially afterwards instead of while
+                # writing out of order.
+                for i, op in enumerate(part["ops"]):
+                    total = sum(nb for _, nb in op["extents"]) * BLOCK_SIZE
+                    if any(start < 0 or blocks < 0 or (start + blocks) * BLOCK_SIZE > part["size"]
+                           for start, blocks in op["extents"]):
+                        die(f"{name}: destination extent exceeds partition size")
+                    if op["type"] in (OP_ZERO, OP_DISCARD):
+                        blob = b"\x00" * total
+                    elif op["type"] == OP_REPLACE:
+                        f.seek(data_start + op["off"])
+                        blob = f.read(op["len"])
+                    elif op["type"] == OP_REPLACE_BZ:
+                        f.seek(data_start + op["off"])
+                        blob = bz2.decompress(f.read(op["len"]))
+                    elif op["type"] == OP_REPLACE_XZ:
+                        f.seek(data_start + op["off"])
+                        blob = lzma.decompress(f.read(op["len"]))
+                    else:
+                        die(f"op {i}: type {op['type']} is a diff op -- not "
+                            f"expected in a full OTA")
+                    if len(blob) != total:
+                        die(f"op {i}: decompressed {len(blob)}B but extents "
+                            f"cover {total}B")
+                    pos = 0
+                    for start_block, num_blocks in op["extents"]:
+                        out.seek(start_block * BLOCK_SIZE)
+                        out.write(blob[pos:pos + num_blocks * BLOCK_SIZE])
+                        pos += num_blocks * BLOCK_SIZE
+
             digest = hashlib.sha256()
-            # The image is sparse in the sense that ops target scattered
-            # dst_extents; hash it sequentially afterwards instead of while
-            # writing out of order.
-            for i, op in enumerate(vb["ops"]):
-                total = sum(nb for _, nb in op["extents"]) * BLOCK_SIZE
-                if op["type"] in (OP_ZERO, OP_DISCARD):
-                    blob = b"\x00" * total
-                elif op["type"] == OP_REPLACE:
-                    f.seek(data_start + op["off"])
-                    blob = f.read(op["len"])
-                elif op["type"] == OP_REPLACE_BZ:
-                    f.seek(data_start + op["off"])
-                    blob = bz2.decompress(f.read(op["len"]))
-                elif op["type"] == OP_REPLACE_XZ:
-                    f.seek(data_start + op["off"])
-                    blob = lzma.decompress(f.read(op["len"]))
-                else:
-                    die(f"op {i}: type {op['type']} is a diff op -- not "
-                        f"expected in a full OTA")
-                if len(blob) != total:
-                    die(f"op {i}: decompressed {len(blob)}B but extents "
-                        f"cover {total}B")
-                pos = 0
-                for start_block, num_blocks in op["extents"]:
-                    out.seek(start_block * BLOCK_SIZE)
-                    out.write(blob[pos:pos + num_blocks * BLOCK_SIZE])
-                    pos += num_blocks * BLOCK_SIZE
+            with open(out_path, "rb") as out:
+                while True:
+                    chunk = out.read(8 << 20)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
 
-        digest = hashlib.sha256()
-        with open(out_path, "rb") as out:
-            while True:
-                chunk = out.read(8 << 20)
-                if not chunk:
-                    break
-                digest.update(chunk)
+            got = digest.hexdigest()
+            want = part["hash"].hex()
+            if got != want:
+                die(f"{name} reconstruction hash mismatch: got {got} "
+                    f"want {want} -- extraction is broken, do NOT trust it")
+            print(f"payload {name}: sha256 {got} (matches manifest)")
 
-        got = digest.hexdigest()
-        want = vb["hash"].hex()
-        if got != want:
-            die(f"vendor_boot reconstruction hash mismatch: got {got} "
-                f"want {want} -- extraction is broken, do NOT trust it")
-        print(f"payload vendor_boot: sha256 {got} (matches manifest)")
+out_path = f"{OUTDIR}/payload_vendor_boot.img"
 
 with open(f"{OUTDIR}/payload_info", "w") as info:
     info.write(f"VENDOR_DLKM_SIZE={vdlkm['size']}\n")
