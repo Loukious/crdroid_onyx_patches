@@ -277,6 +277,8 @@ emit_selected_hunks frameworks/base 0014-pool-notification-history-strings.patch
     'pooledStrings|getPooledStringsToWrite|poolStringsFromNotifications|ProtoInputStream|testWritePoolsFreshNotifications' \
     services/core/java/com/android/server/notification/NotificationHistoryProtoHelper.java \
     services/tests/uiservicestests/src/com/android/server/notification/NotificationHistoryProtoHelperTest.java
+emit frameworks/base 0015-exclude-shade-from-home-double-tap-sleep.patch \
+    packages/SystemUI/src/com/android/systemui/dt2s/DoubleTapToSleepController.java
 
 # Settings.java carries only GESTURE_NAVBAR_SPACE_MODE now, so no hunk filter.
 emit frameworks/base 0001-gesture-navbar-space.patch \

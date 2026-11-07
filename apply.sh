@@ -165,6 +165,7 @@ apply_patches() {
                 frameworks_base/0012-fix-notification-blur-inflation-thread.patch|\
                 frameworks_base/0013-fix-wifi-data-usage-query.patch|\
                 frameworks_base/0014-pool-notification-history-strings.patch|\
+                frameworks_base/0015-exclude-shade-from-home-double-tap-sleep.patch|\
                 device_xiaomi_onyx/0022-label-radio-customized-region-property.patch|\
                 packages_apps_Settings/0002-secure-spaces-management.patch|\
                 hardware_xiaomi/0001-fix-fingerprint-cancel-completion.patch|\

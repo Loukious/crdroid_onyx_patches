@@ -128,6 +128,13 @@ notification path. This fixes duplicate completion without changing fingerprint
 routing or authentication policy. It requires a rebuilt fingerprint service/ROM;
 see [the HAL contract and regression checks](notes/fingerprint-cancellation.md).
 
+**Home double-tap sleep** — framework patch `0015` stops the home-screen
+gesture monitor while the notification shade or Quick Settings is open. This
+prevents rapid Caffeine tile taps from putting the phone to sleep, clears
+pending gestures when the shade opens, and preserves normal home double-tap.
+It requires a rebuilt SystemUI/ROM; see
+[the cause and regression checks](notes/home-double-tap-shade.md).
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
@@ -181,6 +188,7 @@ patches/frameworks_base/                      0001-gesture-navbar-space
                                               0012-fix-notification-blur-inflation-thread
                                               0013-fix-wifi-data-usage-query
                                               0014-pool-notification-history-strings
+                                              0015-exclude-shade-from-home-double-tap-sleep
 retired/hardware_nxp_nfc/                     0001-fix-client-thread-teardown-race (NOT applied)
 patches/hardware_xiaomi/                      0001-fix-fingerprint-cancel-completion
 patches/lineage-sdk/                          0001-secure-space-user-switch-observer-acks
