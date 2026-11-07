@@ -161,6 +161,10 @@ apply_patches() {
             esac
             case "$key/$n" in
                 frameworks_base/000[3-9]-*|frameworks_base/0010-*|\
+                frameworks_base/0012-fix-notification-blur-inflation-thread.patch|\
+                frameworks_base/0013-fix-wifi-data-usage-query.patch|\
+                frameworks_base/0014-pool-notification-history-strings.patch|\
+                device_xiaomi_onyx/0022-label-radio-customized-region-property.patch|\
                 packages_apps_Settings/0002-secure-spaces-management.patch|\
                 lineage-sdk/*|hardware_nxp_nfc/*|system_security/*|system_vold/*)
                     exact=1
@@ -181,7 +185,7 @@ apply_patches() {
             fi
 
             if [ "$exact" = 1 ]; then
-                # Auth/duress/NFC and guarded fixes need exact context. Never
+                # Auth/duress/NFC, log-derived and guarded fixes need exact context. Never
                 # relocate their hunks with fuzz: source drift must fail loudly.
                 if git -C "$ROM/$proj" apply --check "$patch" >/dev/null 2>&1 &&
                         git -C "$ROM/$proj" apply "$patch"; then

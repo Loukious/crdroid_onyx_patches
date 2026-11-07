@@ -1,0 +1,88 @@
+diff --git a/services/core/java/com/android/server/notification/NotificationHistoryProtoHelper.java b/services/core/java/com/android/server/notification/NotificationHistoryProtoHelper.java
+index f5b7744..d1e3e18 100644
+--- a/services/core/java/com/android/server/notification/NotificationHistoryProtoHelper.java
++++ b/services/core/java/com/android/server/notification/NotificationHistoryProtoHelper.java
+@@ -61,10 +61,8 @@ final class NotificationHistoryProtoHelper {
+         return stringPool;
+     }
+ 
+-    private static void writeStringPool(ProtoOutputStream proto,
+-            final NotificationHistory notifications) {
++    private static void writeStringPool(ProtoOutputStream proto, final String[] pooledStrings) {
+         final long token = proto.start(NotificationHistoryProto.STRING_POOL);
+-        final String[] pooledStrings = notifications.getPooledStringsToWrite();
+         proto.write(NotificationHistoryProto.StringPool.SIZE, pooledStrings.length);
+         for (int i = 0; i < pooledStrings.length; i++) {
+             proto.write(NotificationHistoryProto.StringPool.STRINGS, pooledStrings[i]);
+@@ -333,16 +331,19 @@ final class NotificationHistoryProtoHelper {
+     }
+ 
+     public static void write(OutputStream out, NotificationHistory notifications, int version) {
++        // Fresh buffer entries do not populate the pool as they are added.
++        // Rebuild it before writing indexes, and reuse one sorted snapshot.
++        notifications.poolStringsFromNotifications();
++        final String[] pooledStrings = notifications.getPooledStringsToWrite();
+         final ProtoOutputStream proto = new ProtoOutputStream(out);
+         proto.write(NotificationHistoryProto.MAJOR_VERSION, version);
+         // String pool should be written before the history itself
+-        writeStringPool(proto, notifications);
++        writeStringPool(proto, pooledStrings);
+ 
+         List<HistoricalNotification> notificationsToWrite = notifications.getNotificationsToWrite();
+         final int count = notificationsToWrite.size();
+         for (int i = 0; i < count; i++) {
+-            writeNotification(proto, notifications.getPooledStringsToWrite(),
+-                    notificationsToWrite.get(i));
++            writeNotification(proto, pooledStrings, notificationsToWrite.get(i));
+         }
+ 
+         proto.flush();
+diff --git a/services/tests/uiservicestests/src/com/android/server/notification/NotificationHistoryProtoHelperTest.java b/services/tests/uiservicestests/src/com/android/server/notification/NotificationHistoryProtoHelperTest.java
+index 8059bac..d9cfdec 100644
+--- a/services/tests/uiservicestests/src/com/android/server/notification/NotificationHistoryProtoHelperTest.java
++++ b/services/tests/uiservicestests/src/com/android/server/notification/NotificationHistoryProtoHelperTest.java
+@@ -21,6 +21,7 @@ import android.app.NotificationHistory;
+ import android.app.NotificationHistory.HistoricalNotification;
+ import android.graphics.drawable.Icon;
+ import android.text.TextUtils;
++import android.util.proto.ProtoInputStream;
+ 
+ import androidx.test.InstrumentationRegistry;
+ import androidx.test.filters.SmallTest;
+@@ -133,6 +134,36 @@ public class NotificationHistoryProtoHelperTest extends UiServiceTestCase {
+                 .containsExactlyElementsIn(expectedEntries);
+     }
+ 
++    @Test
++    public void testWritePoolsFreshNotificationsAndDropsStaleStrings() throws Exception {
++        NotificationHistory history = new NotificationHistory();
++        history.addPooledStrings(Arrays.asList("stale-string"));
++        history.addNewNotificationToWrite(getHistoricalNotification("shared.package", 1));
++        history.addNewNotificationToWrite(getHistoricalNotification("shared.package", 2));
++
++        ByteArrayOutputStream out = new ByteArrayOutputStream();
++        NotificationHistoryProtoHelper.write(out, history, 1);
++        ProtoInputStream proto = new ProtoInputStream(out.toByteArray());
++        List<String> writtenPool = new ArrayList<>();
++        int declaredSize = -1;
++        while (proto.nextField() != ProtoInputStream.NO_MORE_FIELDS) {
++            if (proto.getFieldNumber() != (int) NotificationHistoryProto.STRING_POOL) continue;
++            long token = proto.start(NotificationHistoryProto.STRING_POOL);
++            while (proto.nextField() != ProtoInputStream.NO_MORE_FIELDS) {
++                if (proto.getFieldNumber() == (int) NotificationHistoryProto.StringPool.SIZE) {
++                    declaredSize = proto.readInt(NotificationHistoryProto.StringPool.SIZE);
++                } else if (proto.getFieldNumber()
++                        == (int) NotificationHistoryProto.StringPool.STRINGS) {
++                    writtenPool.add(proto.readString(NotificationHistoryProto.StringPool.STRINGS));
++                }
++            }
++            proto.end(token);
++        }
++        assertThat(writtenPool).containsExactly(
++                "shared.package", "channelId1", "channelId2", "channelName2", "convo2");
++        assertThat(declaredSize).isEqualTo(writtenPool.size());
++    }
++
+     @Test
+     public void testReadNotificationsWithPkgFilter() throws Exception {
+         NotificationHistory history = new NotificationHistory();

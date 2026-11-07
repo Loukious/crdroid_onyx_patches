@@ -1,0 +1,73 @@
+diff --git a/packages/SystemUI/AndroidManifest.xml b/packages/SystemUI/AndroidManifest.xml
+index d658b7e..52a198c 100644
+--- a/packages/SystemUI/AndroidManifest.xml
++++ b/packages/SystemUI/AndroidManifest.xml
+@@ -71,6 +71,9 @@
+     <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE" />
+     <uses-permission android:name="android.permission.READ_PRECISE_PHONE_STATE" />
+     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
++    <!-- NetworkStatsManager requires fine location for per-Wi-Fi-network usage. -->
++    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
++    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+     <uses-permission android:name="android.permission.OVERRIDE_WIFI_CONFIG" />
+     <uses-permission android:name="android.permission.MANAGE_NETWORK_POLICY" />
+diff --git a/packages/SystemUI/src/com/android/systemui/development/ui/compose/BuildNumber.kt b/packages/SystemUI/src/com/android/systemui/development/ui/compose/BuildNumber.kt
+index fc39842..c0500dd 100644
+--- a/packages/SystemUI/src/com/android/systemui/development/ui/compose/BuildNumber.kt
++++ b/packages/SystemUI/src/com/android/systemui/development/ui/compose/BuildNumber.kt
+@@ -16,8 +16,10 @@
+ 
+ package com.android.systemui.development.ui.compose
+ 
++import android.Manifest
+ import android.content.Context
+ import android.content.Intent
++import android.content.PermissionChecker
+ import android.database.ContentObserver
+ import android.net.ConnectivityManager
+ import android.net.ConnectivityManager.NetworkCallback
+@@ -377,11 +379,7 @@ private class DataUsageQuery(
+             resolveSubId(activeSubs)
+ 
+             if (isWifiConnected()) {
+-                val info = if (weekly)
+-                    duc.getWifiWeeklyDataUsageInfo(true) ?: duc.getWifiWeeklyDataUsageInfo(false)
+-                else
+-                    duc.getWifiDailyDataUsageInfo(true) ?: duc.getWifiDailyDataUsageInfo(false)
+-                info?.let { formatDataUsage(it.usageLevel, ssidWithTruncation(), weekly) }
++                queryWifiUsage(weekly)
+             } else if (activeSubs.isNotEmpty()) {
+                 duc.setSubscriptionId(subId)
+                 val info =
+@@ -400,6 +398,30 @@ private class DataUsageQuery(
+         }
+     }
+ 
++    @WorkerThread
++    private fun queryWifiUsage(weekly: Boolean): String? {
++        // A denied permission/app-op is an expected state, not a failing remote
++        // query to repeat on every refresh. The service still enforces access.
++        val canQueryNetwork =
++            PermissionChecker.checkSelfPermissionForPreflight(
++                context, Manifest.permission.ACCESS_FINE_LOCATION
++            ) == PermissionChecker.PERMISSION_GRANTED
++        val template = duc.getWifiNetworkTemplate(canQueryNetwork)
++        val networkSpecific = template.wifiNetworkKeys.isNotEmpty()
++        val wifiLabel = context.getString(R.string.usage_wifi_default_suffix)
++        val suffix = if (networkSpecific) ssidWithTruncation() else wifiLabel
++        val info = if (weekly) duc.getWeeklyDataUsageInfo(template)
++                   else duc.getDailyDataUsageInfo(template)
++        if (info != null) {
++            return formatDataUsage(info.usageLevel, suffix, weekly)
++        }
++        if (!networkSpecific) return null
++
++        val aggregate = if (weekly) duc.getWifiWeeklyDataUsageInfo(false)
++                        else duc.getWifiDailyDataUsageInfo(false)
++        return aggregate?.let { formatDataUsage(it.usageLevel, wifiLabel, weekly) }
++    }
++
+     @WorkerThread
+     private fun resolveSubId(activeSubs: List<SubscriptionInfo>) {
+         if (followDefaultPending.getAndSet(false)) {

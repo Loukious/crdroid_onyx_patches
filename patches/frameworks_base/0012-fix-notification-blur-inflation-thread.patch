@@ -1,0 +1,68 @@
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/notification/row/ActivatableNotificationViewTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/notification/row/ActivatableNotificationViewTest.kt
+index add63a9..49d46bd 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/notification/row/ActivatableNotificationViewTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/notification/row/ActivatableNotificationViewTest.kt
+@@ -39,6 +39,8 @@ import com.android.systemui.statusbar.notification.NotificationUtils
+ import com.android.systemui.statusbar.notification.SourceType
+ import com.android.systemui.util.mockito.mock
+ import com.google.common.truth.Truth.assertThat
++import java.util.concurrent.FutureTask
++import java.util.concurrent.TimeUnit
+ import org.junit.Before
+ import org.junit.Ignore
+ import org.junit.Test
+@@ -104,6 +106,24 @@ class ActivatableNotificationViewTest : SysuiTestCase() {
+         mSurfaceEffectColor = SurfaceEffectColors.surfaceEffect1(mContext)
+     }
+ 
++    @Test
++    @EnableFlags(Flags.FLAG_LOCKSCREEN_BLUR_FOR_NOTIFICATIONS)
++    fun inflateWithBlurFlagEnabled_onBackgroundThread() {
++        val inflation = FutureTask {
++            TestActivatableNotificationView(mContext, useRealNotificationBackgroundView = true)
++        }
++        Thread(inflation, "NotifInflation-test").apply {
++            isDaemon = true
++            start()
++        }
++
++        // Exercise the real background view: the blur setter must not assert
++        // that this unattached inflation is running on the main thread.
++        val view = inflation.get(5, TimeUnit.SECONDS)
++        assertThat(view.isAttachedToWindow).isFalse()
++        assertThat(view.hasBlur()).isFalse()
++    }
++
+     @Test
+     @DisableFlags(
+         Flags.FLAG_NOTIFICATION_ROW_TRANSPARENCY,
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ActivatableNotificationView.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ActivatableNotificationView.java
+index 1edb3d7..94d22a1 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ActivatableNotificationView.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ActivatableNotificationView.java
+@@ -209,6 +209,14 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView
+         updateOutlineAlpha();
+     }
+ 
++    @Override
++    protected void onAttachedToWindow() {
++        super.onAttachedToWindow();
++        // Row inflation can run off the main thread. Initialize blur when the
++        // view is attached, using the latest transparency/keyguard state.
++        mBackgroundNormal.setBlurBackgroundEnabled(usesBlurredBackground());
++    }
++
+     /**
+      * Sets the custom background on {@link #mBackgroundNormal}
+      * This method can also be used to reload the backgrounds on both of those views, which can
+@@ -216,7 +224,9 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView
+      */
+     protected void initBackground() {
+         mBackgroundNormal.setCustomBackground(R.drawable.notification_material_bg);
+-        mBackgroundNormal.setBlurBackgroundEnabled(usesBlurredBackground());
++        if (isAttachedToWindow()) {
++            mBackgroundNormal.setBlurBackgroundEnabled(usesBlurredBackground());
++        }
+     }
+ 
+     protected boolean hideBackground() {

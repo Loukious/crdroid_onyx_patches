@@ -94,6 +94,21 @@ user as `system_server`, then restores the incoming Binder identity before the
 remaining authorization checks. Caller UID, user restrictions, package targets
 and SKIP exclusions are preserved. Both fixes require a patched ROM install.
 
+**Notification rendering and history** — framework patch `0012` moves blur
+initialization to attachment on the main thread, preserving background row
+inflation. Patch `0014` rebuilds the notification-history string pool before
+saving and reuses one sorted pool for serialization.
+
+**QS Wi-Fi usage** — framework patch `0013` declares SystemUI's required
+per-network usage permissions, checks access before querying, and labels
+aggregate fallback totals as Wi-Fi instead of attributing them to one SSID.
+
+**Radio region lookup** — Onyx patch `0022` gives
+`ro.miui.customized.region` an exact system_ext property context and grants
+`rild` read access to that type. It preserves the property's value/default
+and forbids vendor writes. These fixes require a new ROM installation; see
+[the source rationale and validation](notes/log-derived-rom-fixes.md).
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
@@ -131,6 +146,7 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0003-lhdc-aptx-props-and-blob-fixups
                                               0005-firmware-g303-cn305-hybrid
                                               0016-enable-device-as-webcam
+                                              0022-label-radio-customized-region-property
 patches/external_iw/                         0001-vendor-nested-data-option
 patches/frameworks_base/                      0001-gesture-navbar-space
                                               0003-secure-spaces-full-user-type
@@ -142,6 +158,9 @@ patches/frameworks_base/                      0001-gesture-navbar-space
                                               0009-secure-space-entry-coordinator
                                               0010-secure-space-fingerprint-routing
                                               0011-trickystore-current-user-identity
+                                              0012-fix-notification-blur-inflation-thread
+                                              0013-fix-wifi-data-usage-query
+                                              0014-pool-notification-history-strings
 retired/hardware_nxp_nfc/                     0001-fix-client-thread-teardown-race (NOT applied)
 patches/lineage-sdk/                          0001-secure-space-user-switch-observer-acks
 patches/packages_apps_Evolver/                0001-gesture-navbar-space-ui

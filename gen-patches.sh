@@ -265,6 +265,19 @@ emit_upstream_fix frameworks/base 0011-trickystore-current-user-identity.patch \
 emit external/iw 0001-vendor-nested-data-option.patch vendor.c
 
 # ---------------------------------------------------------------- frameworks/base
+emit_selected_hunks frameworks/base 0012-fix-notification-blur-inflation-thread.patch \
+    'onAttachedToWindow|isAttachedToWindow|inflateWithBlurFlagEnabled|FutureTask|TimeUnit' \
+    packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ActivatableNotificationView.java \
+    packages/SystemUI/multivalentTests/src/com/android/systemui/statusbar/notification/row/ActivatableNotificationViewTest.kt
+emit_selected_hunks frameworks/base 0013-fix-wifi-data-usage-query.patch \
+    'ACCESS_(COARSE|FINE)_LOCATION|queryWifiUsage|PermissionChecker|import android.Manifest' \
+    packages/SystemUI/AndroidManifest.xml \
+    packages/SystemUI/src/com/android/systemui/development/ui/compose/BuildNumber.kt
+emit_selected_hunks frameworks/base 0014-pool-notification-history-strings.patch \
+    'pooledStrings|getPooledStringsToWrite|poolStringsFromNotifications|ProtoInputStream|testWritePoolsFreshNotifications' \
+    services/core/java/com/android/server/notification/NotificationHistoryProtoHelper.java \
+    services/tests/uiservicestests/src/com/android/server/notification/NotificationHistoryProtoHelperTest.java
+
 # Settings.java carries only GESTURE_NAVBAR_SPACE_MODE now, so no hunk filter.
 emit frameworks/base 0001-gesture-navbar-space.patch \
     core/java/android/provider/Settings.java \
@@ -506,6 +519,12 @@ emit device/xiaomi/onyx 0020-nicmd-netlink-xperms.patch \
 # Label the FSA4480 wakeup statistics without including unrelated sysfs edits.
 emit_selected_hunks device/xiaomi/onyx 0021-label-fsa4480-wakeup-stats.patch \
     '5-0042/wakeup' sepolicy/vendor/genfs_contexts
+
+# The legacy radio region key is system-owned and distinct from the vendor key.
+emit_selected_hunks device/xiaomi/onyx 0022-label-radio-customized-region-property.patch \
+    'miui_customized_region_prop' \
+    sepolicy/public/property.te sepolicy/private/property_contexts \
+    sepolicy/private/compat sepolicy/vendor/rild.te
 
 # -------------------------------------------------------------- kernel/xiaomi/sm8735
 # Enable relay symbols in the source kernel used for WCN7750 module validation.
