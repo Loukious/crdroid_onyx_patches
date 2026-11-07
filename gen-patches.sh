@@ -228,7 +228,7 @@ emit_upstream_fix() {
     fi
 }
 
-PROJECTS="bionic build/release device/xiaomi/onyx external/iw frameworks/base kernel/xiaomi/sm8735 lineage-sdk system/vold system/security
+PROJECTS="bionic build/release device/xiaomi/onyx external/iw frameworks/base hardware/xiaomi kernel/xiaomi/sm8735 lineage-sdk system/vold system/security
 packages/apps/Settings packages/apps/Updater packages/apps/Evolver
 packages/modules/adb packages/modules/Bluetooth
 vendor/gms vendor/lineage vendor/qcom/opensource/interfaces"
@@ -475,6 +475,10 @@ fi
 
 # NFC teardown workaround retired: upstream reverted the regression.
 # Do not regenerate the retired patch (retired/hardware_nxp_nfc).
+
+# -------------------------------------------------------------- fingerprint HAL
+emit_context_hunks hardware/xiaomi 0001-fix-fingerprint-cancel-completion.patch \
+    'mDevice->cancel' aidl/fingerprint/Session.cpp
 
 # -------------------------------------------------------------------------- ADB
 # FunctionFS OS descriptors encode version 1.00 as a 16-bit BCD value. Keep

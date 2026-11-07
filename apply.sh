@@ -92,6 +92,7 @@ declare -A PROJECT=(
     [frameworks_base]="frameworks/base"
     [hardware_nxp_nfc]="hardware/nxp/nfc"
     [hardware_qcom-caf_sm8750_audio_primary-hal]="hardware/qcom-caf/sm8750/audio/primary-hal"
+    [hardware_xiaomi]="hardware/xiaomi"
     [kernel_xiaomi_sm8735]="kernel/xiaomi/sm8735"
     [kernel_xiaomi_sm8735-modules]="kernel/xiaomi/sm8735-modules"
     [kernel_xiaomi_onyx-wlan]="kernel/xiaomi/onyx-wlan"
@@ -166,6 +167,7 @@ apply_patches() {
                 frameworks_base/0014-pool-notification-history-strings.patch|\
                 device_xiaomi_onyx/0022-label-radio-customized-region-property.patch|\
                 packages_apps_Settings/0002-secure-spaces-management.patch|\
+                hardware_xiaomi/0001-fix-fingerprint-cancel-completion.patch|\
                 lineage-sdk/*|hardware_nxp_nfc/*|system_security/*|system_vold/*)
                     exact=1
                     ;;

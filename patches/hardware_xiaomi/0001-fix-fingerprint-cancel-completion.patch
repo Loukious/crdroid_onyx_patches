@@ -1,0 +1,14 @@
+diff --git a/aidl/fingerprint/Session.cpp b/aidl/fingerprint/Session.cpp
+index b935731..36e60fe 100644
+--- a/aidl/fingerprint/Session.cpp
++++ b/aidl/fingerprint/Session.cpp
+@@ -236,7 +236,8 @@ ndk::ScopedAStatus Session::cancel() {
+     int ret = mDevice->cancel(mDevice);
+ 
+     if (ret == 0) {
+-        mCb->onError(Error::CANCELED, 0 /* vendorCode */);
++        // Success acknowledges the request. The legacy HAL reports completion
++        // through notify(); sending another error here finishes the client twice.
+         return ndk::ScopedAStatus::ok();
+     }
+ 

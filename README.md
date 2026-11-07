@@ -121,6 +121,13 @@ This preserves profile-specific AppOps accounting and fixes the observed
 undeclared-tag errors. It requires a rebuilt Bluetooth module/ROM; see
 [scope and validation](notes/bluetooth-attributions.md).
 
+**Fingerprint cancellation** — Xiaomi hardware patch `0001` removes the
+adapter's extra cancellation callback. A successful legacy HAL request is
+acknowledged immediately; its completion still arrives through the vendor
+notification path. This fixes duplicate completion without changing fingerprint
+routing or authentication policy. It requires a rebuilt fingerprint service/ROM;
+see [the HAL contract and regression checks](notes/fingerprint-cancellation.md).
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
@@ -175,6 +182,7 @@ patches/frameworks_base/                      0001-gesture-navbar-space
                                               0013-fix-wifi-data-usage-query
                                               0014-pool-notification-history-strings
 retired/hardware_nxp_nfc/                     0001-fix-client-thread-teardown-race (NOT applied)
+patches/hardware_xiaomi/                      0001-fix-fingerprint-cancel-completion
 patches/lineage-sdk/                          0001-secure-space-user-switch-observer-acks
 patches/packages_apps_Evolver/                0001-gesture-navbar-space-ui
 patches/packages_apps_Settings/               0001-gesture-navbar-space-ui
