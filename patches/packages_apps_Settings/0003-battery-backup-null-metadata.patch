@@ -1,0 +1,191 @@
+diff --git a/src/com/android/settings/fuelgauge/BatterySettingsStorage.java b/src/com/android/settings/fuelgauge/BatterySettingsStorage.java
+index eeebbec..e93d8f2 100644
+--- a/src/com/android/settings/fuelgauge/BatterySettingsStorage.java
++++ b/src/com/android/settings/fuelgauge/BatterySettingsStorage.java
+@@ -277,9 +277,9 @@ public final class BatterySettingsStorage extends ObservableBackupRestoreStorage
+ 
+     private class StringEntity implements BackupRestoreEntity {
+         private final String mKey;
+-        private final String mValue;
++        @Nullable private final String mValue;
+ 
+-        StringEntity(String key, String value) {
++        StringEntity(String key, @Nullable String value) {
+             this.mKey = key;
+             this.mValue = value;
+         }
+@@ -295,6 +295,10 @@ public final class BatterySettingsStorage extends ObservableBackupRestoreStorage
+                 @NonNull BackupContext backupContext, @NonNull OutputStream outputStream)
+                 throws IOException {
+             Log.d(TAG, String.format("backup:%s:%s", mKey, mValue));
++            if (mValue == null) {
++                // Optional metadata may be absent; remove any value from an older backup.
++                return EntityBackupResult.DELETE;
++            }
+             outputStream.write(mValue.getBytes(UTF_8));
+             return EntityBackupResult.UPDATE;
+         }
+diff --git a/tests/robotests/src/com/android/settings/fuelgauge/BatterySettingsStorageTest.java b/tests/robotests/src/com/android/settings/fuelgauge/BatterySettingsStorageTest.java
+new file mode 100644
+index 0000000..bf0cf18
+--- /dev/null
++++ b/tests/robotests/src/com/android/settings/fuelgauge/BatterySettingsStorageTest.java
+@@ -0,0 +1,158 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.settings.fuelgauge;
++
++import static com.google.common.truth.Truth.assertThat;
++
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.when;
++
++import static java.nio.charset.StandardCharsets.UTF_8;
++
++import android.app.Application;
++import android.app.backup.BackupDataOutput;
++import android.os.Binder;
++import android.os.Build;
++import android.os.IBinder;
++import android.os.IDeviceIdleController;
++import android.os.ServiceManager;
++
++import com.android.settings.overlay.FeatureFactory;
++import com.android.settingslib.datastore.BackupContext;
++import com.android.settingslib.datastore.BackupRestoreEntity;
++import com.android.settingslib.datastore.EntityBackupResult;
++
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.RuntimeEnvironment;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.Implementation;
++import org.robolectric.annotation.Implements;
++import org.robolectric.annotation.Resetter;
++import org.robolectric.shadows.ShadowServiceManager;
++
++import java.io.ByteArrayOutputStream;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(
++        application = Application.class,
++        shadows = BatterySettingsStorageTest.ShadowDeviceIdleService.class)
++public class BatterySettingsStorageTest {
++    private BatterySettingsStorage mStorage;
++    private PowerUsageFeatureProvider mProvider;
++    private BackupContext mBackupContext;
++
++    @Before
++    public void setUp() throws Exception {
++        final IDeviceIdleController deviceIdleController = mock(IDeviceIdleController.class);
++        when(deviceIdleController.getFullPowerWhitelist()).thenReturn(new String[0]);
++        final Binder binder = new Binder();
++        binder.attachInterface(deviceIdleController, "android.os.IDeviceIdleController");
++        ShadowDeviceIdleService.sDeviceIdleService = binder;
++
++        final Application application = RuntimeEnvironment.getApplication();
++        final FeatureFactory factory = mock(FeatureFactory.class);
++        mProvider = mock(PowerUsageFeatureProvider.class);
++        when(factory.getPowerUsageFeatureProvider()).thenReturn(mProvider);
++        FeatureFactory.setFactory(application, factory);
++        mStorage = new BatterySettingsStorage(application);
++        mBackupContext = new BackupContext(mock(BackupDataOutput.class));
++    }
++
++    @Test
++    public void backup_nullMetadata1_deletesEntityWithoutWritingPayload() throws Exception {
++        assertBackup(BatterySettingsStorage.KEY_BUILD_METADATA_1, EntityBackupResult.DELETE, "");
++    }
++
++    @Test
++    public void backup_nullMetadata2_deletesEntityWithoutWritingPayload() throws Exception {
++        assertBackup(BatterySettingsStorage.KEY_BUILD_METADATA_2, EntityBackupResult.DELETE, "");
++    }
++
++    @Test
++    public void backup_presentMetadata_writesUtf8() throws Exception {
++        when(mProvider.getBuildMetadata1(any())).thenReturn("device-\u03b1");
++        when(mProvider.getBuildMetadata2(any())).thenReturn("build-\u4e8c");
++
++        assertBackup(
++                BatterySettingsStorage.KEY_BUILD_METADATA_1,
++                EntityBackupResult.UPDATE,
++                "device-\u03b1");
++        assertBackup(
++                BatterySettingsStorage.KEY_BUILD_METADATA_2,
++                EntityBackupResult.UPDATE,
++                "build-\u4e8c");
++    }
++
++    @Test
++    public void backup_emptyMetadata_updatesRatherThanDeletesEntity() throws Exception {
++        when(mProvider.getBuildMetadata1(any())).thenReturn("");
++        when(mProvider.getBuildMetadata2(any())).thenReturn("");
++
++        assertBackup(BatterySettingsStorage.KEY_BUILD_METADATA_1, EntityBackupResult.UPDATE, "");
++        assertBackup(BatterySettingsStorage.KEY_BUILD_METADATA_2, EntityBackupResult.UPDATE, "");
++    }
++
++    @Test
++    public void backup_standardBuildInfo_writesCurrentValues() throws Exception {
++        assertBackup(
++                BatterySettingsStorage.KEY_BUILD_BRAND, EntityBackupResult.UPDATE, Build.BRAND);
++        assertBackup(
++                BatterySettingsStorage.KEY_BUILD_PRODUCT, EntityBackupResult.UPDATE, Build.PRODUCT);
++        assertBackup(
++                BatterySettingsStorage.KEY_BUILD_MANUFACTURER,
++                EntityBackupResult.UPDATE,
++                Build.MANUFACTURER);
++        assertBackup(
++                BatterySettingsStorage.KEY_BUILD_FINGERPRINT,
++                EntityBackupResult.UPDATE,
++                Build.FINGERPRINT);
++    }
++
++    private void assertBackup(String key, EntityBackupResult result, String payload)
++            throws Exception {
++        final BackupRestoreEntity entity =
++                mStorage.createBackupRestoreEntities().stream()
++                        .filter(candidate -> key.equals(candidate.getKey()))
++                        .findFirst()
++                        .orElseThrow();
++        final ByteArrayOutputStream output = new ByteArrayOutputStream();
++
++        assertThat(entity.backup(mBackupContext, output)).isEqualTo(result);
++        assertThat(output.toByteArray()).isEqualTo(payload.getBytes(UTF_8));
++    }
++
++    @Implements(ServiceManager.class)
++    public static class ShadowDeviceIdleService extends ShadowServiceManager {
++        private static IBinder sDeviceIdleService;
++
++        @Implementation
++        public static IBinder getService(String name) {
++            return "deviceidle".equals(name)
++                    ? sDeviceIdleService
++                    : ShadowServiceManager.getService(name);
++        }
++
++        @Resetter
++        public static void resetDeviceIdleService() {
++            sDeviceIdleService = null;
++        }
++    }
++}

@@ -509,6 +509,11 @@ emit_context_hunks vendor/lineage 0001-kernel-bin-override.patch \
 emit packages/apps/Settings 0001-gesture-navbar-space-ui.patch \
     res/xml/gesture_navigation_settings.xml
 
+# The default battery feature provider has no optional build metadata.
+emit packages/apps/Settings 0003-battery-backup-null-metadata.patch \
+    src/com/android/settings/fuelgauge/BatterySettingsStorage.java \
+    tests/robotests/src/com/android/settings/fuelgauge/BatterySettingsStorageTest.java
+
 emit packages/apps/Updater 0001-self-hosted-ota-url.patch \
     app/src/main/res/values/strings.xml
 

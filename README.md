@@ -70,6 +70,15 @@ statistics using existing platform permissions and removes the corresponding
 SELinux denials. The label covers dynamically numbered wakeup nodes. It takes
 effect with a rebuilt ROM; it does not change WLAN wakeup behavior.
 
+**Battery settings backup** — Settings patch `0003` handles absent optional
+build metadata without throwing a `NullPointerException`. It deletes absent
+metadata entries from the backup and preserves valid empty and UTF-8 values.
+The failure was found in the phone's backup logs and confirmed in unchanged
+[AOSP source](https://android.googlesource.com/platform/packages/apps/Settings/+/7c598253ff60f06f8e6fe046f18fd88e9daa72d3/src/com/android/settings/fuelgauge/BatterySettingsStorage.java#298).
+The patch includes a Robolectric regression test and takes effect after a
+patched ROM is built and installed. Google's separate transport rejections
+are not addressed by this change.
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
@@ -121,6 +130,7 @@ patches/lineage-sdk/                          0001-secure-space-user-switch-obse
 patches/packages_apps_Evolver/                0001-gesture-navbar-space-ui
 patches/packages_apps_Settings/               0001-gesture-navbar-space-ui
                                               0002-secure-spaces-management
+                                              0003-battery-backup-null-metadata
 patches/packages_apps_Updater/                0001-self-hosted-ota-url
 patches/packages_modules_adb/                 0001-fix-functionfs-os-descriptor-bcd-version
 patches/packages_modules_Bluetooth/           0001-lhdc-v5-qti-offload
