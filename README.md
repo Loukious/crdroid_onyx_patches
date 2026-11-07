@@ -5,7 +5,7 @@ kept as patches so the tree can be `repo sync`'d freely and re-patched
 afterwards. Driven by `apply.sh`.
 
 ```sh
-git clone -b evolution-cnb https://github.com/Loukious/crdroid_onyx_patches /tmp/patches
+git clone -b evolution-cnb-konoha618 https://github.com/Loukious/crdroid_onyx_patches /tmp/patches
 /tmp/patches/apply.sh /path/to/rom
 ```
 
@@ -16,6 +16,11 @@ crDroid-era set is preserved on the `crdroid-16.0` branch.
 `apply.sh` is **idempotent** — it reverse-checks each patch first and skips ones
 already applied — and exits non-zero on a genuine failure so a build stops
 rather than shipping a half-patched ROM.
+
+The PermissionController and TrickyStore fixes additionally inspect their
+target code before applying. An existing exemption or corrected current-user
+lookup is skipped, as is a removed TrickyStore implementation. An unresolved
+patch conflict still stops the build. See [guard behavior and validation](notes/userspace-identity-fixes.md).
 
 | env | effect |
 |---|---|
@@ -79,6 +84,16 @@ The patch includes a Robolectric regression test and takes effect after a
 patched ROM is built and installed. Google's separate transport rejections
 are not addressed by this change.
 
+**PermissionController resource access** — bionic patch `0001` exempts only
+`com.android.permissioncontroller` from Evolution's ROM hiding. The permission
+service can load the Lineage resource APK during backup; other processes keep
+the existing hiding rules.
+
+**TrickyStore caller identity** — framework patch `0011` resolves the foreground
+user as `system_server`, then restores the incoming Binder identity before the
+remaining authorization checks. Caller UID, user restrictions, package targets
+and SKIP exclusions are preserved. Both fixes require a patched ROM install.
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
@@ -109,6 +124,7 @@ generated with `git add -N` first, so a patch *creates* new files rather than
 needing them tracked separately.
 
 ```
+patches/bionic/                               0001-exempt-permissioncontroller-from-rom-hiding
 patches/build_release/                        0001-lhdc-aconfig-flag
 patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0002-release-config-bp4a
@@ -125,6 +141,7 @@ patches/frameworks_base/                      0001-gesture-navbar-space
                                               0008-secure-auth-duress-verifier
                                               0009-secure-space-entry-coordinator
                                               0010-secure-space-fingerprint-routing
+                                              0011-trickystore-current-user-identity
 retired/hardware_nxp_nfc/                     0001-fix-client-thread-teardown-race (NOT applied)
 patches/lineage-sdk/                          0001-secure-space-user-switch-observer-acks
 patches/packages_apps_Evolver/                0001-gesture-navbar-space-ui

@@ -5,9 +5,8 @@
 # vendor/extra/BoardConfigKernel.mk expects.
 #
 # Safe to run repeatedly: each patch is reverse-checked first, so an already
-# patched tree is left alone instead of failing. Any patch that neither applies
-# nor is already applied is a hard error -- better to stop than to ship a
-# half-patched ROM.
+# patched tree is left alone instead of failing. The two guarded userspace fixes
+# also recognize upstream replacements. Other unappliable patches are errors.
 #
 # usage: apply.sh [<rom root>]
 #        apply.sh --preflight        validate everything that does NOT need a
@@ -83,6 +82,7 @@ ylw()  { printf '\033[33m%s\033[0m\n' "$*"; }
 # patch directory name -> project path. Explicit rather than s|_|/| so that a
 # project whose path component contains an underscore can't silently break.
 declare -A PROJECT=(
+    [bionic]="bionic"
     [build_release]="build/release"
     [build_soong]="build/soong"
     [device_xiaomi_onyx]="device/xiaomi/onyx"
@@ -114,7 +114,7 @@ fail=0 applied=0 already=0
 
 # ------------------------------------------------------------------- patching
 apply_patches() {
-    local pdir key proj patch n exact
+    local pdir key proj patch n exact fix_state
     for pdir in "$HERE"/patches/*/; do
         [ -d "$pdir" ] || continue   # unexpanded glob: no patch dirs at all
         key="$(basename "$pdir")"
@@ -141,6 +141,25 @@ apply_patches() {
             fi
             exact=0
             case "$key/$n" in
+                bionic/0001-exempt-permissioncontroller-from-rom-hiding.patch|\
+                frameworks_base/0011-trickystore-current-user-identity.patch)
+                    if ! fix_state="$(python3 "$HERE/ci/upstream_fix_state.py" "$key/$n" "$ROM/$proj")"; then
+                        red "   !! $n FAILED (upstream state could not be checked)"
+                        fail=1
+                        continue
+                    fi
+                    case "$fix_state" in
+                        upstream|obsolete)
+                            echo "   -- $n ($fix_state implementation; not needed)"
+                            already=$((already+1))
+                            continue
+                            ;;
+                        needed) exact=1 ;;
+                        *) red "   !! $n FAILED (unknown fix state: $fix_state)"; fail=1; continue ;;
+                    esac
+                    ;;
+            esac
+            case "$key/$n" in
                 frameworks_base/000[3-9]-*|frameworks_base/0010-*|\
                 packages_apps_Settings/0002-secure-spaces-management.patch|\
                 lineage-sdk/*|hardware_nxp_nfc/*|system_security/*|system_vold/*)
@@ -162,7 +181,7 @@ apply_patches() {
             fi
 
             if [ "$exact" = 1 ]; then
-                # Auth/duress/NFC patches are security-sensitive snapshots. Never
+                # Auth/duress/NFC and guarded fixes need exact context. Never
                 # relocate their hunks with fuzz: source drift must fail loudly.
                 if git -C "$ROM/$proj" apply --check "$patch" >/dev/null 2>&1 &&
                         git -C "$ROM/$proj" apply "$patch"; then
@@ -517,10 +536,10 @@ stage_kernel() {
 preflight() {
     local rc=0
 
-    echo "== preflight 1/4: apply.sh parses"
+    echo "== preflight 1/6: apply.sh parses"
     if bash -n "${BASH_SOURCE[0]}"; then grn "   ok"; else red "   !! syntax error"; rc=1; fi
 
-    echo "== preflight 2/4: no early-exiting pipeline sits in a condition"
+    echo "== preflight 2/6: no early-exiting pipeline sits in a condition"
     # The bug that killed 295566. `grep -q`/`head` as the consumer of a pipeline
     # inside if/elif/while returns 141 under pipefail when the producer is still
     # writing. Catch a reintroduction here rather than on a build server.
@@ -535,7 +554,7 @@ preflight() {
         grn "   ok"
     fi
 
-    echo "== preflight 3/5: patch set is structurally sound"
+    echo "== preflight 3/6: patch set is structurally sound"
     local pdir key p n dirs=0 pats=0
     for pdir in "$HERE"/patches/*/; do
         [ -d "$pdir" ] || continue
@@ -562,7 +581,7 @@ preflight() {
     if [ "$dirs" = 0 ] && [ ! -d "$HERE/scripts" ]; then red "   !! no patch directories or scripts at all"; rc=1; fi
     echo "   $pats patch file(s) across $dirs project dir(s)"
 
-    echo "== preflight 4/5: scripts are valid"
+    echo "== preflight 4/6: scripts are valid"
     local sdir s scripts=0 sdirs=0
     for sdir in "$HERE"/scripts/*/; do
         [ -d "$sdir" ] || continue
@@ -584,7 +603,12 @@ preflight() {
     done
     echo "   $scripts script(s) across $sdirs project dir(s)"
 
-    echo "== preflight 5/5: kernel asset resolves AND an Image really comes out"
+    echo "== preflight 5/6: upstream fix guards"
+    if ! python3 -B -m unittest discover -s "$HERE/ci/tests" -p test_upstream_fixes.py; then
+        red "   !! upstream fix guard tests failed"; rc=1
+    fi
+
+    echo "== preflight 6/6: kernel asset resolves AND an Image really comes out"
     if [ "${SKIP_KERNEL:-0}" = "1" ]; then
         ylw "   skipped (SKIP_KERNEL=1)"
     else

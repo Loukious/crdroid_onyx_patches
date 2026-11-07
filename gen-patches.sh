@@ -208,7 +208,27 @@ emit_context_hunks() {
     printf '  %-42s %6d lines\n' "${proj//\//_}/$name" "$(wc -l < "$target")"
 }
 
-PROJECTS="build/release device/xiaomi/onyx external/iw frameworks/base kernel/xiaomi/sm8735 lineage-sdk system/vold system/security
+# Preserve guarded patches when HEAD already contains an upstream replacement.
+# They still serve older synced trees; never regenerate them as an empty diff or
+# pull an upstream rewrite back into the carried patch.
+emit_upstream_fix() {
+    local proj="$1" name="$2" keep_re="$3"; shift 3
+    local key="${proj//\//_}/$name" state dir
+    state="$(python3 "$HERE/ci/upstream_fix_state.py" "$key" "$ROM/$proj" --ref HEAD)" \
+        || die "$key: upstream state could not be checked"
+    if [ "$state" = needed ]; then
+        emit_selected_hunks "$proj" "$name" "$keep_re" "$@"
+    else
+        dir="$OUT/patches/${proj//\//_}"
+        mkdir -p "$dir"
+        if [ ! "$HERE/patches/$key" -ef "$dir/$name" ]; then
+            cp "$HERE/patches/$key" "$dir/$name"
+        fi
+        printf '  %-42s retained (%s in HEAD)\n' "$key" "$state"
+    fi
+}
+
+PROJECTS="bionic build/release device/xiaomi/onyx external/iw frameworks/base kernel/xiaomi/sm8735 lineage-sdk system/vold system/security
 packages/apps/Settings packages/apps/Updater packages/apps/Evolver
 packages/modules/adb packages/modules/Bluetooth
 vendor/gms vendor/lineage vendor/qcom/opensource/interfaces"
@@ -233,6 +253,13 @@ for p in $PROJECTS; do
 done
 
 echo "Generating patches into $OUT/patches"
+
+# These sources may already be fixed upstream; their application is guarded.
+emit_upstream_fix bionic 0001-exempt-permissioncontroller-from-rom-hiding.patch \
+    'com\.android\.permissioncontroller' libc/bionic/custom_rom_hide.cpp
+emit_upstream_fix frameworks/base 0011-trickystore-current-user-identity.patch \
+    'Resolve the foreground user|currentUserId' \
+    services/core/java/com/android/server/spoof/AxSpoofManager.java
 
 # ---------------------------------------------------------------- external/iw
 emit external/iw 0001-vendor-nested-data-option.patch vendor.c

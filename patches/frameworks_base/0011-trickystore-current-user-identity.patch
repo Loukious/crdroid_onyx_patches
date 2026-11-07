@@ -1,0 +1,21 @@
+diff --git a/services/core/java/com/android/server/spoof/AxSpoofManager.java b/services/core/java/com/android/server/spoof/AxSpoofManager.java
+index 3b69422..5a12e1d 100644
+--- a/services/core/java/com/android/server/spoof/AxSpoofManager.java
++++ b/services/core/java/com/android/server/spoof/AxSpoofManager.java
+@@ -1010,7 +1010,15 @@ public class AxSpoofManager implements IAxSpoofManager {
+     private boolean canReadTrickyStoreKeybox() {
+         int uid = Binder.getCallingUid();
+         if (uid == android.os.Process.SYSTEM_UID || uid == android.os.Process.ROOT_UID) return true;
+-        if (UserHandle.getUserId(uid) != ActivityManager.getCurrentUser()
++        // Resolve the foreground user as system_server, retaining the caller for authorization.
++        final int currentUserId;
++        final long token = Binder.clearCallingIdentity();
++        try {
++            currentUserId = ActivityManager.getCurrentUser();
++        } finally {
++            Binder.restoreCallingIdentity(token);
++        }
++        if (UserHandle.getUserId(uid) != currentUserId
+                 && UserHandle.getUserId(uid) != UserHandle.USER_SYSTEM) return false;
+         String[] packages = mContext.getPackageManager().getPackagesForUid(uid);
+         if (packages == null) return false;

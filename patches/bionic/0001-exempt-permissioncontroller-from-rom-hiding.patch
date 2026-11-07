@@ -1,0 +1,12 @@
+diff --git a/libc/bionic/custom_rom_hide.cpp b/libc/bionic/custom_rom_hide.cpp
+index 70920a0..e0925aa 100644
+--- a/libc/bionic/custom_rom_hide.cpp
++++ b/libc/bionic/custom_rom_hide.cpp
+@@ -135,6 +135,7 @@ static const char* const kMountFilterKeywords[] = {
+ 
+ static const char* const kAllowlistedPackages[] = {
+     "org.lineageos.updater",
++    "com.android.permissioncontroller",
+     nullptr
+ };
+ 
