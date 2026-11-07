@@ -109,6 +109,12 @@ aggregate fallback totals as Wi-Fi instead of attributing them to one SSID.
 and forbids vendor writes. These fixes require a new ROM installation; see
 [the source rationale and validation](notes/log-derived-rom-fixes.md).
 
+**Audio diagnostic queues** — Onyx patch `0023` installs the memory-logger
+configuration required by the selected Qualcomm PAL/AGM binaries. The existing
+Qualcomm `sun` XML is byte-for-byte identical to both stock Global 3.0.303 and
+China 3.0.305. This restores queue initialization after the phone logs exposed
+the missing file; see [stock comparison and validation](notes/audio-memlogger.md).
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
@@ -147,6 +153,7 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0005-firmware-g303-cn305-hybrid
                                               0016-enable-device-as-webcam
                                               0022-label-radio-customized-region-property
+                                              0023-install-audio-memory-logger-config
 patches/external_iw/                         0001-vendor-nested-data-option
 patches/frameworks_base/                      0001-gesture-navbar-space
                                               0003-secure-spaces-full-user-type

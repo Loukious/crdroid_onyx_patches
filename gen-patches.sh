@@ -526,6 +526,10 @@ emit_selected_hunks device/xiaomi/onyx 0022-label-radio-customized-region-proper
     sepolicy/public/property.te sepolicy/private/property_contexts \
     sepolicy/private/compat sepolicy/vendor/rild.te
 
+# The selected stock PAL/AGM libraries require the stock memory-logger config.
+emit_selected_hunks device/xiaomi/onyx 0023-install-audio-memory-logger-config.patch \
+    'mem_logger_config[.]xml' device.mk
+
 # -------------------------------------------------------------- kernel/xiaomi/sm8735
 # Enable relay symbols in the source kernel used for WCN7750 module validation.
 # Do not rely exclusively on the custom Kono-Ha prebuilt (which already has RELAY).
