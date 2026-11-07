@@ -476,6 +476,10 @@ emit device/xiaomi/onyx 0015-enable-wifi-cfr.patch \
 emit device/xiaomi/onyx 0020-nicmd-netlink-xperms.patch \
     sepolicy/vendor/vendor_nicmd.te
 
+# Label the FSA4480 wakeup statistics without including unrelated sysfs edits.
+emit_selected_hunks device/xiaomi/onyx 0021-label-fsa4480-wakeup-stats.patch \
+    '5-0042/wakeup' sepolicy/vendor/genfs_contexts
+
 # -------------------------------------------------------------- kernel/xiaomi/sm8735
 # Enable relay symbols in the source kernel used for WCN7750 module validation.
 # Do not rely exclusively on the custom Kono-Ha prebuilt (which already has RELAY).

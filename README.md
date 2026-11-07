@@ -64,6 +64,12 @@ message grants. This restores creation of the modem data interfaces and stops
 the demonstrated modem retry/wakeup loop with `netlink_xperm` enabled.
 SELinux remains enforcing. See [the validation notes](notes/nicmd-netlink.md).
 
+**Wakeup statistics** — Onyx patch `0021` labels the FSA4480 USB-C audio
+switch's wakeup subtree as `sysfs_wakeup`. This lets `system_suspend` read its
+statistics using existing platform permissions and removes the corresponding
+SELinux denials. The label covers dynamically numbered wakeup nodes. It takes
+effect with a rebuilt ROM; it does not change WLAN wakeup behavior.
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
