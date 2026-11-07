@@ -1,0 +1,45 @@
+diff --git a/android/app/AndroidManifest.xml b/android/app/AndroidManifest.xml
+index d160f2c..1a767dc 100644
+--- a/android/app/AndroidManifest.xml
++++ b/android/app/AndroidManifest.xml
+@@ -4,6 +4,12 @@
+   package="com.android.bluetooth"
+   android:sharedUserId="android.uid.bluetooth">
+ 
++    <!-- Attributions used by the internal GATT profile clients. -->
++    <attribution android:tag="BatteryService"
++        android:label="@string/attribution_battery_service" />
++    <attribution android:tag="BassClient"
++        android:label="@string/attribution_bass_client" />
++
+     <!-- Allows access to the Bluetooth Share Manager -->
+     <permission android:name="android.permission.ACCESS_BLUETOOTH_SHARE"
+          android:label="@string/permlab_bluetoothShareManager"
+diff --git a/android/app/res/values/attributions.xml b/android/app/res/values/attributions.xml
+new file mode 100644
+index 0000000..8a30153
+--- /dev/null
++++ b/android/app/res/values/attributions.xml
+@@ -0,0 +1,22 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++    Copyright (C) 2026 The Android Open Source Project
++
++    Licensed under the Apache License, Version 2.0 (the "License");
++    you may not use this file except in compliance with the License.
++    You may obtain a copy of the License at
++
++         http://www.apache.org/licenses/LICENSE-2.0
++
++    Unless required by applicable law or agreed to in writing, software
++    distributed under the License is distributed on an "AS IS" BASIS,
++    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++    See the License for the specific language governing permissions and
++    limitations under the License.
++-->
++<resources>
++    <!-- Attribution label for reading the battery level of connected Bluetooth devices. -->
++    <string name="attribution_battery_service">Bluetooth device battery levels</string>
++    <!-- Attribution label for helping a Bluetooth device receive an LE Audio broadcast. -->
++    <string name="attribution_bass_client">Bluetooth audio broadcast assistance</string>
++</resources>

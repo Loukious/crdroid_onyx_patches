@@ -115,6 +115,12 @@ Qualcomm `sun` XML is byte-for-byte identical to both stock Global 3.0.303 and
 China 3.0.305. This restores queue initialization after the phone logs exposed
 the missing file; see [stock comparison and validation](notes/audio-memlogger.md).
 
+**Bluetooth attribution** — Bluetooth patch `0002` declares the existing
+`BatteryService` and `BassClient` attribution tags and supplies readable labels.
+This preserves profile-specific AppOps accounting and fixes the observed
+undeclared-tag errors. It requires a rebuilt Bluetooth module/ROM; see
+[scope and validation](notes/bluetooth-attributions.md).
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
@@ -177,6 +183,7 @@ patches/packages_apps_Settings/               0001-gesture-navbar-space-ui
 patches/packages_apps_Updater/                0001-self-hosted-ota-url
 patches/packages_modules_adb/                 0001-fix-functionfs-os-descriptor-bcd-version
 patches/packages_modules_Bluetooth/           0001-lhdc-v5-qti-offload
+                                              0002-declare-profile-attributions
 patches/system_security/                      0001-secure-auth-biometric-user-scope
 patches/system_vold/                          0001-secure-auth-key-erasure
 patches/vendor_gms/                           0001-keep-aosp-dialer

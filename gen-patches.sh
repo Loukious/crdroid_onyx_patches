@@ -483,7 +483,12 @@ emit_context_hunks packages/modules/adb 0001-fix-functionfs-os-descriptor-bcd-ve
     'bcdVersion' daemon/usb_ffs.cpp
 
 # ------------------------------------------------------------------------- LHDC
-emit packages/modules/Bluetooth 0001-lhdc-v5-qti-offload.patch .
+emit packages/modules/Bluetooth 0001-lhdc-v5-qti-offload.patch . \
+    ':(exclude)android/app/AndroidManifest.xml' \
+    ':(exclude)android/app/res/values/attributions.xml'
+
+emit packages/modules/Bluetooth 0002-declare-profile-attributions.patch \
+    android/app/AndroidManifest.xml android/app/res/values/attributions.xml
 
 emit vendor/qcom/opensource/interfaces 0001-lhdc-aidl.patch .
 
