@@ -58,6 +58,200 @@ index eb50005411726..f867083a13b09 100644
          }
      }
  }
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenLegacyBouncerTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenLegacyBouncerTest.kt
+new file mode 100644
+index 0000000000000..99abe2970a2ac
+--- /dev/null
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenLegacyBouncerTest.kt
+@@ -0,0 +1,188 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.keyguard.domain.interactor
++
++import android.animation.ValueAnimator
++import androidx.test.ext.junit.runners.AndroidJUnit4
++import androidx.test.filters.SmallTest
++import com.android.systemui.SysuiTestCase
++import com.android.systemui.bouncer.domain.interactor.PrimaryBouncerInteractor
++import com.android.systemui.communal.domain.interactor.communalSceneInteractor
++import com.android.systemui.communal.domain.interactor.communalSettingsInteractor
++import com.android.systemui.flags.DisableSceneContainer
++import com.android.systemui.keyguard.data.repository.fakeKeyguardTransitionRepository
++import com.android.systemui.keyguard.shared.model.KeyguardState
++import com.android.systemui.keyguard.shared.model.TransitionInfo
++import com.android.systemui.keyguard.shared.model.TransitionState
++import com.android.systemui.keyguard.shared.model.TransitionStep
++import com.android.systemui.kosmos.applicationCoroutineScope
++import com.android.systemui.kosmos.testDispatcher
++import com.android.systemui.kosmos.testScope
++import com.android.systemui.power.domain.interactor.powerInteractor
++import com.android.systemui.shade.data.repository.fakeShadeRepository
++import com.android.systemui.testKosmos
++import com.android.systemui.util.mockito.mock
++import kotlin.coroutines.CoroutineContext
++import kotlinx.coroutines.CoroutineDispatcher
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.test.runCurrent
++import kotlinx.coroutines.test.runTest
++import org.junit.Before
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.mockito.ArgumentMatchers.anyBoolean
++import org.mockito.ArgumentMatchers.anyFloat
++import org.mockito.ArgumentMatchers.anyString
++import org.mockito.Mockito.never
++import org.mockito.Mockito.verify
++import org.mockito.Mockito.`when`
++
++@SmallTest
++@RunWith(AndroidJUnit4::class)
++class FromLockscreenLegacyBouncerTest : SysuiTestCase() {
++    private val kosmos = testKosmos()
++    private val testScope = kosmos.testScope
++    private val repository = kosmos.fakeKeyguardTransitionRepository
++    private val shade = kosmos.fakeShadeRepository
++    private val bouncer = mock<PrimaryBouncerInteractor>()
++    private val showingSoon = MutableStateFlow(false)
++    private val main = QueuedDispatcher()
++    private lateinit var underTest: FromLockscreenTransitionInteractor
++
++    @Before
++    fun setUp() {
++        `when`(bouncer.isShowing).thenReturn(MutableStateFlow(false))
++        `when`(bouncer.isShowingSoon).thenReturn(showingSoon)
++        underTest =
++            FromLockscreenTransitionInteractor(
++                transitionRepository = repository,
++                internalTransitionInteractor = kosmos.internalKeyguardTransitionInteractor,
++                transitionInteractor = kosmos.keyguardTransitionInteractor,
++                scope = kosmos.applicationCoroutineScope,
++                applicationScope = kosmos.applicationCoroutineScope,
++                bgDispatcher = kosmos.testDispatcher,
++                mainDispatcher = main,
++                keyguardInteractor = kosmos.keyguardInteractor,
++                shadeRepository = shade,
++                powerInteractor = kosmos.powerInteractor,
++                communalSettingsInteractor = kosmos.communalSettingsInteractor,
++                communalSceneInteractor = kosmos.communalSceneInteractor,
++                swipeToDismissInteractor = kosmos.swipeToDismissInteractor,
++                keyguardOcclusionInteractor = kosmos.keyguardOcclusionInteractor,
++                primaryBouncerInteractor = bouncer,
++            )
++    }
++
++    @Test
++    @DisableSceneContainer
++    fun cancelledSwipe_doesNotReopenBouncerWhenMainThreadResumes() =
++        testScope.runTest {
++            queueRepair(0.5f)
++            repository.currentTransitionInfo =
++                TransitionInfo(
++                    ownerName = "cancelled swipe",
++                    from = KeyguardState.PRIMARY_BOUNCER,
++                    to = KeyguardState.LOCKSCREEN,
++                    animator = ValueAnimator(),
++                )
++            main.runAll()
++
++            verify(bouncer, never()).show(anyBoolean(), anyString())
++            verify(bouncer, never()).setPanelExpansion(anyFloat())
++        }
++
++    @Test
++    @DisableSceneContainer
++    fun returningSwipe_usesCurrentExpansionInsteadOfQueuedProgress() =
++        testScope.runTest {
++            queueRepair(0.4f)
++            shade.setLegacyShadeExpansion(0.9f)
++            main.runAll()
++
++            verify(bouncer).setPanelExpansion(0.9f)
++            verify(bouncer, never()).setPanelExpansion(0f)
++        }
++
++    @Test
++    @DisableSceneContainer
++    fun hiddenEndpoint_doesNotEnqueueShowBeforeCancellationTransitionStarts() =
++        testScope.runTest {
++            queueRepair(1f)
++            main.runAll()
++
++            verify(bouncer, never()).show(anyBoolean(), anyString())
++            verify(bouncer).setPanelExpansion(1f)
++        }
++
++    @Test
++    @DisableSceneContainer
++    fun animatedBouncer_doesNotChangeItsExpansionOrScrimOwner() =
++        testScope.runTest {
++            queueRepair(1f)
++            repository.currentTransitionInfo =
++                repository.currentTransitionInfo.copy(animator = ValueAnimator())
++            main.runAll()
++
++            verify(bouncer, never()).show(anyBoolean(), anyString())
++            verify(bouncer, never()).setPanelExpansion(anyFloat())
++        }
++
++    @Test
++    @DisableSceneContainer
++    fun invisibleLegacyBouncer_isStillRepairedDuringActiveManualTransition() =
++        testScope.runTest {
++            showingSoon.value = true
++            queueRepair(0f)
++            main.runAll()
++
++            verify(bouncer)
++                .show(
++                    false,
++                    "FromLockscreenTransitionInteractor#listenForLockscreenToPrimaryBouncerDragging",
++                )
++            verify(bouncer).setPanelExpansion(0f)
++        }
++
++    private suspend fun queueRepair(expansion: Float) {
++        underTest.start()
++        testScope.runCurrent()
++        shade.setLegacyShadeExpansion(expansion)
++        repository.sendTransitionStep(
++            TransitionStep(
++                from = KeyguardState.LOCKSCREEN,
++                to = KeyguardState.PRIMARY_BOUNCER,
++                value = 0f,
++                transitionState = TransitionState.STARTED,
++            )
++        )
++        // The collector accepts STARTED and suspends at the main-thread handoff. The test can
++        // change the authoritative transition/expansion before allowing UI mutations to run.
++        testScope.runCurrent()
++    }
++
++    private class QueuedDispatcher : CoroutineDispatcher() {
++        private val queue = ArrayDeque<Runnable>()
++
++        override fun dispatch(context: CoroutineContext, block: Runnable) {
++            queue.addLast(block)
++        }
++
++        fun runAll() {
++            while (queue.isNotEmpty()) queue.removeFirst().run()
++        }
++    }
++}
 diff --git a/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java b/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java
 index 58bbdeb35ea08..6b529f0a41dda 100644
 --- a/packages/SystemUI/src/com/android/keyguard/AdminSecondaryLockScreenController.java
@@ -1253,14 +1447,11 @@ index 450fe513a1264..a2beddcb9bf75 100644
      }
  
 diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt
-index 2626449a320d7..f0b7cbd1b628e 100644
+index 2626449a320d7..ef2efd8b7b1ee 100644
 --- a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt
 +++ b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt
-@@ -18,8 +18,11 @@ package com.android.systemui.keyguard.domain.interactor
- 
- import android.animation.ValueAnimator
+@@ -20,6 +20,8 @@ import android.animation.ValueAnimator
  import android.util.MathUtils
-+import android.util.Log
  import com.android.app.animation.Interpolators
  import com.android.app.tracing.coroutines.launchTraced as launch
 +import com.android.systemui.bouncer.domain.interactor.PrimaryBouncerInteractor
@@ -1268,7 +1459,7 @@ index 2626449a320d7..f0b7cbd1b628e 100644
  import com.android.systemui.communal.domain.interactor.CommunalSceneInteractor
  import com.android.systemui.communal.domain.interactor.CommunalSettingsInteractor
  import com.android.systemui.communal.shared.model.CommunalScenes
-@@ -51,6 +54,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
+@@ -51,6 +53,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  import kotlinx.coroutines.flow.filter
  import kotlinx.coroutines.flow.map
  import kotlinx.coroutines.flow.onStart
@@ -1276,16 +1467,7 @@ index 2626449a320d7..f0b7cbd1b628e 100644
  
  @SysUISingleton
  class FromLockscreenTransitionInteractor
-@@ -62,7 +66,7 @@ constructor(
-     @Background private val scope: CoroutineScope,
-     @Application private val applicationScope: CoroutineScope,
-     @Background bgDispatcher: CoroutineDispatcher,
--    @Main mainDispatcher: CoroutineDispatcher,
-+    @Main private val uiDispatcher: CoroutineDispatcher,
-     keyguardInteractor: KeyguardInteractor,
-     private val shadeRepository: ShadeRepository,
-     powerInteractor: PowerInteractor,
-@@ -70,11 +74,12 @@ constructor(
+@@ -70,6 +73,7 @@ constructor(
      private val communalSceneInteractor: CommunalSceneInteractor,
      private val swipeToDismissInteractor: SwipeToDismissInteractor,
      keyguardOcclusionInteractor: KeyguardOcclusionInteractor,
@@ -1293,13 +1475,7 @@ index 2626449a320d7..f0b7cbd1b628e 100644
  ) :
      TransitionInteractor(
          fromState = KeyguardState.LOCKSCREEN,
-         transitionInteractor = transitionInteractor,
--        mainDispatcher = mainDispatcher,
-+        mainDispatcher = uiDispatcher,
-         bgDispatcher = bgDispatcher,
-         powerInteractor = powerInteractor,
-         keyguardOcclusionInteractor = keyguardOcclusionInteractor,
-@@ -170,6 +175,23 @@ constructor(
+@@ -170,6 +174,21 @@ constructor(
      private fun listenForLockscreenToPrimaryBouncerDragging() {
          if (SceneContainerFlag.isEnabled) return
          var transitionId: UUID? = null
@@ -1315,33 +1491,31 @@ index 2626449a320d7..f0b7cbd1b628e 100644
 +                            it.transitionState == TransitionState.RUNNING)
 +                }
 +                .collect {
-+                    withContext(uiDispatcher) {
-+                        updateLegacyPrimaryBouncer(KeyguardBouncerConstants.EXPANSION_VISIBLE)
-+                    }
++                    withContext(mainDispatcher) { updateLegacyPrimaryBouncer() }
 +                }
 +        }
          applicationScope.launch("$TAG#listenForLockscreenToPrimaryBouncerDragging") {
              shadeRepository.legacyShadeExpansion.collect { shadeExpansion ->
                  val statusBarState = keyguardInteractor.statusBarState.value
-@@ -182,6 +204,7 @@ constructor(
+@@ -182,6 +201,7 @@ constructor(
                      internalTransitionInteractor.currentTransitionInfoInternal()
                  if (id != null) {
                      if (startedStep.to == KeyguardState.PRIMARY_BOUNCER) {
-+                        updateLegacyPrimaryBouncer(shadeExpansion)
++                        updateLegacyPrimaryBouncer()
                          // An existing `id` means a transition is started, and calls to
                          // `updateTransition` will control it until FINISHED or CANCELED
                          var nextState =
-@@ -251,6 +274,9 @@ constructor(
+@@ -251,6 +271,9 @@ constructor(
                                  animator = null, // transition will be manually controlled,
                                  ownerReason = "#listenForLockscreenToPrimaryBouncerDragging",
                              )
 +                        if (transitionId != null) {
-+                            updateLegacyPrimaryBouncer(shadeExpansion)
++                            updateLegacyPrimaryBouncer()
 +                        }
                      }
                  }
              }
-@@ -268,6 +294,32 @@ constructor(
+@@ -268,6 +291,44 @@ constructor(
          }
      }
  
@@ -1352,17 +1526,29 @@ index 2626449a320d7..f0b7cbd1b628e 100644
 +     * can recreate the lockscreen with the transition state ready while the legacy bouncer is
 +     * still hidden; advancing only the transition then produces an invisible credential view.
 +     */
-+    private fun updateLegacyPrimaryBouncer(shadeExpansion: Float) {
-+        Log.i(
-+            TAG,
-+            "legacy bouncer bridge expansion=$shadeExpansion showing=" +
-+                primaryBouncerInteractor.isShowing.value + " showingSoon=" +
-+                primaryBouncerInteractor.isShowingSoon.value,
-+        )
++    private fun updateLegacyPrimaryBouncer() {
++        // A STARTED/RUNNING event may have waited for the main thread while the swipe was
++        // canceled or another transition took over. Reconcile the current manual transition,
++        // never the queued event. Animated bouncer shows have their own expansion/scrim owner.
++        val transitionInfo = internalTransitionInteractor.currentTransitionInfoInternal()
++        if (
++            transitionInfo.from != KeyguardState.LOCKSCREEN ||
++                transitionInfo.to != KeyguardState.PRIMARY_BOUNCER ||
++                transitionInfo.animator != null
++        ) {
++            return
++        }
++
++        // Sample after the thread hop (or suspended startTransitionTo), so a returning swipe
++        // stays in sync with the shade instead of being forced fully open by an old event.
++        val shadeExpansion = shadeRepository.legacyShadeExpansion.value
 +        // showingSoon is only a pending callback; after a biometric dismissal it can remain set
 +        // while the actual legacy container is invisible. Retry show() based on the real visible
-+        // state so the transition cannot finish with an invisible PIN view.
-+        if (!primaryBouncerInteractor.isShowing.value) {
++        // state, but never enqueue another show at the canceled swipe's hidden endpoint.
++        if (
++            shadeExpansion != KeyguardBouncerConstants.EXPANSION_HIDDEN &&
++                !primaryBouncerInteractor.isShowing.value
++        ) {
 +            primaryBouncerInteractor.show(
 +                isScrimmed = false,
 +                reason = "$TAG#listenForLockscreenToPrimaryBouncerDragging",

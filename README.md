@@ -142,6 +142,14 @@ pending gestures when the shade opens, and preserves normal home double-tap.
 It requires a rebuilt SystemUI/ROM; see
 [the cause and regression checks](notes/home-double-tap-shade.md).
 
+**Lockscreen keypad cancellation** — the legacy bouncer bridge in framework
+patch `0009` checks the current manual transition and swipe position before
+updating the keypad. Cancelling a partial swipe no longer lets a delayed
+callback reopen the keypad with an already expanded shade, where Back cannot
+dismiss it. The correction is also maintained on the
+[`secure-spaces-auth-duress` source branch](https://github.com/Loukious/frameworks_base/tree/secure-spaces-auth-duress).
+See [the evidence and regression checks](notes/bouncer-back-cancellation.md).
+
 ## Layout
 
 The Secure Spaces work in `custom-rom` adds framework patches
@@ -421,6 +429,10 @@ The framework feature branches were **not** checked out as the ROM base:
 `frameworks/base`, Settings, and `lineage-sdk` use the synced Evolution X
 revisions, plus the numbered patches above. The biometric `MANAGE_USERS`
 identity-resolution fix from `frameworks_base` commit `287bcdf` is included.
+The November 8 keypad cancellation correction advances the framework feature
+snapshot to `144707dd6f39b519941486cf812f1fcd65734fbc`; it is folded into
+`0009`, so applying the patch set repeatedly still works without an overlapping
+follow-up patch.
 
 Before publication of these rebased patches, they were applied in filename
 order to clean, unmodified files exported from the October 19 upstream Git

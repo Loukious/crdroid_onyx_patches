@@ -27,7 +27,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # a later repo sync or unrelated local commit from silently changing generated
 # security-sensitive patches.
 FRAMEWORK_SECURE_BASE="${FRAMEWORK_SECURE_BASE:-d5d4e643234708b7a3c280e7d41ba7fd385aaef1}"
-FRAMEWORK_SECURE_END="${FRAMEWORK_SECURE_END:-287bcdf81d534f35adbe154b2f83c9d93f2e6450}"
+FRAMEWORK_SECURE_END="${FRAMEWORK_SECURE_END:-144707dd6f39b519941486cf812f1fcd65734fbc}"
 SETTINGS_SECURE_BASE="${SETTINGS_SECURE_BASE:-36d32b115a6ce46e8b3098b62ccd1fe5a1f80fc0}"
 SETTINGS_SECURE_END="${SETTINGS_SECURE_END:-5abf5fa3c5bfce68f3e04f372db51bf94b6724df}"
 LINEAGE_SECURE_BASE="${LINEAGE_SECURE_BASE:-c3efc4ee11e2348a058f71b021e2ab4c403fdc64}"
@@ -417,6 +417,7 @@ if [ -f "$ROM/frameworks/base/packages/SystemUI/src/com/android/systemui/secures
         packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/PrimaryBouncerInteractor.kt \
         packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardDismissInteractor.kt \
         packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenTransitionInteractor.kt \
+        packages/SystemUI/multivalentTests/src/com/android/systemui/keyguard/domain/interactor/FromLockscreenLegacyBouncerTest.kt \
         packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarKeyguardViewManager.java \
         packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerInteractor.kt \
         packages/SystemUI/src/com/android/systemui/bouncer/ui/viewmodel/AuthMethodBouncerViewModel.kt \
