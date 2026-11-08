@@ -228,7 +228,7 @@ emit_upstream_fix() {
     fi
 }
 
-PROJECTS="bionic build/release device/xiaomi/onyx external/iw frameworks/base hardware/xiaomi kernel/xiaomi/sm8735 lineage-sdk system/vold system/security
+PROJECTS="bionic build/release device/xiaomi/onyx external/iw frameworks/base frameworks/opt/telephony hardware/xiaomi kernel/xiaomi/sm8735 lineage-sdk system/vold system/security
 packages/apps/Settings packages/apps/Updater packages/apps/Evolver
 packages/modules/adb packages/modules/Bluetooth
 vendor/gms vendor/lineage vendor/qcom/opensource/interfaces"
@@ -263,6 +263,11 @@ emit_upstream_fix frameworks/base 0011-trickystore-current-user-identity.patch \
 
 # ---------------------------------------------------------------- external/iw
 emit external/iw 0001-vendor-nested-data-option.patch vendor.c
+
+# -------------------------------------------------- frameworks/opt/telephony
+emit frameworks/opt/telephony 0001-apply-lte-ca-override-before-state-comparison.patch \
+    src/java/com/android/internal/telephony/ServiceStateTracker.java \
+    tests/telephonytests/src/com/android/internal/telephony/ServiceStateTrackerTest.java
 
 # ---------------------------------------------------------------- frameworks/base
 emit_selected_hunks frameworks/base 0012-fix-notification-blur-inflation-thread.patch \

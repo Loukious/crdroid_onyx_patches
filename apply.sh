@@ -90,6 +90,7 @@ declare -A PROJECT=(
     [device_qcom_sepolicy_vndr_sm8750]="device/qcom/sepolicy_vndr/sm8750"
     [external_iw]="external/iw"
     [frameworks_base]="frameworks/base"
+    [frameworks_opt_telephony]="frameworks/opt/telephony"
     [hardware_nxp_nfc]="hardware/nxp/nfc"
     [hardware_qcom-caf_sm8750_audio_primary-hal]="hardware/qcom-caf/sm8750/audio/primary-hal"
     [hardware_xiaomi]="hardware/xiaomi"
@@ -166,6 +167,7 @@ apply_patches() {
                 frameworks_base/0013-fix-wifi-data-usage-query.patch|\
                 frameworks_base/0014-pool-notification-history-strings.patch|\
                 frameworks_base/0015-exclude-shade-from-home-double-tap-sleep.patch|\
+                frameworks_opt_telephony/0001-apply-lte-ca-override-before-state-comparison.patch|\
                 device_xiaomi_onyx/0022-label-radio-customized-region-property.patch|\
                 packages_apps_Settings/0002-secure-spaces-management.patch|\
                 hardware_xiaomi/0001-fix-fingerprint-cancel-completion.patch|\

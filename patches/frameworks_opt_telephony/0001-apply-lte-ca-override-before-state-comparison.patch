@@ -1,0 +1,99 @@
+diff --git a/src/java/com/android/internal/telephony/ServiceStateTracker.java b/src/java/com/android/internal/telephony/ServiceStateTracker.java
+index f2e4fad..7248929 100644
+--- a/src/java/com/android/internal/telephony/ServiceStateTracker.java
++++ b/src/java/com/android/internal/telephony/ServiceStateTracker.java
+@@ -2948,6 +2948,9 @@ public class ServiceStateTracker extends Handler {
+                 NetworkRegistrationInfo.DOMAIN_PS, AccessNetworkConstants.TRANSPORT_TYPE_WWAN);
+         setPhyCellInfoFromCellIdentity(mNewSS, networkRegState.getCellIdentity());
+ 
++        // Apply the same override as mSS before ratcheting and comparing service states.
++        mNewSS.setForceLteCA(mForceLteCA);
++
+         boolean hasSatelliteConnectionChanged = false;
+         SatelliteModemStateListener satelliteModemStateListener = getSatelliteModemStateListener();
+         if (satelliteModemStateListener != null) {
+@@ -3153,8 +3156,6 @@ public class ServiceStateTracker extends Handler {
+ 
+         ServiceState oldMergedSS = new ServiceState(mPhone.getServiceState());
+ 
+-        mNewSS.setForceLteCA(mForceLteCA);
+-
+         mSS = new ServiceState(mNewSS);
+ 
+         mNewSS.setOutOfService(false);
+diff --git a/tests/telephonytests/src/com/android/internal/telephony/ServiceStateTrackerTest.java b/tests/telephonytests/src/com/android/internal/telephony/ServiceStateTrackerTest.java
+index 861d3a5..5f495f7 100644
+--- a/tests/telephonytests/src/com/android/internal/telephony/ServiceStateTrackerTest.java
++++ b/tests/telephonytests/src/com/android/internal/telephony/ServiceStateTrackerTest.java
+@@ -61,6 +61,7 @@ import android.os.Process;
+ import android.os.SystemClock;
+ import android.os.UserHandle;
+ import android.os.WorkSource;
++import android.provider.Settings;
+ import android.telephony.AccessNetworkConstants;
+ import android.telephony.CarrierConfigManager;
+ import android.telephony.CellIdentity;
+@@ -159,6 +160,7 @@ public class ServiceStateTrackerTest extends TelephonyTest {
+     private static final int EVENT_PS_RESTRICT_ENABLED = 8;
+     private static final int EVENT_PS_RESTRICT_DISABLED = 9;
+     private static final int EVENT_VOICE_RAT_CHANGED = 12;
++    private static final int EVENT_SERVICE_STATE_CHANGED = 13;
+ 
+     private static final int PHONE_ID = 0;
+ 
+@@ -2179,6 +2181,55 @@ public class ServiceStateTrackerTest extends TelephonyTest {
+         sendPhyChanConfigChange(bandwidths, networkType, pci, null);
+     }
+ 
++    @Test
++    public void testUnchangedLtePollWithForcedCarrierAggregation() {
++        assertLtePollNotifications(Boolean.TRUE);
++    }
++
++    @Test
++    public void testUnchangedLtePollWithCarrierAggregationDisabled() {
++        assertLtePollNotifications(Boolean.FALSE);
++    }
++
++    @Test
++    public void testUnchangedLtePollWithCarrierAggregationUnset() {
++        assertLtePollNotifications(null);
++    }
++
++    private void assertLtePollNotifications(Boolean forceLteCa) {
++        String key = Settings.Global.FORCE_LTE_CA + "_" + PHONE_ID;
++        String original = Settings.Global.getString(mContext.getContentResolver(), key);
++        try {
++            Settings.Global.putString(mContext.getContentResolver(), key,
++                    forceLteCa == null ? null : (forceLteCa ? "1" : "0"));
++            processAllMessages();
++
++            CellIdentityLte cell = new CellIdentityLte(1, 1, 5, 1, new int[] {1},
++                    10000, "001", "01", "test", "tst", Collections.emptyList(), null);
++            sendRegStateUpdateForLteCellId(cell);
++            ServiceState previous = new ServiceState(sst.mSS);
++            assertEquals(forceLteCa, previous.getForceLteCA());
++
++            sst.registerForServiceStateChanged(mTestHandler, EVENT_SERVICE_STATE_CHANGED, null);
++            clearInvocations(mTestHandler);
++            sendRegStateUpdateForLteCellId(cell);
++
++            assertEquals(previous, sst.mSS);
++            verify(mTestHandler, never()).sendMessageAtTime(any(Message.class), anyLong());
++
++            // A genuine cell change must still reach the same listeners.
++            CellIdentityLte nextCell = new CellIdentityLte(2, 2, 5, 1, new int[] {1},
++                    10000, "001", "01", "test", "tst", Collections.emptyList(), null);
++            sendRegStateUpdateForLteCellId(nextCell);
++            assertEquals(forceLteCa, sst.mSS.getForceLteCA());
++            verify(mTestHandler, times(1)).sendMessageAtTime(any(Message.class), anyLong());
++        } finally {
++            sst.unregisterForServiceStateChanged(mTestHandler);
++            Settings.Global.putString(mContext.getContentResolver(), key, original);
++            processAllMessages();
++        }
++    }
++
+     private void sendRegStateUpdateForLteCellId(CellIdentityLte cellId) {
+         LteVopsSupportInfo lteVopsSupportInfo =
+                 new LteVopsSupportInfo(LteVopsSupportInfo.LTE_STATUS_NOT_AVAILABLE,

@@ -109,6 +109,13 @@ aggregate fallback totals as Wi-Fi instead of attributing them to one SSID.
 and forbids vendor writes. These fixes require a new ROM installation; see
 [the source rationale and validation](notes/log-derived-rom-fixes.md).
 
+**LTE+ service-state comparisons** — telephony patch `0001` applies the
+existing per-SIM aggregation override before ratcheting and comparing service
+states. Repeated radio polls no longer look changed merely because the new
+state has not received the override yet. This preserves the toggle's current
+reporting behavior and requires a rebuilt telephony component/ROM; see
+[the cause and validation](notes/lte-ca-state-comparison.md).
+
 **Audio diagnostic queues** — Onyx patch `0023` installs the memory-logger
 configuration required by the selected Qualcomm PAL/AGM binaries. The existing
 Qualcomm `sun` XML is byte-for-byte identical to both stock Global 3.0.303 and
@@ -189,6 +196,7 @@ patches/frameworks_base/                      0001-gesture-navbar-space
                                               0013-fix-wifi-data-usage-query
                                               0014-pool-notification-history-strings
                                               0015-exclude-shade-from-home-double-tap-sleep
+patches/frameworks_opt_telephony/             0001-apply-lte-ca-override-before-state-comparison
 retired/hardware_nxp_nfc/                     0001-fix-client-thread-teardown-race (NOT applied)
 patches/hardware_xiaomi/                      0001-fix-fingerprint-cancel-completion
 patches/lineage-sdk/                          0001-secure-space-user-switch-observer-acks
