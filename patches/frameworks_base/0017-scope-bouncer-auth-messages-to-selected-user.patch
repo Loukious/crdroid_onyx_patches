@@ -1,0 +1,155 @@
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorTest.kt
+index a7d76755bb77d..c9d308d4acf6e 100644
+--- a/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorTest.kt
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorTest.kt
+@@ -830,6 +830,9 @@ class BouncerMessageInteractorTest : SysuiTestCase() {
+                 .startTimer(eq(3000L), eq(1000L), countDownTimerCallback.capture())
+ 
+             kosmos.fakeUserRepository.setSelectedUserInfo(SECONDARY_USER)
++            biometricSettingsRepository.setAuthenticationFlags(
++                AuthenticationFlags(SECONDARY_USER_ID, 0)
++            )
+             runCurrent()
+ 
+             verify(countDownTimerUtil).cancelTimer()
+@@ -966,6 +969,78 @@ class BouncerMessageInteractorTest : SysuiTestCase() {
+             assertThat(lockoutMessage?.secondaryMessage?.message).isNull()
+         }
+ 
++    @Test
++    fun credentialLockout_withoutSensorLockout_explainsPrimaryAuthRequirement() =
++        testScope.runTest {
++            init(fingerprintAuthCurrentlyAllowed = false)
++            val message by collectLastValue(underTest.bouncerMessage)
++            biometricSettingsRepository.setAuthenticationFlags(
++                AuthenticationFlags(
++                    PRIMARY_USER_ID,
++                    LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_AFTER_LOCKOUT,
++                )
++            )
++            runCurrent()
++
++            assertThat(primaryResMessage(message)).isEqualTo(enterCredString)
++            assertThat(secondaryResMessage(message)).isEqualTo(tooManyAttemptsString)
++
++            biometricSettingsRepository.setAuthenticationFlags(
++                AuthenticationFlags(PRIMARY_USER_ID, 0)
++            )
++            runCurrent()
++            assertThat(message?.secondaryMessage?.messageResId).isEqualTo(0)
++        }
++
++    @Test
++    fun userSwitch_doesNotReusePreviousUsersRestartMessage() =
++        testScope.runTest {
++            init(fingerprintAuthCurrentlyAllowed = false)
++            val message by collectLastValue(underTest.bouncerMessage)
++            biometricSettingsRepository.setAuthenticationFlags(
++                AuthenticationFlags(
++                    PRIMARY_USER_ID,
++                    LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_AFTER_BOOT,
++                )
++            )
++            runCurrent()
++            assertThat(secondaryResMessage(message)).isEqualTo(afterRestartString)
++
++            // The selected user changes before StrongAuthTracker delivers their flags.
++            kosmos.fakeUserRepository.setSelectedUserInfo(SECONDARY_USER)
++            runCurrent()
++            assertThat(primaryResMessage(message)).isEqualTo(enterCredString)
++            assertThat(message?.secondaryMessage?.messageResId).isEqualTo(0)
++
++            biometricSettingsRepository.setAuthenticationFlags(
++                AuthenticationFlags(
++                    SECONDARY_USER_ID,
++                    LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_AFTER_LOCKOUT,
++                )
++            )
++            runCurrent()
++            assertThat(secondaryResMessage(message)).isEqualTo(tooManyAttemptsString)
++        }
++
++    @Test
++    fun userSwitch_flagsArriveBeforeSelection_doesNotShowOtherUsersRestartReason() =
++        testScope.runTest {
++            init(fingerprintAuthCurrentlyAllowed = false)
++            val message by collectLastValue(underTest.bouncerMessage)
++            biometricSettingsRepository.setAuthenticationFlags(
++                AuthenticationFlags(
++                    SECONDARY_USER_ID,
++                    LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_AFTER_BOOT,
++                )
++            )
++            runCurrent()
++            assertThat(message?.secondaryMessage?.messageResId).isEqualTo(0)
++
++            kosmos.fakeUserRepository.setSelectedUserInfo(SECONDARY_USER)
++            runCurrent()
++            assertThat(secondaryResMessage(message)).isEqualTo(afterRestartString)
++        }
++
+     @Test
+     fun onFingerprintLockout_propagatesState() =
+         testScope.runTest {
+@@ -1294,7 +1369,7 @@ class BouncerMessageInteractorTest : SysuiTestCase() {
+             verifyMessagesForAuthFlag(
+                 LockPatternUtils.StrongAuthTracker.STRONG_AUTH_NOT_REQUIRED to defaultMessage,
+                 LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_AFTER_LOCKOUT to
+-                    defaultMessage,
++                    Pair(enterCredString, tooManyAttemptsString),
+                 LockPatternUtils.StrongAuthTracker.SOME_AUTH_REQUIRED_AFTER_USER_REQUEST to
+                     defaultMessage,
+                 LockPatternUtils.StrongAuthTracker.SOME_AUTH_REQUIRED_AFTER_TRUSTAGENT_EXPIRED to
+diff --git a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractor.kt b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractor.kt
+index 6209b6df81a1e..dec6145a49c12 100644
+--- a/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractor.kt
+@@ -200,7 +200,10 @@ constructor(
+ 
+     private val initialBouncerMessage: Flow<BouncerMessageModel> =
+         combine(
+-                primaryBouncerInteractor.lastShownSecurityMode, // required to update defaultMessage
++                combine(
++                    primaryBouncerInteractor.lastShownSecurityMode,
++                    userRepository.selectedUserInfo,
++                ) { _, userInfo -> userInfo.id },
+                 authenticationFlags,
+                 trustRepository.isCurrentUserTrustManaged,
+                 isAnyBiometricsEnabledAndEnrolled,
+@@ -213,7 +216,7 @@ constructor(
+             )
+             .map {
+                 (
+-                    _,
++                    userId,
+                     flags,
+                     _,
+                     biometricsEnrolledAndEnabled,
+@@ -222,6 +225,15 @@ constructor(
+                     isFingerprintAuthCurrentlyAllowedOnBouncer,
+                     isFaceAuthCurrentlyAllowedOnBouncer,
+                     enrolledStrongBiometricModalities) ->
++                // User selection and StrongAuthTracker updates arrive independently. Never
++                // describe another user's boot/lockout state while waiting for matching flags.
++                if (userId != currentUserId || flags.userId != userId) {
++                    return@map BouncerMessageStrings.defaultMessage(
++                            currentSecurityMode.toAuthModel(),
++                            fpAuthIsAllowed = false,
++                        )
++                        .toMessage()
++                }
+                 val isTrustUsuallyManaged = trustRepository.isCurrentUserTrustUsuallyManaged.value
+                 val trustOrBiometricsAvailable =
+                     (isTrustUsuallyManaged || biometricsEnrolledAndEnabled)
+@@ -268,6 +280,11 @@ constructor(
+                             currentSecurityMode.toAuthModel()
+                         )
+                         .toMessage()
++                } else if (trustOrBiometricsAvailable && flags.isPrimaryAuthRequiredAfterLockout) {
++                    // Credential lockout can require primary auth even after the sensor's
++                    // lockout has expired, or when SystemUI has just restarted.
++                    BouncerMessageStrings.class3AuthLockedOut(currentSecurityMode.toAuthModel())
++                        .toMessage()
+                 } else if (
+                     trustOrBiometricsAvailable && flags.isPrimaryAuthRequiredForUnattendedUpdate
+                 ) {

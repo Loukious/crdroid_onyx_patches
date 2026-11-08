@@ -148,6 +148,13 @@ updating the keypad. Cancelling a partial swipe no longer lets a delayed
 callback reopen the keypad with an already expanded shade, where Back cannot
 dismiss it. The correction is also maintained on the
 [`secure-spaces-auth-duress` source branch](https://github.com/Loukious/frameworks_base/tree/secure-spaces-auth-duress).
+
+**User-switch stability and PIN messages** — framework patch `0016` fixes
+zero-range QS expansion and prevents non-finite view alpha from crashing blur
+synchronization. Patch `0017` keeps bouncer reasons with their selected user and
+explains credential lockout even when the biometric sensor is no longer locked
+out. Authentication requirements remain enforced. Both require a rebuilt ROM;
+see [evidence and regression checks](notes/systemui-user-switch.md).
 See [the evidence and regression checks](notes/bouncer-back-cancellation.md).
 
 ## Layout

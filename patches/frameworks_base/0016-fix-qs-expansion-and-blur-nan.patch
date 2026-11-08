@@ -1,0 +1,169 @@
+diff --git a/packages/SystemUI/multivalentTests/src/com/android/systemui/common/ui/view/BackgroundBlurAlphaSyncTest.kt b/packages/SystemUI/multivalentTests/src/com/android/systemui/common/ui/view/BackgroundBlurAlphaSyncTest.kt
+new file mode 100644
+index 0000000000000..48cc23587bbc1
+--- /dev/null
++++ b/packages/SystemUI/multivalentTests/src/com/android/systemui/common/ui/view/BackgroundBlurAlphaSyncTest.kt
+@@ -0,0 +1,79 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.common.ui.view
++
++import android.view.View
++import android.widget.FrameLayout
++import androidx.test.ext.junit.runners.AndroidJUnit4
++import androidx.test.filters.SmallTest
++import com.android.internal.graphics.drawable.BackgroundBlurDrawable
++import com.android.systemui.SysuiTestCase
++import com.android.systemui.util.mockito.mock
++import com.android.systemui.util.mockito.whenever
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.mockito.Mockito.verify
++
++@SmallTest
++@RunWith(AndroidJUnit4::class)
++class BackgroundBlurAlphaSyncTest : SysuiTestCase() {
++    private val view: View = mock()
++    private val parent: FrameLayout = mock()
++    private val blur: BackgroundBlurDrawable = mock()
++    private val sync = BackgroundBlurAlphaSync(view) { blur }
++
++    @Test
++    fun sync_multipliesViewAndAncestorAlphas() {
++        whenever(view.alpha).thenReturn(0.5f)
++        whenever(view.transitionAlpha).thenReturn(1f)
++        whenever(view.parent).thenReturn(parent)
++        whenever(parent.alpha).thenReturn(0.5f)
++        whenever(parent.transitionAlpha).thenReturn(0.5f)
++
++        sync.sync()
++
++        verify(blur).setAlpha(32)
++    }
++
++    @Test
++    fun sync_invalidAncestorAlpha_hidesBlurThenRecovers() {
++        whenever(view.alpha).thenReturn(1f)
++        whenever(view.transitionAlpha).thenReturn(1f)
++        whenever(view.parent).thenReturn(parent)
++        whenever(parent.alpha).thenReturn(Float.NaN)
++        whenever(parent.transitionAlpha).thenReturn(1f)
++        whenever(blur.alpha).thenReturn(255)
++
++        sync.sync()
++        verify(blur).setAlpha(0)
++
++        whenever(parent.alpha).thenReturn(0.5f)
++        sync.sync()
++        verify(blur).setAlpha(128)
++    }
++
++    @Test
++    fun sync_invalidTransitionAlpha_hidesBlur() {
++        whenever(view.alpha).thenReturn(1f)
++        whenever(view.transitionAlpha).thenReturn(Float.POSITIVE_INFINITY)
++        whenever(blur.alpha).thenReturn(255)
++
++        sync.sync()
++
++        verify(blur).setAlpha(0)
++    }
++}
+diff --git a/packages/SystemUI/src/com/android/systemui/common/ui/view/BackgroundBlurAlphaSync.kt b/packages/SystemUI/src/com/android/systemui/common/ui/view/BackgroundBlurAlphaSync.kt
+index c248b3f920085..7edfc03af823c 100644
+--- a/packages/SystemUI/src/com/android/systemui/common/ui/view/BackgroundBlurAlphaSync.kt
++++ b/packages/SystemUI/src/com/android/systemui/common/ui/view/BackgroundBlurAlphaSync.kt
+@@ -50,7 +50,9 @@ class BackgroundBlurAlphaSync(
+             alpha *= v.alpha * v.transitionAlpha
+             v = v.parent as? View
+         }
+-        val blurAlpha = (255 * alpha.coerceIn(0f, 1f)).roundToInt()
++        // A transient invalid view alpha must not crash SystemUI during pre-draw. Hide the
++        // blur for this frame; the next valid frame recomputes it from the view hierarchy.
++        val blurAlpha = if (alpha.isFinite()) (255 * alpha.coerceIn(0f, 1f)).roundToInt() else 0
+         if (blur.alpha != blurAlpha) {
+             blur.alpha = blurAlpha
+         }
+diff --git a/packages/SystemUI/src/com/android/systemui/shade/QuickSettingsControllerImpl.java b/packages/SystemUI/src/com/android/systemui/shade/QuickSettingsControllerImpl.java
+index 52d17c81cf2f8..01590c6eec900 100644
+--- a/packages/SystemUI/src/com/android/systemui/shade/QuickSettingsControllerImpl.java
++++ b/packages/SystemUI/src/com/android/systemui/shade/QuickSettingsControllerImpl.java
+@@ -1190,9 +1190,13 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
+             // be larger than 0 because of the timing, leading to flickers.
+             return 0.0f;
+         }
+-        return Math.min(
+-                1f, (mExpansionHeight - mMinExpansionHeight) / (mMaxExpansionHeight
+-                        - mMinExpansionHeight));
++        final float expansionRange = mMaxExpansionHeight - mMinExpansionHeight;
++        if (expansionRange <= 0f) {
++            // The fragment publishes expansion before its first layout, and its heights can
++            // temporarily coincide while it is recreated. No expandable range means collapsed.
++            return 0f;
++        }
++        return MathUtils.saturate((mExpansionHeight - mMinExpansionHeight) / expansionRange);
+     }
+ 
+     void updateMinHeight() {
+diff --git a/packages/SystemUI/tests/src/com/android/systemui/shade/QuickSettingsControllerImplTest.java b/packages/SystemUI/tests/src/com/android/systemui/shade/QuickSettingsControllerImplTest.java
+index 0d5f3e9742445..d1c7193deed14 100644
+--- a/packages/SystemUI/tests/src/com/android/systemui/shade/QuickSettingsControllerImplTest.java
++++ b/packages/SystemUI/tests/src/com/android/systemui/shade/QuickSettingsControllerImplTest.java
+@@ -60,6 +60,43 @@ import java.util.List;
+ @DisableSceneContainer
+ public class QuickSettingsControllerImplTest extends QuickSettingsControllerImplBaseTest {
+ 
++    @Test
++    public void computeExpansionFraction_beforeLayout_isCollapsed() {
++        assertThat(mQsController.computeExpansionFraction()).isEqualTo(0f);
++    }
++
++    @Test
++    public void updateExpansion_zeroHeight_doesNotPublishNaN() {
++        mQsController.setQs(mQs);
++        mQsController.updateExpansion();
++
++        assertThat(mShadeRepository.getQsExpansion().getValue()).isEqualTo(0f);
++        verify(mMediaHierarchyManager).setQsExpansion(0f);
++        verify(mNotificationShadeDepthController).setQsPanelExpansion(0f);
++    }
++
++    @Test
++    public void computeExpansionFraction_equalNonzeroHeights_isCollapsed() {
++        mQsController.setQs(mQs);
++        when(mQs.getQsMinExpansionHeight()).thenReturn(DEFAULT_HEIGHT);
++        when(mQs.getDesiredHeight()).thenReturn(DEFAULT_HEIGHT);
++        mQsController.updateMinHeight();
++        mQsController.onHeightChanged();
++
++        assertThat(mQsController.computeExpansionFraction()).isEqualTo(0f);
++    }
++
++    @Test
++    public void computeExpansionFraction_layoutAfterZeroHeight_recovers() {
++        mQsController.setQs(mQs);
++        mQsController.updateExpansion();
++        setDefaultHeightProperties();
++        mQsController.setExpansionHeight((DEFAULT_MIN_HEIGHT + DEFAULT_HEIGHT) / 2f);
++
++        assertThat(mQsController.computeExpansionFraction()).isEqualTo(0.5f);
++        assertThat(mShadeRepository.getQsExpansion().getValue()).isEqualTo(0.5f);
++    }
++
+     @Test
+     public void testCloseQsSideEffects() {
+         enableSplitShade(true);

@@ -284,6 +284,14 @@ emit_selected_hunks frameworks/base 0014-pool-notification-history-strings.patch
     services/tests/uiservicestests/src/com/android/server/notification/NotificationHistoryProtoHelperTest.java
 emit frameworks/base 0015-exclude-shade-from-home-double-tap-sleep.patch \
     packages/SystemUI/src/com/android/systemui/dt2s/DoubleTapToSleepController.java
+emit frameworks/base 0016-fix-qs-expansion-and-blur-nan.patch \
+    packages/SystemUI/src/com/android/systemui/shade/QuickSettingsControllerImpl.java \
+    packages/SystemUI/tests/src/com/android/systemui/shade/QuickSettingsControllerImplTest.java \
+    packages/SystemUI/src/com/android/systemui/common/ui/view/BackgroundBlurAlphaSync.kt \
+    packages/SystemUI/multivalentTests/src/com/android/systemui/common/ui/view/BackgroundBlurAlphaSyncTest.kt
+emit frameworks/base 0017-scope-bouncer-auth-messages-to-selected-user.patch \
+    packages/SystemUI/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractor.kt \
+    packages/SystemUI/multivalentTests/src/com/android/systemui/bouncer/domain/interactor/BouncerMessageInteractorTest.kt
 
 # Settings.java carries only GESTURE_NAVBAR_SPACE_MODE now, so no hunk filter.
 emit frameworks/base 0001-gesture-navbar-space.patch \

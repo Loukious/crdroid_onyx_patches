@@ -51,8 +51,8 @@ for d in $INDEX_DIRS; do [ -d "$d" ] && dirs+=("$d"); done
   # top-level functions, with or without an extension receiver
   grep -rhoE 'fun +([A-Za-z0-9_<>,.?]+\.)?[A-Za-z_][A-Za-z0-9_]*' \
     --include=*.kt "${dirs[@]}" 2>/dev/null | sed -E 's/^fun +//; s/^.*\.//'
-  grep -rhoE '(val|var|const val) +[A-Za-z_][A-Za-z0-9_]*' \
-    --include=*.kt "${dirs[@]}" 2>/dev/null | awk '{print $NF}'
+  grep -rhoE '(val|var|const val) +([A-Za-z0-9_<>,.?]+\.)?[A-Za-z_][A-Za-z0-9_]*' \
+    --include=*.kt "${dirs[@]}" 2>/dev/null | awk '{print $NF}' | sed 's/^.*\.//'
 } | sort -u > "$idx"
 echo "indexed $(wc -l < "$idx") declared symbols from: ${dirs[*]}"
 
