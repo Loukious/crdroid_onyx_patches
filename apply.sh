@@ -138,6 +138,9 @@ apply_patches() {
         for patch in "$pdir"*.patch; do
             [ -e "$patch" ] || continue
             n="$(basename "$patch")"
+            if [ "$KONOHA_SOURCE_BUILD" != 1 ] && [ "$key/$n" = device_xiaomi_onyx/0024-package-source-usb-wifi-firmware.patch ]; then
+                echo "   -- $n (requires the Onyx 6.18 source firmware package)"; continue
+            fi
             if [ "$KONOHA_SOURCE_BUILD" = 1 ] && { [ "$key/$n" = device_xiaomi_onyx/0001-vendor-extra-kernel-hook.patch ] || [ "$key/$n" = vendor_lineage/0002-kernel-source-rw-allowlist.patch ]; }; then
                 echo "   -- $n (replaced by the Onyx source-build configuration)"; continue
             fi

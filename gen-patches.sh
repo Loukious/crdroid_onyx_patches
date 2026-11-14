@@ -555,6 +555,10 @@ emit_selected_hunks device/xiaomi/onyx 0022-label-radio-customized-region-proper
 emit_selected_hunks device/xiaomi/onyx 0023-install-audio-memory-logger-config.patch \
     'mem_logger_config[.]xml' device.mk
 
+# Keep the product firmware hook separate from other device configuration.
+emit_selected_hunks device/xiaomi/onyx 0024-package-source-usb-wifi-firmware.patch \
+    'port/rom/firmware[.]mk' device.mk
+
 # -------------------------------------------------------------- kernel/xiaomi/sm8735
 # Enable relay symbols in the source kernel used for WCN7750 module validation.
 # Do not rely exclusively on the custom Kono-Ha prebuilt (which already has RELAY).

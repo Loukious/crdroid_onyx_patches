@@ -12,7 +12,7 @@ artifact that cannot lie is the shipped zip itself.
 This script parses the payload manifest straight from the protobuf wire
 format (no google.protobuf import: ota_from_target_files.py does not use it,
 so nothing proves the build server's python3 has it installed) and
-reconstructs the boot, vendor_boot, recovery, DTBO and DLKM partition images
+reconstructs the boot, vendor_boot, recovery, DTBO, vendor and DLKM partition images
 from their install operations.
 The reconstruction is self-checking: the sha256 of the rebuilt image must
 equal the hash delta_generator recorded in the manifest, so a parsing bug
@@ -151,7 +151,7 @@ with zipfile.ZipFile(OTA_ZIP) as z:
         print(f"payload vendor_dlkm: {vdlkm['size']} bytes")
 
         selected = [p for p in partitions if p['name'] in {
-            'boot', 'vendor_boot', 'vendor_dlkm', 'system_dlkm', 'dtbo', 'recovery'}]
+            'boot', 'vendor_boot', 'vendor_dlkm', 'system_dlkm', 'dtbo', 'recovery', 'vendor'}]
         if not any(p['name'] == 'vendor_boot' for p in selected):
             die('payload has no vendor_boot partition')
         if len({p['name'] for p in partitions}) != len(partitions):

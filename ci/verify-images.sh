@@ -159,10 +159,10 @@ else
     fi
 fi
 
-# The source recipe emits hashes for the exact kernel, DTs and every module.
+# Check the exact source kernel, DTs, modules and USB Wi-Fi firmware in the OTA.
 if [ -f "$TREE/kernel/platform/kernel-6.18/port/rom/build.py" ]; then
     python3 "$HERE/verify-source-kernel.py" "$TREE" "$TMP" \
-        || fail "shipped kernel/modules do not match the current source build"
+        || fail "shipped kernel/modules/firmware do not match the current source build"
 fi
 
 # ------------------------------------------------------------------ staleness
