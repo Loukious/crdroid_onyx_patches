@@ -196,6 +196,7 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0016-enable-device-as-webcam
                                               0022-label-radio-customized-region-property
                                               0023-install-audio-memory-logger-config
+                                              0024-package-source-usb-wifi-firmware
 patches/external_iw/                         0001-vendor-nested-data-option
 patches/frameworks_base/                      0001-gesture-navbar-space
                                               0003-secure-spaces-full-user-type

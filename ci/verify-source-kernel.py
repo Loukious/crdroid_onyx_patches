@@ -15,6 +15,34 @@ def sha(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
+def verify_firmware(tree, source):
+    package = source / 'port/firmware'
+    manifest = json.loads((package / 'manifest.json').read_text())
+    requirements = json.loads((source / 'port/nethunter-native-modules.json').read_text())
+    names = [entry['path'] for entry in manifest['blobs']]
+    if len(names) != 16 or len(set(names)) != 16 or set(names) != set(requirements['wireless_firmware']):
+        raise ValueError('Source wireless firmware inventory differs')
+    for entry in manifest['blobs']:
+        name = Path(entry['path'])
+        if name.is_absolute() or '..' in name.parts:
+            raise ValueError('Unsafe source wireless firmware path')
+        packed = tree / 'firmware' / name
+        if not packed.is_file() or packed.is_symlink() or sha(packed) != entry['sha256']:
+            raise ValueError('Shipped wireless firmware differs: ' + str(name))
+    notices = tree / 'etc/firmware-notices/onyx-usb-wifi'
+    wanted = [package / 'README.md', package / 'manifest.json']
+    for directory in ('licenses', 'sources'):
+        wanted += [path for path in (package / directory).rglob('*') if path.is_file()]
+    for original in wanted:
+        packed = notices / original.relative_to(package)
+        if not packed.is_file() or packed.is_symlink() or sha(packed) != sha(original):
+            raise ValueError('Shipped wireless firmware notice/source differs: ' + str(original.relative_to(package)))
+    for corresponding in requirements['firmware_source_archives']:
+        if sha(notices / corresponding['path']) != corresponding['sha256']:
+            raise ValueError('Shipped ATH corresponding firmware source differs')
+    print('vendor: all 16 wireless firmware files, licenses and matching ATH source verified')
+
+
 def verify(rom, payload):
     rom, payload = rom.resolve(), payload.resolve()
     source = rom / 'kernel/platform/kernel-6.18'
@@ -35,7 +63,7 @@ def verify(rom, payload):
 
     manifest = json.loads((payload / 'payload-manifest.json').read_text())
     images = {part: payload / ('payload_' + part + '.img') for part in
-              ['boot', 'vendor_boot', 'vendor_dlkm', 'system_dlkm', 'dtbo', 'recovery']}
+              ['boot', 'vendor_boot', 'vendor_dlkm', 'system_dlkm', 'dtbo', 'recovery', 'vendor']}
     for part, path in images.items():
         if sha(path) != manifest[part]['sha256']:
             raise ValueError('Reconstructed OTA image differs from its payload hash: ' + part)
@@ -110,7 +138,10 @@ def verify(rom, payload):
                     raise ValueError('Duplicate or linked ' + part + ' module: ' + str(module))
                 modules[module.name] = sha(module)
             check_modules(part, modules)
-    print('Verified OTA kernel, device trees and every module against source ' + revision)
+        vendor = work / 'vendor'
+        run(host / 'fsck.erofs', '--extract=' + str(vendor), '--no-preserve-owner', images['vendor'])
+        verify_firmware(vendor, source)
+    print('Verified OTA kernel, device trees, every module and wireless firmware against source ' + revision)
 
 
 if __name__ == '__main__':
