@@ -1,5 +1,12 @@
-Evolution X 16.0 — POCO F7 (onyx) — unofficial builds by Loukious
+Evolution X 17.0 — POCO F7 (onyx) — unofficial builds by Loukious
 https://github.com/Loukious/crave_aosp_builder/discussions
+
+2026-11-15 (12.4)
+- Match Xiaomi Global stock automatic-brightness adjustments after moving
+  the slider or switching between manual and Auto mode.
+- Restore Onyx front/rear light-sensor policy and panel brightness
+  mapping and transition rates.
+- Includes Linux 6.18.39.
 
 2026-08-31 (11.10)
 - Fix LHDC A2DP offload start/suspend loop: the AVDT codec-info field was
