@@ -1,6 +1,25 @@
 {
   "response": [
     {
+      "filename": "EvolutionX-17.0-20261116-onyx-12.4-Unofficial.zip",
+      "size": 5210032734,
+      "sha256": "4b775934b341455c18a23abe69aafebfaf70875760878aec6ea262002e8da5fa",
+      "timestamp": 1794815245,
+      "version": "12.4",
+      "buildtype": "userdebug",
+      "md5": "58ac9d436f038038896b9e443862ef36",
+      "maintainer": "Loukious",
+      "oem": "Xiaomi",
+      "device": "POCO F7",
+      "download": "https://downloads.sourceforge.net/project/onyx-evox-loukious/EvolutionX-17.0-20261116-onyx-12.4-Unofficial.zip",
+      "forum": "https://github.com/Loukious/crave_aosp_builder/discussions",
+      "firmware": "https://sourceforge.net/projects/onyx-evox-loukious/files/",
+      "paypal": "https://buymeacoffee.com/loukious",
+      "github": "Loukious",
+      "os_sdk_level": 37,
+      "os_patch_level": "2026-11-01"
+    },
+    {
       "filename": "EvolutionX-17.0-20261115-onyx-12.4-Unofficial.zip",
       "size": 5209702608,
       "sha256": "b11c91aa27984d6e57613f3a931218d90660bc439d0a5f86f51cc6441a216018",
