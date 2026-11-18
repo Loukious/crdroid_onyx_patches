@@ -25,7 +25,7 @@ submit this readable command from the normal Crave devspace project directory:
 ```sh
 crave -n run --projectID 99 --no-patch --disable-build-cache \
   --artifacts 'abi-diagnostics/*.tar.gz' -- \
-  'git clone --depth 1 --branch evolution-cnb https://github.com/Loukious/crdroid_onyx_patches /tmp/onyx-abi-diagnostics-recipe && bash /tmp/onyx-abi-diagnostics-recipe/ci/crave-abi-trace.sh'
+  'git clone --depth 1 --branch evolution-cnb-onyx618 https://github.com/Loukious/crdroid_onyx_patches /tmp/onyx-abi-diagnostics-recipe && bash /tmp/onyx-abi-diagnostics-recipe/ci/crave-abi-trace.sh'
 ```
 
 Use a fresh checkout directory if that `/tmp` path already exists. The script

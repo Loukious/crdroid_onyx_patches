@@ -6,7 +6,7 @@ from this repo over `raw.githubusercontent.com`, and
 the app here:
 
 ```
-https://raw.githubusercontent.com/Loukious/crdroid_onyx_patches/evolution-bka/ota/{device}.json
+https://raw.githubusercontent.com/Loukious/crdroid_onyx_patches/evolution-cnb-onyx618/ota/{device}.json
 ```
 
 ## Why it exists
@@ -18,12 +18,23 @@ weekly as an update to this build, and flashing it would take the local patch
 set, the LHDC codec and the Kono-Ha kernel with it. Pointing at a file we
 control means that can never happen by accident.
 
-## It is a live feed now (2026-08-30)
+## Published feed and default branch (2026-11-18)
 
-This file is updated automatically by the publish step of
-`Loukious/crave_aosp_builder`'s `crdroid-onyx.yml` workflow: after a build's
-zip lands on SourceForge, the workflow commits an entry for it here (one entry
-per build, newest first). Every entry's `download` URL points at the
+The default patches branch is now `evolution-cnb-onyx618`. Its feed and changelog
+preserve the exact published contents from `evolution-cnb` commit `ad7da3b`,
+including the November 13, 15 and 16 Android 17 releases. The active Updater
+patch fetches this new branch.
+
+Future publication jobs must target `evolution-cnb-onyx618`. External dated
+publication runners and workflows that still pin `evolution-cnb` require a
+separate update before publishing to the new default branch. The existing
+`evolution-cnb` and `evolution-bka` feeds remain available for already installed
+ROMs that use those URLs; changing this source patch takes effect in a rebuilt
+Updater/ROM.
+
+The publish step historically ran in `Loukious/crave_aosp_builder`'s
+`crdroid-onyx.yml` workflow: after a build's zip lands on SourceForge, it commits
+one entry per build, newest first. Every entry's `download` URL points at the
 SourceForge `/download` link, same pattern crDroid's own OTA feed uses. The
 Updater's parser (`org.evolution.updater.misc.Utils.parseJsonUpdate`)
 getString()s nine fields per entry -- timestamp, filename, md5, size,
@@ -33,9 +44,7 @@ entry carries. `timestamp` is the zip's `post-timestamp` from
 what `Utils.isCompatible()` compares against, so each new build sorts as
 newer than the previous one.
 
-Note: this branch's feed (`evolution-bka`) is the one the flashed Evolution X
-build already fetches, so updates appear on the phone with no reflash. The
-`crdroid-16.0` branch copy stays `{"response": []}` -- any old crDroid ROM
+The `crdroid-16.0` branch copy stays `{"response": []}` -- any old crDroid ROM
 pointing there simply sees "no updates", which is correct (those builds are
 superseded).
 

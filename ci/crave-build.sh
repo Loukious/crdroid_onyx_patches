@@ -2,10 +2,9 @@
 #
 # Sync + patch + build Evolution X for onyx (POCO F7).
 #
-# Branch evolution-cnb of this repo = EXPERIMENTAL Android 17 (Evolution X
-# 'cnb') on top of the unchanged 16.0 device-side stack, because no onyx
-# device tree exists at 17.0 yet. The A16 recipe lives on the evolution-bka
-# branch; keep both in mind when porting fixes between them.
+# Default branch evolution-cnb-onyx618 carries Android 17 (Evolution X 'cnb')
+# with source-built Onyx 6.18 kernel integration. The A16 recipe lives on the
+# evolution-bka branch; keep both in mind when porting fixes between them.
 #
 # This runs ON A CRAVE BUILD SERVER, with the working directory set to the ROM
 # source root -- never in the Devspace CLI, where `repo sync` and `make` are

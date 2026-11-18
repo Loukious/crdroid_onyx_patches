@@ -233,6 +233,11 @@ corrected device trees, ABI and config sync as one pinned project.
 The four source-kernel/WLAN projects are absent; their old local checkouts and
 changes were archived under `~/Android/rom-sync-backups/konoha-activation-20261104T200158Z`.
 
+On November 18, 2026, the matching patches branch was renamed to
+`Loukious/crdroid_onyx_patches:evolution-cnb-onyx618` and made the repository's
+default branch. The separate local-manifest repository keeps its
+`evolution-cnb-konoha618` name.
+
 Real prebuilt sync, hashes, module CRCs/vermagic, exact source snapshots,
 manifest/XML parsing, import checks and repeat configuration checks passed.
 No ROM/kernel compilation, partition image generation, workflow dispatch or

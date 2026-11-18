@@ -5,7 +5,7 @@ kept as patches so the tree can be `repo sync`'d freely and re-patched
 afterwards. Driven by `apply.sh`.
 
 ```sh
-git clone -b evolution-cnb-konoha618 https://github.com/Loukious/crdroid_onyx_patches /tmp/patches
+git clone -b evolution-cnb-onyx618 https://github.com/Loukious/crdroid_onyx_patches /tmp/patches
 /tmp/patches/apply.sh /path/to/rom
 ```
 
@@ -386,7 +386,7 @@ Rebased and round-trip verified against the synced Evolution X `cnb` tree:
 |---|---|
 | `packages_apps_Evolver/0001-gesture-navbar-space-ui` | new — replaces the crDroidSettings patch, which died with crDroid |
 | `packages_apps_Settings/0001-gesture-navbar-space-ui` | rewritten. Evo's `SystemSettingListPreference` persists to `Settings.System` itself, so the 43 lines of Java the crDroid version carried are gone; the patch is now one XML block |
-| `packages_apps_Updater/0001-self-hosted-ota-url` | re-aimed at Evo's `strings.xml` and at the current `evolution-cnb` branch of this repo |
+| `packages_apps_Updater/0001-self-hosted-ota-url` | re-aimed at Evo's `strings.xml`; OTA and changelog URLs now use this repo's default `evolution-cnb-onyx618` branch |
 
 The current layered tree has already been rebased and focused-build validated;
 there is no remaining Android 16 patch-application step before the product build.
@@ -485,7 +485,10 @@ firmware SHA1). The generator no longer resurrects them.
 
 ## Manifest-synced Onyx 6.18 source builds
 
-Use `local_manifests_onyx:evolution-cnb-konoha618` with this branch. The manifest
+This repository's default branch is `evolution-cnb-onyx618`, renamed from
+`evolution-cnb-konoha618` on November 18, 2026. Use
+`local_manifests_onyx:evolution-cnb-konoha618` with it; the separate local-manifest
+repository retains its branch name. The manifest
 syncs `Loukious/onyx-android17-6.18:android17-6.18-lts` into
 `kernel/platform/kernel-6.18`. `apply.sh` selects its `port/rom/BoardConfig.mk`
 and skips the older 6.6 source patches, release Image download and WLAN overlay.
