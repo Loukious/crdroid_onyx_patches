@@ -32,6 +32,17 @@ patch conflict still stops the build. See [guard behavior and validation](notes/
 
 ## Key carried features
 
+**Stock Onyx auto-brightness** — framework patch `0018` ports HyperOS main/rear
+sensor arbitration, absolute hysteresis, touch/torch/pocket handling and brightness
+ramps. Device patch `0025` enables the policy; vendor patch `0004` corrects both
+panel conversion maps and the copied integer ramp scale. The existing stock
+129-point calibration is preserved. A rebuilt ROM and device testing are required;
+see [reference defaults and validation](notes/stock-auto-brightness.md).
+
+Framework patch `0019` also accepts brightness-mode taps immediately after a
+slider drag, while the shade's return animation finishes. This SystemUI fix
+requires a rebuilt SystemUI; it is separate from the installed KernelSU trial.
+
 **Gesture navigation space** — an extra settable inset below the gesture pill.
 `frameworks/base` (`Settings.java`, `DisplayPolicy.java`) plus a UI half that is
 split across two projects for a reason that is not obvious: the `ListPreference`
@@ -135,12 +146,10 @@ notification path. This fixes duplicate completion without changing fingerprint
 routing or authentication policy. It requires a rebuilt fingerprint service/ROM;
 see [the HAL contract and regression checks](notes/fingerprint-cancellation.md).
 
-**Home double-tap sleep** — framework patch `0015` stops the home-screen
-gesture monitor while the notification shade or Quick Settings is open. This
-prevents rapid Caffeine tile taps from putting the phone to sleep, clears
-pending gestures when the shade opens, and preserves normal home double-tap.
-It requires a rebuilt SystemUI/ROM; see
-[the cause and regression checks](notes/home-double-tap-shade.md).
+**Retired home double-tap shade experiment** — former framework patch `0015`
+is removed from the active patch set, application rules and generator. Its
+shade-exclusion behavior is no longer carried. The original diagnosis and host
+regression results remain in [the historical note](notes/home-double-tap-shade.md).
 
 **Lockscreen keypad cancellation** — the legacy bouncer bridge in framework
 patch `0009` checks the current manual transition and swipe position before
@@ -197,6 +206,7 @@ patches/device_xiaomi_onyx/                   0001-vendor-extra-kernel-hook
                                               0022-label-radio-customized-region-property
                                               0023-install-audio-memory-logger-config
                                               0024-package-source-usb-wifi-firmware
+                                              0025-enable-stock-auto-brightness
 patches/external_iw/                         0001-vendor-nested-data-option
 patches/frameworks_base/                      0001-gesture-navbar-space
                                               0003-secure-spaces-full-user-type
@@ -211,7 +221,8 @@ patches/frameworks_base/                      0001-gesture-navbar-space
                                               0012-fix-notification-blur-inflation-thread
                                               0013-fix-wifi-data-usage-query
                                               0014-pool-notification-history-strings
-                                              0015-exclude-shade-from-home-double-tap-sleep
+                                              0018-stock-onyx-auto-brightness
+                                              0019-fix-brightness-mode-tap-after-drag
 patches/frameworks_opt_telephony/             0001-apply-lte-ca-override-before-state-comparison
 retired/hardware_nxp_nfc/                     0001-fix-client-thread-teardown-race (NOT applied)
 patches/hardware_xiaomi/                      0001-fix-fingerprint-cancel-completion
@@ -229,6 +240,7 @@ patches/system_vold/                          0001-secure-auth-key-erasure
 patches/vendor_gms/                           0001-keep-aosp-dialer
 patches/vendor_lineage/                       0001-kernel-bin-override
 patches/vendor_qcom_opensource_interfaces/    0001-lhdc-aidl
+patches/vendor_xiaomi_onyx/                   0004-stock-brightness-display-config
 retired/vendor_xiaomi_onyx/                   0001-firmware-sha1s-g303-cn305-hybrid (NOT applied)
 ```
 

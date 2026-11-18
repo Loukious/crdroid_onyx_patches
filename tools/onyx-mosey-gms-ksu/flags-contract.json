@@ -1,0 +1,88 @@
+{
+  "gms_version_code": 264630035,
+  "mosey_version_code": 60715,
+  "namespace": "mosey_app_android#com.google.android.mosey",
+  "flags": {
+    "45768305": {
+      "db_type": 2,
+      "sqlite_storage": "integer",
+      "desired": true,
+      "apk_getter": "dlr.w / bki.b",
+      "default": false
+    }
+  },
+  "captured_flagset_sha256": "ae73a7028c5225ff93d457d69b23c2f9cfdd828b02217780a404d4e8d3162b03",
+  "sql_sha256": "cdffc9f537f9f60b5c84b4c439a750d4ed8d632a6805d1f7ffeefb1de6422b77",
+  "accepted_compressed_snapshots": [
+    {
+      "sha256": "ae73a7028c5225ff93d457d69b23c2f9cfdd828b02217780a404d4e8d3162b03",
+      "size": 886,
+      "flags_count": 61
+    },
+    {
+      "sha256": "5c641897bc44713bb9a0ef9062f8cb9d51e74f45a9a10872938ac1b2284f9201",
+      "size": 823,
+      "flags_count": 33,
+      "country_map_sha256": "6a805a93633e566dc36e601ae8ecb0fe11cda64011e1de88324b2f5d94ce7eb3"
+    }
+  ],
+  "legacy_country_migration": {
+    "flag": "45718707",
+    "managed": false,
+    "legacy_contract": {
+      "db_type": 5,
+      "sqlite_storage": "blob",
+      "protobuf": "map<string,int32> field 1",
+      "changed_entry": {
+        "country": "TN",
+        "before": 149,
+        "after": 6
+      },
+      "country_count": 263,
+      "captured_other_country_diff_from_apk_default": {
+        "PS": {
+          "captured": 44,
+          "apk_default": 149
+        }
+      },
+      "accepted_maps": [
+        {
+          "name": "captured",
+          "before_size": 2329,
+          "before_sha256": "6a805a93633e566dc36e601ae8ecb0fe11cda64011e1de88324b2f5d94ce7eb3",
+          "desired_size": 2328,
+          "desired_sha256": "8edd37badfc0cb426440b5c7e22c4332d055e88751e60590ac60db8d4bf3183a"
+        },
+        {
+          "name": "apk_default",
+          "before_size": 2330,
+          "before_sha256": "665f87944085b6ceb4787bc1a4f7bac7130315880ca1a36f33cfe3b102d3ca57",
+          "desired_size": 2329,
+          "desired_sha256": "457e943c0f5357b213e95fc70933951a92a6a324666743c3c702b0b08c4ae12a"
+        }
+      ]
+    },
+    "behavior": "Restore only the original CE/DE/cache country entry or remove an exactly owned module-created entry; never write a country pin on new installs.",
+    "ownership": "Independent immutable legacy app/cache baseline plus exact legacy value/type/source/link checks; reject unknown writers before migration.",
+    "after_release": "Permanent baseline-bound release marker; later GMS country updates remain unmanaged."
+  },
+  "managed_flags": {
+    "com.google.android.gms.nearby": {
+      "45704091": true
+    },
+    "mosey_app_android#com.google.android.mosey": {
+      "45768305": true
+    }
+  },
+  "sql_file_sha256": {
+    "mosey-flags.sql": "cdffc9f537f9f60b5c84b4c439a750d4ed8d632a6805d1f7ffeefb1de6422b77",
+    "inspect-mosey.sql": "62d0e46cb0c1495e7b55f3bb7bccfe7c74be52eff141d491089e80140ad488eb",
+    "inspect-mosey-de.sql": "7c5b76239438ef892b1e855a682ffed7967675d0f643bda19ddc7cccd940376c",
+    "apply-mosey.sql": "c034327ce422ea84336ce169a46fe42f4c0878f4f2f446727e6e3591d45a8c78",
+    "apply-mosey-de.sql": "d547bc5bd935b4c3b52b02f7b63eea797c49ce54b8daef13f0967c231304e344",
+    "rollback-mosey.sql": "f7fb9e8f09298dce00067377b575128f10786f077e581c415a9e5473be0582d3",
+    "rollback-mosey-de.sql": "b567aab68061f8c2bae1de9143612b0a834f2a513430a0f5d0672ed1b760f5a9",
+    "release-country.sql": "270104ade34fc7f31b944ed2bab604ae2c69ef534e17bbd676099bdcccfae705",
+    "release-country-de.sql": "0a0df83ec6c77f60e7ac9b3003c099272538116605952ebd4e68bc7d27778b80"
+  }
+}

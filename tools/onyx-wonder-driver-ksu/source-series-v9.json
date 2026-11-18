@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "target": {
+    "device": "onyx",
+    "android_sdk": 37,
+    "kernel_release": "6.18.63-android17-6-maybe-dirty-4k",
+    "payload_sha256": "54cf09f0dc27ac41eb9ce1cdc4bd4b5046d374520b4d773330d3a1a580b0b1d7"
+  },
+  "source_working_directory": "modules root: qcacld-3.0/ and qca-wifi-host-cmn/ must be direct children",
+  "accepted_baseline_manifest": "/home/loukious/Android/onyx-tracker-fix-20261116/workspace/artifacts/20261117T143428209411Z/inputs/module-source-hashes.json",
+  "accepted_baseline_manifest_sha256": "f86baaf3e7b2cf5da4b7c278ad6293e7f2710127df6f8bc28d0d0582ce4a5a33",
+  "files": {
+    "qca-wifi-host-cmn/dp/wifi3.0/monitor/dp_rx_mon.c": {
+      "baseline_sha256": "4d37ce1a24a21ac0e3c2c68536fb21fe33f782ce2a970a5b0159ee70e5efcfbb",
+      "v9_sha256": "da65177d29dd407441c0f49fe96a6cdfee5ad6b8b7dca9454c6fe6f4aadc4575"
+    },
+    "qcacld-3.0/components/dp/core/src/wlan_dp_txrx.c": {
+      "baseline_sha256": "c6797d865f15f8dc3cf1f0366358de2fd6311cdb916210ffbc18f4d3446a326b",
+      "v9_sha256": "d48d8d03b678b3c164591c5494a8a52a546e18a13d8dfd61d0366d1f75627de6"
+    },
+    "qcacld-3.0/components/mlme/core/inc/wlan_mlme_main.h": {
+      "baseline_sha256": "fdef094e26e8a4a5f4ca0b0a31de9bcf50c76c7d4352fe9d3909389c5f207c55",
+      "v9_sha256": "14f2a3ecd2aaaffeeb43963052ee069711273a91f48725e72bbd80617ce21bc3"
+    },
+    "qcacld-3.0/components/mlme/dispatcher/inc/wlan_mlme_sta_mon.h": {
+      "baseline_sha256": "0a08b13dbb806d3c98f1581ca613b08b4a460a977992911594d3f49dbd842eed",
+      "v9_sha256": "0859b11e3014ee06fa335f23f3d425763c20bcce25fd2b137a28e6ee93a35577"
+    },
+    "qcacld-3.0/components/mlme/dispatcher/src/wlan_mlme_api.c": {
+      "baseline_sha256": "32ff4f6818dc48de4b69646446cd61a31d3203253e683491ed830293bb874866",
+      "v9_sha256": "30071b17b002005deff9bedcc0045f0857240580f784f73f3975b8fcdb90349c"
+    },
+    "qcacld-3.0/core/hdd/inc/wlan_hdd_wonder.h": {
+      "baseline_sha256": "63821111e5bff5c9b7c0d5e3e756b39b6773494772b8b145eab9189f1c1bed78",
+      "v9_sha256": "b80de058fa558f4b62a5539523622c9781f778b2f7f6060933b3e329f700916f"
+    },
+    "qcacld-3.0/core/hdd/inc/wlan_hdd_wonder_peer.h": {
+      "baseline_sha256": "37c5c70825a5c365b6a125695e7ed0a99e392337f43ba7995098b96e64426830",
+      "v9_sha256": "30b7bc40f9945b0416737a887db3b392cc8d119e7d164940fea15fc63c43ed44"
+    },
+    "qcacld-3.0/core/hdd/inc/wlan_hdd_wonder_rate.h": {
+      "baseline_sha256": null,
+      "v9_sha256": "e5239deb853093f9cb9b3e51f39bb9b1eff9ddd40d25d9b57245fbadeca2bd48"
+    },
+    "qcacld-3.0/core/hdd/src/wlan_hdd_main.c": {
+      "baseline_sha256": "4179bbdbe887e70b49f3574f49025728ee20cb5cbd0d90e242ff65447cd21d61",
+      "v9_sha256": "e6cb3cfeafd1bbcd201f3fe9cebe5252d50bbf2ca5e879506c21aaacbd59a117"
+    },
+    "qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c": {
+      "baseline_sha256": "c2e6460535c293ccc6e04438e0a109d1cda56cc06937bee8b0bbf526ada8f232",
+      "v9_sha256": "fc02e76b25cf7f86a7748f3daaa651466cbf73c69c30885d053426a6da20932a"
+    },
+    "qcacld-3.0/core/hdd/src/wlan_hdd_wonder_peer.c": {
+      "baseline_sha256": "7b37fe68da747f3a3785d48e9b390779a1f2bd164014e49085f1951309b16da6",
+      "v9_sha256": "9b2794ed5542b5ad232d05af3b155bca149803164aca51a456564d44a3f77cc5"
+    }
+  },
+  "patches": [
+    {
+      "name": "0001-wonder-monitor-lifecycle.patch",
+      "strip": 1,
+      "sha256": "42f51792b780d031124cbe92c9924b2ad24ba850b2ec8ad71d3495972aed470f"
+    },
+    {
+      "name": "0002-wonder-monitor-rx-header.patch",
+      "strip": 1,
+      "sha256": "30ee3dd6eec6c771922950b53401d466a87a25ca7daada4e4d3cbc3ad24872c5"
+    },
+    {
+      "name": "0003-wonder-session-scan-lease.patch",
+      "strip": 2,
+      "sha256": "b46e7d5e64fbbddc5787731b5aad8665aef7f18d57df6004ae7c29ce393dada4"
+    },
+    {
+      "name": "0004-wonder-compact-awdl-rx.patch",
+      "strip": 1,
+      "sha256": "1b11c99e631ceb8431111579180b7efccbf9e897a86b8488a55d3cf50973764a"
+    },
+    {
+      "name": "0005-wonder-apfree-native-and-peer-rates.patch",
+      "strip": 1,
+      "sha256": "af5fdd9be00286c9b3a045d59df5288f55c0adc5885b7b43543298917daca99a"
+    },
+    {
+      "name": "0006-wonder-compact-unknown-raw-rx.patch",
+      "strip": 1,
+      "sha256": "a471294000d2edd9439e5b76c4231d36db87c71249ffba0b11db3cdeda4a7806"
+    }
+  ],
+  "source_only": true,
+  "device_changes": false,
+  "kernel_or_rom_build": false,
+  "added_patch_scope": {
+    "0005-wonder-apfree-native-and-peer-rates.patch": "v6 to v8: enabled unassociated STA lease, native START/cleanup, pre-vdev channel validation, destination-compatible transmit rates",
+    "0006-wonder-compact-unknown-raw-rx.patch": "v8 to v9: copy complete validated compact unknown-peer RAW MPDU, preserving original bytes/FCS/ownership"
+  },
+  "references": [
+    {
+      "path": "/home/loukious/Android/mosey-extended-review-20261116/README.md",
+      "sha256": "8557934b20648e1e94ad8013024eb70514912ae9d0b19aef43fb228c499cd9b3",
+      "reference_only": true
+    },
+    {
+      "path": "/home/loukious/Android/mosey-extended-review-20261116/module.prop",
+      "sha256": "d904e0382547d631b7f9d32019c66f66ec05cb0f57021ed377851ee6d1b4d54d",
+      "reference_only": true
+    },
+    {
+      "path": "/home/loukious/Android/wonder-research-20261116/opairdrop/module/service.sh",
+      "sha256": "b1b320077fe1031f09bd45b8845d11846acfda7b5acf0596601446b2a1df4637",
+      "reference_only": true
+    },
+    {
+      "path": "/home/loukious/Android/wonder-research-20261116/opairdrop/native/config.c",
+      "sha256": "2bde06a458d6b32f79c0698e0c733790b883d787334cabcca100b130912ad1d3",
+      "reference_only": true
+    }
+  ],
+  "baseline_fixture_reconstruction": {
+    "source_root": "/home/loukious/Android/onyx-wonder-coex-dev-20261117/mosey-activation-fix-20261117T161143423932Z/goal-working-20261117/native-capability-integration/wonder-driver-lifecycle-fix-20261117T201814462721Z/retained-ddk-build/source/onyx",
+    "reverse_patch": "/home/loukious/Android/onyx-wonder-coex-dev-20261117/mosey-activation-fix-20261117T161143423932Z/goal-working-20261117/native-capability-integration/wonder-driver-lifecycle-fix-20261117T201814462721Z/lifecycle-fix.patch",
+    "reverse_patch_sha256": "cc1f20b3393b9d612deb0db8c93ed1e36dcd8856e48c946c56e01be72e82d177",
+    "direction": "reverse",
+    "verification": "every existing file matches the accepted installed artifact module-source-hashes.json before applying the six-patch series"
+  },
+  "all_retained_v6_v9_source_differences": [
+    "qca-wifi-host-cmn/dp/wifi3.0/monitor/dp_rx_mon.c",
+    "qcacld-3.0/components/mlme/dispatcher/inc/wlan_mlme_sta_mon.h",
+    "qcacld-3.0/components/mlme/dispatcher/src/wlan_mlme_api.c",
+    "qcacld-3.0/core/hdd/inc/wlan_hdd_wonder.h",
+    "qcacld-3.0/core/hdd/inc/wlan_hdd_wonder_peer.h",
+    "qcacld-3.0/core/hdd/inc/wlan_hdd_wonder_rate.h",
+    "qcacld-3.0/core/hdd/src/wlan_hdd_main.c",
+    "qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c",
+    "qcacld-3.0/core/hdd/src/wlan_hdd_wonder_peer.c"
+  ],
+  "all_retained_source_differences_accounted": true
+}

@@ -1,0 +1,10 @@
+ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  User 0 active services:
+  * ServiceRecord{6897da3 u0 com.google.android.mosey/.ExternalSharingService c:com.android.shell}
+    intent={cmp=com.google.android.mosey/.ExternalSharingService}
+    app=ProcessRecord{1ee5269 13590:com.google.android.mosey/u0a638}
+    isForeground=false
+  * ServiceRecord{4455667 u0 com.google.android.mosey/SPECIAL_USE:FgsDelegate c:com.google.android.mosey}
+    app=ProcessRecord{1ee5269 13590:com.google.android.mosey/u0a638}
+    isForeground=true
+    isFgsDelegate=true

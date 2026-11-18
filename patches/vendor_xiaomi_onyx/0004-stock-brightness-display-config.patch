@@ -1,0 +1,64 @@
+diff --git a/proprietary/vendor/etc/displayconfig/display_id_4630947173316895379.xml b/proprietary/vendor/etc/displayconfig/display_id_4630947173316895379.xml
+index 95c0122..9ce3d5f 100644
+--- a/proprietary/vendor/etc/displayconfig/display_id_4630947173316895379.xml
++++ b/proprietary/vendor/etc/displayconfig/display_id_4630947173316895379.xml
+@@ -2,7 +2,7 @@
+ <!-- MIUI ADD: Adapt_MIUIAdaptFrame-->
+ <displayConfiguration>
+     <!-- Global Brightness-Nit mapping -->
+-    <screenBrightnessMap>
++    <screenBrightnessMap interpolation="linear">
+         <point>
+             <value>0.000854597</value>
+             <nits>2.0</nits>
+@@ -16,6 +16,11 @@
+             <nits>3200.0</nits>
+         </point>
+     </screenBrightnessMap>
++    <!-- Stock 14-bit integer ramps normalized to Android's float brightness domain. -->
++    <screenBrightnessRampFastIncrease>0.3010010988</screenBrightnessRampFastIncrease>
++    <screenBrightnessRampFastDecrease>0.3010010988</screenBrightnessRampFastDecrease>
++    <screenBrightnessRampSlowIncrease>0.2408130875</screenBrightnessRampSlowIncrease>
++    <screenBrightnessRampSlowDecrease>0.2408130875</screenBrightnessRampSlowDecrease>
+     <!-- root node for HBM-->
+     <highBrightnessMode enabled="true">
+         <!-- Transition point brightness from normal to HBM mode -->
+@@ -52,4 +57,4 @@
+     <ambientLightHorizonLong>1500</ambientLightHorizonLong>
+     <ambientLightHorizonShort>1000</ambientLightHorizonShort>
+ </displayConfiguration>
+-<!-- END Adapt_MIUIAdaptFrame-->
+\ No newline at end of file
++<!-- END Adapt_MIUIAdaptFrame-->
+diff --git a/proprietary/vendor/etc/displayconfig/display_id_4630947258895476883.xml b/proprietary/vendor/etc/displayconfig/display_id_4630947258895476883.xml
+index 95c0122..9ce3d5f 100644
+--- a/proprietary/vendor/etc/displayconfig/display_id_4630947258895476883.xml
++++ b/proprietary/vendor/etc/displayconfig/display_id_4630947258895476883.xml
+@@ -2,7 +2,7 @@
+ <!-- MIUI ADD: Adapt_MIUIAdaptFrame-->
+ <displayConfiguration>
+     <!-- Global Brightness-Nit mapping -->
+-    <screenBrightnessMap>
++    <screenBrightnessMap interpolation="linear">
+         <point>
+             <value>0.000854597</value>
+             <nits>2.0</nits>
+@@ -16,6 +16,11 @@
+             <nits>3200.0</nits>
+         </point>
+     </screenBrightnessMap>
++    <!-- Stock 14-bit integer ramps normalized to Android's float brightness domain. -->
++    <screenBrightnessRampFastIncrease>0.3010010988</screenBrightnessRampFastIncrease>
++    <screenBrightnessRampFastDecrease>0.3010010988</screenBrightnessRampFastDecrease>
++    <screenBrightnessRampSlowIncrease>0.2408130875</screenBrightnessRampSlowIncrease>
++    <screenBrightnessRampSlowDecrease>0.2408130875</screenBrightnessRampSlowDecrease>
+     <!-- root node for HBM-->
+     <highBrightnessMode enabled="true">
+         <!-- Transition point brightness from normal to HBM mode -->
+@@ -52,4 +57,4 @@
+     <ambientLightHorizonLong>1500</ambientLightHorizonLong>
+     <ambientLightHorizonShort>1000</ambientLightHorizonShort>
+ </displayConfiguration>
+-<!-- END Adapt_MIUIAdaptFrame-->
+\ No newline at end of file
++<!-- END Adapt_MIUIAdaptFrame-->

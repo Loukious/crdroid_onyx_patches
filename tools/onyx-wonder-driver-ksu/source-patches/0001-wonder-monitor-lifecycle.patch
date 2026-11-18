@@ -1,0 +1,185 @@
+--- a/qcacld-3.0/core/hdd/src/wlan_hdd_main.c
++++ b/qcacld-3.0/core/hdd/src/wlan_hdd_main.c
+@@ -8642,10 +8642,14 @@
+ {
+ 	int ret;
+ 
+-	if (params->is_add_virtual_iface)
++	if (params->is_add_virtual_iface) {
+ 		ret = wlan_cfg80211_register_netdevice(dev);
+-	else
++		/* Match cleanup even when creation fails before the caller returns. */
++		if (!ret)
++			adapter->is_virtual_iface = true;
++	} else {
+ 		ret = register_netdevice(dev);
++	}
+ 
+ 	return ret;
+ }
+@@ -11052,7 +11056,7 @@
+ 
+ 	for (i = 0; i < NET_DEV_HOLD_ID_MAX; i++)
+ 		qdf_atomic_init(
+-			&adapter->net_dev_hold_ref_count[NET_DEV_HOLD_ID_MAX]);
++			&adapter->net_dev_hold_ref_count[i]);
+ 
+ 	/* Add it to the hdd's session list. */
+ 	status = hdd_add_adapter_back(hdd_ctx, adapter);
+--- a/qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c
++++ b/qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c
+@@ -25,6 +25,7 @@
+ #include "osif_psoc_sync.h"
+ #include "osif_vdev_sync.h"
+ #include "wlan_reg_ucfg_api.h"
++#include "wlan_dp_ucfg_api.h"
+ 
+ #ifdef FEATURE_WLAN_WONDER
+ 
+@@ -64,6 +65,21 @@
+ MODULE_PARM_DESC(wonder_sta_offchan_probe,
+ 	"Enable experimental STA off-channel dwell probes (default off; normal Wonder TX options remain unsupported)");
+ 
++static int hdd_wonder_lifecycle_revision_get(char *buffer,
++					    const struct kernel_param *param)
++{
++	(void)param;
++	return scnprintf(buffer, PAGE_SIZE, "1\n");
++}
++
++static const struct kernel_param_ops hdd_wonder_lifecycle_revision_ops = {
++	.get = hdd_wonder_lifecycle_revision_get,
++};
++module_param_cb(wonder_lifecycle_revision, &hdd_wonder_lifecycle_revision_ops,
++		NULL, 0444);
++MODULE_PARM_DESC(wonder_lifecycle_revision,
++	"Read-only Wonder monitor registration and synchronization revision");
++
+ static int hdd_wonder_coex_stats_get(char *buffer, const struct kernel_param *param)
+ {
+ 	struct hdd_wonder_session *session;
+@@ -168,6 +184,8 @@
+ 	/* cfg80211_unregister_netdevice requires the vendor wiphy mutex. */
+ 	wiphy_lock(provider->hdd_ctx->wiphy);
+ 	hdd_close_adapter(provider->hdd_ctx, adapter, true);
++	/* Filter reset and native unbind need the monitor flags through cleanup. */
++	ucfg_dp_set_mon_conf_flags(provider->hdd_ctx->psoc, 0);
+ 	wiphy_unlock(provider->hdd_ctx->wiphy);
+ 	if (vdev_sync)
+ 		osif_vdev_sync_destroy(vdev_sync);
+@@ -599,7 +617,8 @@
+ {
+ 	struct hdd_wonder_provider *provider;
+ 	struct hdd_wonder_session *session;
+-	struct osif_psoc_sync *psoc_sync;
++	struct osif_psoc_sync *psoc_sync = NULL;
++	struct osif_vdev_sync *create_sync, *vdev_sync;
+ 	struct hdd_context *hdd_ctx;
+ 	struct net_device *existing;
+ 	u8 mac[ETH_ALEN];
+@@ -673,14 +692,25 @@
+ 		goto restart_idle;
+ 	}
+ 	ether_addr_copy(mac, params->mac_addr);
++	ret = osif_vdev_sync_create_and_trans(hdd_ctx->parent_dev, &create_sync);
++	if (ret)
++		goto free_session;
++	if (!wlan_mlme_sta_mon_admission_begin(hdd_ctx->psoc)) {
++		ret = -EBUSY;
++		goto destroy_sync;
++	}
+ 	wiphy_lock(hdd_ctx->wiphy);
+ 	ret = hdd_wonder_add_monitor(hdd_ctx, &session->adapter,
+ 				     HDD_WONDER_NETDEV, mac);
+ 	wiphy_unlock(hdd_ctx->wiphy);
+-	if (ret) {
+-		kfree(session);
+-		goto restart_idle;
+-	}
++	wlan_mlme_sta_mon_admission_end(hdd_ctx->psoc);
++	if (ret)
++		goto destroy_sync;
++	/* Match nl80211 monitor setup before ndo_open and native RX binding. */
++	ucfg_dp_set_mon_conf_flags(hdd_ctx->psoc, QDF_MONITOR_FLAG_OTHER_BSS |
++		(session->adapter->sta_mon_coexist ? QDF_MONITOR_FLAG_STA_COEX : 0));
++	osif_vdev_sync_register(session->adapter->dev, create_sync);
++	osif_vdev_sync_trans_stop(create_sync);
+ 	provider->session = session;
+ 	WRITE_ONCE(session->adapter->wonder_owned, true);
+ 	WRITE_ONCE(hdd_wonder_standalone_active,
+@@ -691,7 +721,13 @@
+ 		session->peer = NULL;
+ 		goto close_session;
+ 	}
++	/* ndo_open drains parent operations; do not wait on our own psoc op. */
++	osif_psoc_sync_op_stop(psoc_sync);
++	psoc_sync = NULL;
+ 	ret = dev_open(session->adapter->dev, NULL);
++	if (ret)
++		goto close_session;
++	ret = osif_vdev_sync_op_start(session->adapter->dev, &vdev_sync);
+ 	if (ret)
+ 		goto close_session;
+ 	wiphy_lock(hdd_ctx->wiphy);
+@@ -700,24 +736,24 @@
+ 			HDD_WONDER_COEX_MAX_DWELL_NS, &completed_ns);
+ 	wiphy_unlock(hdd_ctx->wiphy);
+ 	if (ret)
+-		goto close_session;
++		goto stop_vdev_close_session;
+ 	ret = hdd_wonder_peer_validate_rate(session->peer, &params->tx_rate);
+ 	if (ret)
+-		goto close_session;
++		goto stop_vdev_close_session;
+ 	session->tx_rate = params->tx_rate;
+ 	session->sched = hdd_wonder_sched_create(session->adapter, session,
+ 						&hdd_wonder_sched_ops);
+ 	if (IS_ERR(session->sched)) {
+ 		ret = PTR_ERR(session->sched);
+ 		session->sched = NULL;
+-		goto close_session;
++		goto stop_vdev_close_session;
+ 	}
+ 	ret = hdd_wonder_bind_clock(session, false);
+ 	if (ret)
+-		goto close_session;
++		goto stop_vdev_close_session;
+ 	ret = hdd_wonder_airtime(session, true);
+ 	if (ret)
+-		goto close_session;
++		goto stop_vdev_close_session;
+ 	hdd_wonder_sched_note_channel(session->sched, params->channel.freq,
+ 				      params->channel.bandwidth, completed_ns);
+ 	rcu_assign_pointer(hdd_wonder_active, session);
+@@ -725,15 +761,30 @@
+ 	hdd_info("Experimental Wonder monitor transport ready on %s, %u MHz",
+ 		 HDD_WONDER_NETDEV, params->channel.freq);
+ 	ret = 0;
++	osif_vdev_sync_op_stop(vdev_sync);
+ 	goto stop_op;
+ 
++stop_vdev_close_session:
++	osif_vdev_sync_op_stop(vdev_sync);
+ close_session:
++	/* ndo_stop and sync teardown must not drain an operation owned here. */
++	if (psoc_sync) {
++		osif_psoc_sync_op_stop(psoc_sync);
++		psoc_sync = NULL;
++	}
+ 	hdd_wonder_close_session(provider);
++	goto restart_idle;
++destroy_sync:
++	osif_vdev_sync_trans_stop(create_sync);
++	osif_vdev_sync_destroy(create_sync);
++free_session:
++	kfree(session);
+ restart_idle:
+ 	if (!hdd_is_any_interface_open(hdd_ctx))
+ 		hdd_psoc_idle_timer_start(hdd_ctx);
+ stop_op:
+-	osif_psoc_sync_op_stop(psoc_sync);
++	if (psoc_sync)
++		osif_psoc_sync_op_stop(psoc_sync);
+ unlock:
+ 	mutex_unlock(&hdd_wonder_lock);
+ 	return ret;

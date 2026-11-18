@@ -1,0 +1,278 @@
+--- a/qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c
++++ b/qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c
+@@ -54,6 +54,7 @@
+ 	bool airtime_enabled;
+ 	bool suspended;
+ 	bool failed;
++	bool native_group_ready;
+ 	/* Only the init transaction reads this before the RCU session is live. */
+ 	bool exclusive_bootstrap;
+ };
+@@ -72,6 +73,11 @@
+ static struct hdd_wonder_session __rcu *hdd_wonder_active;
+ static bool wonder_enabled = true;
+ static bool wonder_sta_offchan_probe;
++static bool wonder_native_group_tx = true;
++module_param_cb(wonder_native_group_tx, &param_ops_bool,
++		&wonder_native_group_tx, 0444);
++MODULE_PARM_DESC(wonder_native_group_tx,
++	"Use native WMI multicast data TX on the exclusive AWDL channel (default on)");
+ static bool hdd_wonder_standalone_active;
+ module_param(wonder_enabled, bool, 0444);
+ MODULE_PARM_DESC(wonder_enabled,
+@@ -320,6 +326,7 @@
+ 	struct hdd_monitor_ctx channel = { 0 };
+ 	struct wlan_channel shared;
+ 	u64 generation = 0;
++	bool exclusive = !adapter->sta_mon_coexist;
+ 	QDF_STATUS status;
+ 	int ret;
+ 
+@@ -337,6 +344,7 @@
+ 		if (!wlan_mlme_sta_mon_get_snapshot(hdd_ctx->psoc,
+ 				adapter->deflink->vdev_id, generation, &snapshot))
+ 			return -EAGAIN;
++		exclusive = snapshot.exclusive;
+ 		ret = hdd_wonder_peer_prepare(session->peer, shared.ch_freq, generation);
+ 		if (ret)
+ 			goto failed;
+@@ -448,6 +456,18 @@
+ 			goto failed;
+ 	}
+ 	session->channel = *params;
++	WRITE_ONCE(session->native_group_ready, false);
++	if (exclusive && READ_ONCE(wonder_native_group_tx)) {
++		struct wma_wonder_helper_snapshot helper;
++
++		ret = hdd_wonder_peer_get_helper(session->peer, &helper);
++		if (!ret) {
++			status = wma_wonder_offchan_prepare(adapter->deflink->vdev_id,
++				params->freq, adapter->mac_addr.bytes, generation, &helper);
++			ret = qdf_status_to_os_return(status);
++		}
++		WRITE_ONCE(session->native_group_ready, !ret);
++	}
+ 	return 0;
+ failed:
+ 	WRITE_ONCE(session->failed, true);
+@@ -564,12 +584,45 @@
+ 		    const struct cdp_tx_injection_params *params)
+ {
+ 	struct hdd_adapter *adapter = session->adapter;
++	const struct ieee80211_hdr *hdr = (const void *)skb->data;
+ 	struct cdp_tx_injection_params constrained = *params;
+ 	QDF_STATUS status;
+ 	void *token;
+ 
+-	hdd_wonder_peer_tx_rate(session->peer,
+-		((struct ieee80211_hdr *)skb->data)->addr1, &constrained);
++	hdd_wonder_peer_tx_rate(session->peer, hdr->addr1, &constrained);
++	if (READ_ONCE(wonder_native_group_tx) && READ_ONCE(session->native_group_ready) &&
++	    skb->len >= 24 && params->is_data &&
++	    ieee80211_is_data_present(hdr->frame_control) &&
++	    !ieee80211_has_protected(hdr->frame_control) &&
++	    !ieee80211_has_tods(hdr->frame_control) &&
++	    !ieee80211_has_fromds(hdr->frame_control) &&
++	    !ieee80211_has_morefrags(hdr->frame_control) &&
++	    !(le16_to_cpu(hdr->seq_ctrl) & IEEE80211_SCTL_FRAG) &&
++	    is_multicast_ether_addr(hdr->addr1) &&
++	    !memcmp(hdr->addr3, hdd_wonder_awdl_bssid, ETH_ALEN)) {
++		struct wma_wonder_helper_snapshot helper;
++		struct cdp_tx_injection_params native = constrained;
++		u32 frequency = READ_ONCE(session->channel.freq);
++		u64 generation = adapter->sta_mon_coexist ?
++			wlan_mlme_sta_mon_epoch(adapter->hdd_ctx->psoc) : 0;
++
++		if (!hdd_wonder_peer_get_helper(session->peer, &helper)) {
++			/* This AWDL group-data route uses firmware-assigned outer 802.11
++			 * sequence numbers and intrinsic group no-ACK behavior. Wonder's
++			 * generated flags have no wire fields in that command; AWDL's own
++			 * sequence and all packet addresses remain untouched.
++			 * Keep every other override subject to WMI rejection and retain
++			 * the original parameters for the HTT fallback.
++			 */
++			native.no_ack = false;
++			native.tx_flags &= ~(IEEE80211_RADIOTAP_F_TX_NOACK |
++					     IEEE80211_RADIOTAP_F_TX_NOSEQNO);
++			status = wma_wonder_offchan_tx(skb, adapter->deflink->vdev_id,
++				frequency, generation, &helper, frequency, &native,
++				NULL, NULL, NULL, NULL);
++			return status;
++		}
++	}
+ 	if (!session->coex)
+ 		return wma_injection_tx(skb, adapter->deflink->vdev_id, &constrained);
+ 
+@@ -711,8 +764,19 @@
+ 	if (!session || session->adapter != adapter ||
+ 	    smp_load_acquire(&session->suspended) || READ_ONCE(session->failed))
+ 		goto out;
+-	status = hdd_wonder_tx_mdns(session, skb, params) ?
+-		QDF_STATUS_SUCCESS : hdd_wonder_queue_tx(session, skb, params);
++	if (READ_ONCE(wonder_native_group_tx) &&
++	    READ_ONCE(session->native_group_ready)) {
++		status = hdd_wonder_queue_tx(session, skb, params);
++		/* A rejected native send has not consumed skb. Preserve discovery
++		 * when its bounded descriptor namespace or queue is exhausted.
++		 */
++		if (QDF_IS_STATUS_ERROR(status) &&
++		    hdd_wonder_tx_mdns(session, skb, params))
++			status = QDF_STATUS_SUCCESS;
++	} else {
++		status = hdd_wonder_tx_mdns(session, skb, params) ?
++			QDF_STATUS_SUCCESS : hdd_wonder_queue_tx(session, skb, params);
++	}
+ out:
+ 	rcu_read_unlock();
+ 	return qdf_status_to_os_return(status);
+--- a/qcacld-3.0/core/wma/src/wma_data.c
++++ b/qcacld-3.0/core/wma/src/wma_data.c
+@@ -2328,6 +2328,7 @@
+ 	uint64_t generation;
+ 	uint32_t home_frequency;
+ 	uint32_t frequency;
++	uint32_t desc_id;
+ 	uint8_t monitor_id;
+ 	bool (*begin)(void *arg, unsigned long *flags);
+ 	void (*end)(void *arg, unsigned long flags);
+@@ -2565,7 +2566,8 @@
+ static QDF_STATUS wma_wonder_offchan_send(qdf_nbuf_t nbuf, uint8_t monitor_id,
+ 		uint32_t home_frequency, uint64_t generation,
+ 		const struct wma_wonder_helper_snapshot *snapshot,
+-		uint32_t frequency, const struct cdp_tx_injection_params *tx_params,
++		uint32_t frequency, uint32_t desc_id,
++		const struct cdp_tx_injection_params *tx_params,
+ 		bool (*begin)(void *arg, unsigned long *flags),
+ 		void (*end)(void *arg, unsigned long flags), void *arg)
+ {
+@@ -2582,9 +2584,12 @@
+ 	int16_t power_dbm;
+ 	__le16 frame_control;
+ 	bool release = false;
+-
+-	if (!nbuf || !snapshot || !snapshot->cookie || !tx_params || !begin || !end ||
+-	    !home_frequency || !frequency || frequency == home_frequency ||
++	bool on_home = frequency == home_frequency && !begin && !end;
++
++	if (!nbuf || !snapshot || !snapshot->cookie || !tx_params ||
++	    !desc_id || desc_id > U16_MAX ||
++	    (!on_home && (!begin || !end || frequency == home_frequency)) ||
++	    !home_frequency || !frequency ||
+ 	    frequency > U16_MAX || qdf_nbuf_len(nbuf) < 24 ||
+ 	    qdf_nbuf_len(nbuf) > U16_MAX || qdf_nbuf_is_nonlinear(nbuf) ||
+ 	    qdf_nbuf_get_num_frags(nbuf) != 1 ||
+@@ -2601,6 +2606,13 @@
+ 	if (!wma_wonder_offchan_helper_valid(wma, monitor_id, home_frequency,
+ 				tx_params->interface_mac, generation, snapshot))
+ 		goto out;
++	if (on_home && generation) {
++		struct wlan_mlme_sta_mon_snapshot owner;
++
++		if (!wlan_mlme_sta_mon_get_snapshot(wma->psoc, monitor_id,
++						   generation, &owner) || !owner.exclusive)
++			goto out;
++	}
+ 	if ((!wlan_reg_is_24ghz_ch_freq(frequency) &&
+ 	     !wlan_reg_is_5ghz_ch_freq(frequency)) ||
+ 	    wlan_reg_get_bonded_channel_state_for_pwrmode(wma->pdev, frequency,
+@@ -2639,10 +2651,7 @@
+ 	spin_lock_irqsave(&wma_wonder_offchan_lock, flags);
+ 	if (!wma_wonder_offchan.registered || !wma_wonder_offchan.accepting ||
+ 	    wma_wonder_offchan.wmi_handle != wma->wmi_handle ||
+-	    wma_wonder_offchan.wma_context != wma ||
+-	    wma_wonder_offchan.next_desc >= U16_MAX) {
+-		if (wma_wonder_offchan.next_desc >= U16_MAX)
+-			wma_wonder_offchan.descriptor_exhausted++;
++	    wma_wonder_offchan.wma_context != wma) {
+ 		spin_unlock_irqrestore(&wma_wonder_offchan_lock, flags);
+ 		status = QDF_STATUS_E_CANCELED;
+ 		goto out;
+@@ -2665,7 +2674,7 @@
+ 	}
+ 	slot->dma_device.dev = get_device(wma->qdf_dev->dev);
+ 	slot->nbuf = nbuf;
+-	slot->desc_id = ++wma_wonder_offchan.next_desc;
++	slot->desc_id = desc_id;
+ 	slot->pdev_id = pdev_id;
+ 	slot->publishing = true;
+ 	wma_wonder_offchan.in_flight++;
+@@ -2678,12 +2687,23 @@
+ 	cmd.frm_len = qdf_nbuf_len(nbuf);
+ 	cmd.vdev_id = snapshot->vdev_id;
+ 	cmd.desc_id = slot->desc_id;
+-	cmd.chanfreq = frequency;
++	/* Zero explicitly selects the established BSS channel in this command. */
++	cmd.chanfreq = on_home ? 0 : frequency;
+ 	cmd.pdata = qdf_nbuf_data(nbuf);
+ 	cmd.qdf_ctx = &slot->dma_device;
+ 	cmd.tx_params_valid = true;
+ 	/* No blocking operation is allowed after the caller's publication guard. */
+-	if (!begin(arg, &guard_flags)) {
++	if (on_home && generation) {
++		if (!wlan_mlme_sta_mon_tx_begin(wma->psoc, monitor_id,
++					      generation, &guard_flags)) {
++			status = QDF_STATUS_E_CANCELED;
++		} else {
++			status = wmi_offchan_data_tx_cmd_send(wma->wmi_handle, &cmd);
++			wlan_mlme_sta_mon_tx_end(guard_flags);
++		}
++	} else if (on_home) {
++		status = wmi_offchan_data_tx_cmd_send(wma->wmi_handle, &cmd);
++	} else if (!begin(arg, &guard_flags)) {
+ 		status = QDF_STATUS_E_CANCELED;
+ 	} else {
+ 		status = wmi_offchan_data_tx_cmd_send(wma->wmi_handle, &cmd);
+@@ -2717,7 +2737,8 @@
+ 		wma_wonder_offchan.failed++;
+ 		spin_unlock_irqrestore(&wma_wonder_offchan_lock, flags);
+ 	}
+-	packet->release(packet->arg);
++	if (packet->release)
++		packet->release(packet->arg);
+ 	qdf_mem_free(packet);
+ 	module_put(THIS_MODULE);
+ }
+@@ -2742,7 +2763,8 @@
+ 		spin_unlock_irqrestore(&wma_wonder_offchan_lock, flags);
+ 		status = wma_wonder_offchan_send(packet->nbuf, packet->monitor_id,
+ 				packet->home_frequency, packet->generation,
+-				&packet->snapshot, packet->frequency, &packet->params,
++				&packet->snapshot, packet->frequency, packet->desc_id,
++				&packet->params,
+ 				packet->begin, packet->end, packet->arg);
+ 		if (!QDF_IS_STATUS_ERROR(status)) {
+ 			spin_lock_irqsave(&wma_wonder_offchan_lock, flags);
+@@ -2767,10 +2789,11 @@
+ 	struct wma_wonder_offchan_packet *packet;
+ 	unsigned long flags;
+ 	QDF_STATUS status;
++	bool on_home = frequency == home_frequency && !begin && !end && !release;
+ 
+ 	if (!nbuf || !snapshot || !snapshot->cookie || !tx_params ||
+-	    !begin || !end || !release || !home_frequency || !frequency ||
+-	    frequency == home_frequency || frequency > U16_MAX ||
++	    (!on_home && (!begin || !end || !release || frequency == home_frequency)) ||
++	    !home_frequency || !frequency || frequency > U16_MAX ||
+ 	    !READ_ONCE(wma_injection_ctx.active))
+ 		return QDF_STATUS_E_INVAL;
+ 	/* Reject unrepresentable metadata at the caller's nonblocking boundary. */
+@@ -2798,11 +2821,19 @@
+ 	spin_lock_irqsave(&wma_wonder_offchan_lock, flags);
+ 	if (!wma_wonder_offchan.registered || !wma_wonder_offchan.accepting) {
+ 		status = QDF_STATUS_E_CANCELED;
++	} else if (wma_wonder_offchan.next_desc >= U16_MAX) {
++		wma_wonder_offchan.descriptor_exhausted++;
++		status = QDF_STATUS_E_NOSUPPORT;
+ 	} else if (wma_wonder_offchan.queued >= WMA_WONDER_OFFCHAN_SLOTS) {
+ 		status = QDF_STATUS_E_BUSY;
+ 	} else if (!try_module_get(THIS_MODULE)) {
+ 		status = QDF_STATUS_E_CANCELED;
+ 	} else {
++		/* Reserve each low-16-bit wire ID before accepting ownership. Never
++		 * recycle an ID, including one whose queued send is later canceled.
++		 * Exhaustion is synchronous so callers can choose another transport.
++		 */
++		packet->desc_id = ++wma_wonder_offchan.next_desc;
+ 		list_add_tail(&packet->node, &wma_wonder_offchan_queue);
+ 		wma_wonder_offchan.queued++;
+ 		/* Serialize scheduling with stop+cancel, preventing orphaned work. */

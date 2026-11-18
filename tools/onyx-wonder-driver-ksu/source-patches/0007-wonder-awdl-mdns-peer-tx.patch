@@ -1,0 +1,239 @@
+--- a/qcacld-3.0/core/hdd/inc/wlan_hdd_wonder.h
++++ b/qcacld-3.0/core/hdd/inc/wlan_hdd_wonder.h
+@@ -17,6 +17,7 @@
+ bool hdd_wonder_can_start(struct hdd_context *hdd_ctx);
+ bool hdd_wonder_transport_ready(struct hdd_adapter *adapter);
+ bool hdd_wonder_netdev_transport_ready(struct net_device *dev);
++void hdd_wonder_note_rx_peer(struct net_device *dev, const struct sk_buff *skb);
+ bool hdd_wonder_netdev_is_owned(struct net_device *dev);
+ /* Nonblocking netdev admission; success transfers the skb to WMA. */
+ int hdd_wonder_injection_tx(struct hdd_adapter *adapter, struct sk_buff *skb,
+--- a/qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c
++++ b/qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c
+@@ -2,6 +2,7 @@
+ /* Experimental Wonder provider for Onyx's existing ICNSS2 WLAN transport. */
+ #include <linux/auxiliary_bus.h>
+ #include <linux/etherdevice.h>
++#include <linux/jiffies.h>
+ #include <linux/module.h>
+ #include <linux/mutex.h>
+ #include <linux/rtnetlink.h>
+@@ -30,6 +31,16 @@
+ #ifdef FEATURE_WLAN_WONDER
+ 
+ #define HDD_WONDER_NETDEV "wondertap0"
++#define HDD_WONDER_MDNS_PEERS 16
++#define HDD_WONDER_MDNS_PEER_LIFETIME (10 * HZ)
++
++static const u8 hdd_wonder_awdl_bssid[] = { 0x00, 0x25, 0x00, 0xff, 0x94, 0x73 };
++static const u8 hdd_wonder_mdns_group[] = { 0x33, 0x33, 0x00, 0x00, 0x00, 0xfb };
++
++struct hdd_wonder_mdns_peer {
++	unsigned long last_seen;
++	u8 address[ETH_ALEN];
++};
+ 
+ struct hdd_wonder_session {
+ 	struct hdd_adapter *adapter;
+@@ -38,6 +49,8 @@
+ 	struct hdd_wonder_coex *coex;
+ 	struct wondertap_set_freq_params channel;
+ 	struct wondertap_fixed_tx_rate_params tx_rate;
++	spinlock_t mdns_peers_lock;
++	struct hdd_wonder_mdns_peer mdns_peers[HDD_WONDER_MDNS_PEERS];
+ 	bool airtime_enabled;
+ 	bool suspended;
+ 	bool failed;
+@@ -546,30 +559,26 @@
+ 	return ready;
+ }
+ 
+-int hdd_wonder_injection_tx(struct hdd_adapter *adapter, struct sk_buff *skb,
+-		const struct cdp_tx_injection_params *params)
+-{
+-	struct hdd_wonder_session *session;
++static QDF_STATUS
++hdd_wonder_queue_tx(struct hdd_wonder_session *session, struct sk_buff *skb,
++		    const struct cdp_tx_injection_params *params)
++{
++	struct hdd_adapter *adapter = session->adapter;
+ 	struct cdp_tx_injection_params constrained = *params;
+-	QDF_STATUS status = QDF_STATUS_E_AGAIN;
++	QDF_STATUS status;
+ 	void *token;
+ 
+-	rcu_read_lock();
+-	session = rcu_dereference(hdd_wonder_active);
+-	if (!session || session->adapter != adapter ||
+-	    smp_load_acquire(&session->suspended) || READ_ONCE(session->failed))
+-		goto out;
+ 	hdd_wonder_peer_tx_rate(session->peer,
+ 		((struct ieee80211_hdr *)skb->data)->addr1, &constrained);
+-	if (!session->coex) {
+-		status = wma_injection_tx(skb, adapter->deflink->vdev_id, &constrained);
+-		goto out;
+-	}
++	if (!session->coex)
++		return wma_injection_tx(skb, adapter->deflink->vdev_id, &constrained);
++
+ 	token = hdd_wonder_coex_tx_token(session->coex, constrained.chanfreq);
+ 	if (IS_ERR(token)) {
+ 		if (PTR_ERR(token) == -EALREADY)
+-			status = wma_injection_tx(skb, adapter->deflink->vdev_id, &constrained);
+-		goto out;
++			return wma_injection_tx(skb, adapter->deflink->vdev_id,
++						&constrained);
++		return QDF_STATUS_E_AGAIN;
+ 	}
+ 	status = wma_wonder_offchan_tx(skb, adapter->deflink->vdev_id,
+ 			hdd_wonder_coex_home_frequency(session->coex),
+@@ -580,6 +589,130 @@
+ 			hdd_wonder_coex_tx_release, token);
+ 	if (QDF_IS_STATUS_ERROR(status))
+ 		hdd_wonder_coex_tx_release(token);
++	return status;
++}
++
++/*
++ * Monitor RX has a radiotap header followed by the complete action frame.
++ * A recent PSF or MIF gives the radio address needed to deliver mDNS to a peer.
++ */
++void hdd_wonder_note_rx_peer(struct net_device *dev, const struct sk_buff *skb)
++{
++	static const u8 awdl_action[] = { 0x7f, 0x00, 0x17, 0xf2, 0x08, 0x10 };
++	struct ieee80211_radiotap_header radiotap;
++	struct hdd_wonder_session *session;
++	struct hdd_wonder_mdns_peer *entry;
++	u8 frame[24 + 16] __aligned(2);
++	unsigned long flags;
++	unsigned int offset, i, slot = 0;
++	const u8 *address = frame + 10;
++	__le16 fc;
++
++	rcu_read_lock();
++	session = rcu_dereference(hdd_wonder_active);
++	if (!session || session->adapter->dev != dev ||
++	    skb_copy_bits(skb, 0, &radiotap, sizeof(radiotap)))
++		goto out;
++	offset = le16_to_cpu(radiotap.it_len);
++	if (radiotap.it_version || offset < sizeof(radiotap) ||
++	    skb_copy_bits(skb, offset, frame, sizeof(frame)))
++		goto out;
++	fc = cpu_to_le16(get_unaligned_le16(frame));
++	if (!ieee80211_is_action(fc) || ieee80211_has_protected(fc) ||
++	    ieee80211_has_morefrags(fc) ||
++	    (get_unaligned_le16(frame + 22) & IEEE80211_SCTL_FRAG) ||
++	    memcmp(frame + 16, hdd_wonder_awdl_bssid, ETH_ALEN) ||
++	    memcmp(frame + 24, awdl_action, sizeof(awdl_action)) ||
++	    (frame[30] != 0 && frame[30] != 3) ||
++	    !is_valid_ether_addr(address) ||
++	    !memcmp(address, dev->dev_addr, ETH_ALEN))
++		goto out;
++
++	spin_lock_irqsave(&session->mdns_peers_lock, flags);
++	for (i = 0; i < ARRAY_SIZE(session->mdns_peers); i++) {
++		entry = &session->mdns_peers[i];
++		if (!memcmp(entry->address, address, ETH_ALEN)) {
++			slot = i;
++			break;
++		}
++		if (is_zero_ether_addr(entry->address) ||
++		    time_before(entry->last_seen, session->mdns_peers[slot].last_seen))
++			slot = i;
++	}
++	entry = &session->mdns_peers[slot];
++	memcpy(entry->address, address, ETH_ALEN);
++	entry->last_seen = jiffies;
++	spin_unlock_irqrestore(&session->mdns_peers_lock, flags);
++out:
++	rcu_read_unlock();
++}
++
++/* Qualcomm's private RAW helper drops group data. Keep the mDNS packet and
++ * its multicast IP destination intact, and use the radio address of each
++ * recently heard AWDL peer. A-MSDU subframe addresses also stay intact.
++ */
++static bool hdd_wonder_tx_mdns(struct hdd_wonder_session *session,
++			      struct sk_buff *skb,
++			      const struct cdp_tx_injection_params *params)
++{
++	const struct ieee80211_hdr *hdr = (const void *)skb->data;
++	u8 addresses[HDD_WONDER_MDNS_PEERS][ETH_ALEN];
++	unsigned long flags, now = jiffies;
++	unsigned int i, count = 0;
++	bool sent = false;
++
++	if (skb->len < 24 || !params->is_data ||
++	    !ieee80211_is_data_present(hdr->frame_control) ||
++	    ieee80211_has_tods(hdr->frame_control) ||
++	    ieee80211_has_fromds(hdr->frame_control) ||
++	    ieee80211_has_protected(hdr->frame_control) ||
++	    ieee80211_has_morefrags(hdr->frame_control) ||
++	    (le16_to_cpu(hdr->seq_ctrl) & IEEE80211_SCTL_FRAG) ||
++	    memcmp(hdr->addr1, hdd_wonder_mdns_group, ETH_ALEN) ||
++	    memcmp(hdr->addr2, session->adapter->dev->dev_addr, ETH_ALEN) ||
++	    memcmp(hdr->addr3, hdd_wonder_awdl_bssid, ETH_ALEN))
++		return false;
++
++	spin_lock_irqsave(&session->mdns_peers_lock, flags);
++	for (i = 0; i < ARRAY_SIZE(session->mdns_peers); i++) {
++		const struct hdd_wonder_mdns_peer *peer = &session->mdns_peers[i];
++
++		if (!is_zero_ether_addr(peer->address) &&
++		    time_before(now, peer->last_seen + HDD_WONDER_MDNS_PEER_LIFETIME))
++			memcpy(addresses[count++], peer->address, ETH_ALEN);
++	}
++	spin_unlock_irqrestore(&session->mdns_peers_lock, flags);
++
++	for (i = 0; i < count; i++) {
++		struct sk_buff *copy = skb_copy(skb, GFP_ATOMIC);
++
++		if (!copy)
++			break;
++		memcpy(((struct ieee80211_hdr *)copy->data)->addr1,
++		       addresses[i], ETH_ALEN);
++		if (QDF_IS_STATUS_ERROR(hdd_wonder_queue_tx(session, copy, params)))
++			dev_kfree_skb_any(copy);
++		else
++			sent = true;
++	}
++	if (sent)
++		consume_skb(skb);
++	return sent;
++}
++
++int hdd_wonder_injection_tx(struct hdd_adapter *adapter, struct sk_buff *skb,
++		const struct cdp_tx_injection_params *params)
++{
++	struct hdd_wonder_session *session;
++	QDF_STATUS status = QDF_STATUS_E_AGAIN;
++
++	rcu_read_lock();
++	session = rcu_dereference(hdd_wonder_active);
++	if (!session || session->adapter != adapter ||
++	    smp_load_acquire(&session->suspended) || READ_ONCE(session->failed))
++		goto out;
++	status = hdd_wonder_tx_mdns(session, skb, params) ?
++		QDF_STATUS_SUCCESS : hdd_wonder_queue_tx(session, skb, params);
+ out:
+ 	rcu_read_unlock();
+ 	return qdf_status_to_os_return(status);
+@@ -756,6 +889,7 @@
+ 		ret = -ENOMEM;
+ 		goto restart_idle;
+ 	}
++	spin_lock_init(&session->mdns_peers_lock);
+ 	ether_addr_copy(mac, params->mac_addr);
+ 	ret = osif_vdev_sync_create_and_trans(hdd_ctx->parent_dev, &create_sync);
+ 	if (ret)
+--- a/qcacld-3.0/components/dp/core/src/wlan_dp_txrx.c
++++ b/qcacld-3.0/components/dp/core/src/wlan_dp_txrx.c
+@@ -922,6 +922,8 @@
+ 			nbuf = nbuf_next;
+ 			continue;
+ 		}
++		if (dp_intf->dev)
++			hdd_wonder_note_rx_peer(dp_intf->dev, nbuf);
+ #endif
+ 		qdf_nbuf_set_dev(nbuf, dp_intf->dev);
+ 

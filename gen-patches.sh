@@ -231,7 +231,8 @@ emit_upstream_fix() {
 PROJECTS="bionic build/release device/xiaomi/onyx external/iw frameworks/base frameworks/opt/telephony hardware/xiaomi kernel/xiaomi/sm8735 lineage-sdk system/vold system/security
 packages/apps/Settings packages/apps/Updater packages/apps/Evolver
 packages/modules/adb packages/modules/Bluetooth
-vendor/gms vendor/lineage vendor/qcom/opensource/interfaces"
+vendor/gms vendor/lineage vendor/qcom/opensource/interfaces
+vendor/unbundled_google/packages/SystemUIGoogle"
 
 cleanup() {
     for p in $PROJECTS; do
@@ -282,8 +283,6 @@ emit_selected_hunks frameworks/base 0014-pool-notification-history-strings.patch
     'pooledStrings|getPooledStringsToWrite|poolStringsFromNotifications|ProtoInputStream|testWritePoolsFreshNotifications' \
     services/core/java/com/android/server/notification/NotificationHistoryProtoHelper.java \
     services/tests/uiservicestests/src/com/android/server/notification/NotificationHistoryProtoHelperTest.java
-emit frameworks/base 0015-exclude-shade-from-home-double-tap-sleep.patch \
-    packages/SystemUI/src/com/android/systemui/dt2s/DoubleTapToSleepController.java
 emit frameworks/base 0016-fix-qs-expansion-and-blur-nan.patch \
     packages/SystemUI/src/com/android/systemui/shade/QuickSettingsControllerImpl.java \
     packages/SystemUI/tests/src/com/android/systemui/shade/QuickSettingsControllerImplTest.java \
@@ -613,9 +612,19 @@ emit packages/apps/Evolver 0001-gesture-navbar-space-ui.patch \
 # product package list lets the platform Dialer remain installed.
 emit vendor/gms 0001-keep-aosp-dialer.patch gms_full.mk
 
+emit vendor/unbundled_google/packages/SystemUIGoogle \
+    0001-separate-now-playing-from-keyguard-indications.patch \
+    src/com/google/android/systemui/keyguard/ui/sections/DefaultAmbientIndicationAreaSection.kt \
+    res/values/custom_dimens.xml \
+    res/values/custom_ids.xml
+
 # Radio SHA1 digests are recalculated by ci/refresh-radio-sha1s.py AFTER
 # staging the actual firmware images in apply.sh. A static Android.mk patch
 # would be incorrect whenever the upstream radio list or blobs change.
+
+# Keep stock brightness changes isolated from the shared display/resources edits.
+# This generator uses temporary indexes and can also be run on its own.
+python3 "$HERE/ci/gen-stock-brightness-patches.py" "$ROM" --out "$OUT"
 
 echo
 echo "Done. Totals:"

@@ -1,0 +1,69 @@
+{
+  "date": "2026-11-14",
+  "scope": "Host tests, focused actual Java/resource/overlay compilation and patch preservation; full Soong build incomplete; port not installed or luminance measured",
+  "host_junit": {
+    "lux_passed": 38,
+    "ramp_passed": 37
+  },
+  "stock_profile": {
+    "default_curve_points": 129,
+    "threshold_anchors": 34,
+    "panel_configs": 2
+  },
+  "patches": {
+    "patches/frameworks_base/0018-stock-onyx-auto-brightness.patch": {
+      "sha256": "fd0bec6bc1c78235ceed2235c2e370da0dc5ec6106addf8cf6f4fbea1449f1e9",
+      "pre_port_baseline_forward_apply": true,
+      "baseline_to_current_source_byte_parity": true,
+      "reverse_restores_baseline": true,
+      "ordinary_reverse_check_actual_rom": true,
+      "deterministic_regeneration": true
+    },
+    "patches/device_xiaomi_onyx/0025-enable-stock-auto-brightness.patch": {
+      "sha256": "a1c77f632413578c5b1b940f54585fb0108d8d1d3bd497a88de5c952f5deb173",
+      "pre_port_baseline_forward_apply": true,
+      "baseline_to_current_source_byte_parity": true,
+      "reverse_restores_baseline": true,
+      "ordinary_reverse_check_actual_rom": true,
+      "deterministic_regeneration": true
+    },
+    "patches/vendor_xiaomi_onyx/0004-stock-brightness-display-config.patch": {
+      "sha256": "7d797520e67ec7acc381b9d671bb5bfcba7719be28c3bddd6ba2351232035b59",
+      "pre_port_baseline_forward_apply": true,
+      "baseline_to_current_source_byte_parity": true,
+      "reverse_restores_baseline": true,
+      "ordinary_reverse_check_actual_rom": true,
+      "deterministic_regeneration": true
+    }
+  },
+  "focused_android_compile": {
+    "production_java_sources": 8,
+    "actual_framework_and_services_dependencies": true,
+    "actual_generated_internal_R": true,
+    "framework_resources_compiled_and_linked": true,
+    "onyx_overlay_compiled_and_linked": true,
+    "android_test_classes_compiled": [
+      "OnyxLuxPolicyTest",
+      "OnyxBrightnessSensorPolicyTest",
+      "OnyxAutomaticBrightnessControllerTest",
+      "OnyxBrightnessRampControllerTest",
+      "RampAnimatorTest",
+      "BrightnessMappingStrategyTest"
+    ],
+    "android_tests_executed": false,
+    "cached_unchanged_dependencies_used": true,
+    "local_receipts": "/home/loukious/Android/onyx-stock-brightness-port-20261114/direct-compile/report.json"
+  },
+  "full_soong_build": {
+    "completed": false,
+    "targets": [
+      "framework-res",
+      "services.core",
+      "FrameworkOverlayOnyx",
+      "DisplayServiceTests"
+    ],
+    "lunch": "lineage_onyx-cp2a-userdebug",
+    "reason": "Stopped during build graph generation under local memory pressure; not an observed compilation error in the port",
+    "limited_attempt": "SOONG_GOMEMLIMIT=20GiB, JOBS=3"
+  }
+}

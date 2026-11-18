@@ -1,0 +1,122 @@
+[
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/system_ext/framework/miui-services.jar",
+    "size": 12424606,
+    "sha256": "961169f516cb534a9c0f7c1b830b86e74cd01b5c9029a30e71bc256b0eb641ca"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/system/system/framework/services.jar",
+    "size": 35609576,
+    "sha256": "8eb04c6498ef5ba0dd7670969762cea0d186fa3ecc2b81d7e40fc742f20c34f9"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/product/overlay/AospFrameworkResOverlay.apk",
+    "size": 20771554,
+    "sha256": "936b33a81899dcfb6e359433a9641a4a71ee55e9443575c32448017ea4eca43c"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/product/overlay/MiuiFrameworkResOverlay.apk",
+    "size": 16815,
+    "sha256": "52fa3ef201fadc3e29cc2aabf278790096acedb6568ca3c30ea39efb5ab28789"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/odm/overlay/FrameworksResTarget_Vendor.apk",
+    "size": 12710,
+    "sha256": "d79bf5787350056b0144888d407e6b3213b214f99a62f500943478dfa376645b"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/product/overlay/FrameworksResCommon_Sys.apk",
+    "size": 24926,
+    "sha256": "fb1c5f759c676d76e35a17636c985822151c0ac98200874978dbde74c3afd75c"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/system_ext/framework/framework-ext-res/framework-ext-res.apk",
+    "size": 6849847,
+    "sha256": "8c1eb12fbf1025420fdfd7ea27c241840c524a08db62d2d1c7e69aff6cc1bcef"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/product/overlay/partition_order.xml",
+    "size": 865,
+    "sha256": "0f697affbd3a986426426f846de44ef6c7bd0ee2098a27dcb90fcdca9a1a51c9"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/system_ext/framework/miui-services.jar",
+    "size": 12424530,
+    "sha256": "0cd1ee6229a54618d88702c6e96521c3e746bb8da1f28a4df118f642de8ec4dc"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/system/system/framework/services.jar",
+    "size": 35609484,
+    "sha256": "37d4e57a9753441264128ded9fbe7ecf6f810c91ea0126457010fecb9a521e9a"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/product/overlay/AospFrameworkResOverlay.apk",
+    "size": 20767458,
+    "sha256": "8e55c084bc41324191b34554df2c8e1bfb54d9c15082a0e41aa5510185f33881"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/product/overlay/MiuiFrameworkResOverlay.apk",
+    "size": 16815,
+    "sha256": "16e69a20100c9fa19c6b2eb07082929c96652f82371bf0cced73ab409021cad1"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/odm/overlay/FrameworksResTarget_Vendor.apk",
+    "size": 12710,
+    "sha256": "d79bf5787350056b0144888d407e6b3213b214f99a62f500943478dfa376645b"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/product/overlay/FrameworksResCommon_Sys.apk",
+    "size": 24926,
+    "sha256": "0ca8ff837f4f61ae7c4d17f44fb60b0f537025e5f11393e234d2fabceb480723"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/system_ext/framework/framework-ext-res/framework-ext-res.apk",
+    "size": 4490551,
+    "sha256": "16bbd330e515b35a169aebe1048bdd6c6082e981151cb57f4f7293e6e8d89491"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/product/overlay/partition_order.xml",
+    "size": 865,
+    "sha256": "0f697affbd3a986426426f846de44ef6c7bd0ee2098a27dcb90fcdca9a1a51c9"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/product/etc/displayconfig/display_id_4630947258895476883.xml",
+    "size": 1953,
+    "sha256": "ac750d06903cf97f66fa4ce990b674f678709040cb32f76bde8d73d496be70e1"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/product/etc/displayconfig/display_id_4630947173316895379.xml",
+    "size": 1953,
+    "sha256": "ac750d06903cf97f66fa4ce990b674f678709040cb32f76bde8d73d496be70e1"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/product/etc/displayconfig/display_id_4630947258895476883.xml",
+    "size": 1953,
+    "sha256": "ac750d06903cf97f66fa4ce990b674f678709040cb32f76bde8d73d496be70e1"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/product/etc/displayconfig/display_id_4630947173316895379.xml",
+    "size": 1953,
+    "sha256": "ac750d06903cf97f66fa4ce990b674f678709040cb32f76bde8d73d496be70e1"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/system/system/framework/framework.jar",
+    "size": 49048440,
+    "sha256": "253db84c269b2c06e9c7e2daf26057182231322399fee582d985c87f8c52f21a"
+  },
+  {
+    "path": "/mnt/d/Android/stock303-analysis/root/product/etc/device_features/onyx.xml",
+    "size": 40946,
+    "sha256": "6e44bc1b4eb2f9dfd10ba7a5d01d20184a16cb8b30b7fa7bcac308a30f493d2a"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/system/system/framework/framework.jar",
+    "size": 49048472,
+    "sha256": "e02aad5dee88a1058cb69792b462040ffa76216b2dab1f9f2768a53c04eb3d7c"
+  },
+  {
+    "path": "/mnt/d/Android/stock305cn-analysis/root/product/etc/device_features/onyx.xml",
+    "size": 40946,
+    "sha256": "6e44bc1b4eb2f9dfd10ba7a5d01d20184a16cb8b30b7fa7bcac308a30f493d2a"
+  }
+]

@@ -1,0 +1,4 @@
+# Local interpreter caches and saved conversations are not patch sources.
+__pycache__/
+*.py[cod]
+/codex-session-*.md

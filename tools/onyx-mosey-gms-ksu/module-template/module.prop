@@ -1,0 +1,6 @@
+id=onyx_mosey_gms
+name=Onyx Mosey Quick Share Provider
+version=2026.11.18.10
+versionCode=2026111810
+author=Loukious
+description=Enables verified Nearby/Mosey flags, releases the legacy channel-6 country override, and keeps the native WLAN country and STA disconnect/restore adapter. Requires the matching Wonder driver on Onyx Android 17, GMS 26.46.30, Mosey 60715.

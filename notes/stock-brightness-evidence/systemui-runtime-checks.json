@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-14",
+  "trial": "2026.11.14-trial.4",
+  "version_code": 2026111404,
+  "installed": true,
+  "accepted": true,
+  "zip_sha256": "4414971d39b51294cd8fd083b0d36925a23f18a73d0326c8778fb9a4ef10b2b1",
+  "payload": {
+    "/system/framework/services.jar": "8c4f249302cb8fa1e77095b7a22057a2615ade551f8d78107908e5c4f55bf101",
+    "/vendor/etc/displayconfig/display_id_4630947173316895379.xml": "77ed812b114c9475f914a31c20239a71d2ebd29d4700dd36e7fe59b3cc030d06",
+    "/vendor/etc/displayconfig/display_id_4630947258895476883.xml": "77ed812b114c9475f914a31c20239a71d2ebd29d4700dd36e7fe59b3cc030d06",
+    "/system_ext/priv-app/SystemUIGoogle/SystemUIGoogle.apk": "b5b425b4288205bb001a586253b357a9d0987e21176e25029f84d434c0fdb56b"
+  },
+  "rapid_slider_release_then_auto": {
+    "passed": 5,
+    "attempts": 5,
+    "no_added_delay_between_input_commands": true,
+    "drag_durations_ms": [
+      220,
+      90,
+      300,
+      150,
+      220
+    ],
+    "all_immediate_mode_reads": 1
+  },
+  "exact_manual_brightness_one_then_auto": {
+    "passed": 3,
+    "attempts": 3,
+    "manual_actual_brightness": 0.0,
+    "automatic_actual_brightness": 0.023045078,
+    "ambient_lux": 6.358375,
+    "reason": "automatic",
+    "jump_to_maximum": false
+  },
+  "selinux": "Enforcing",
+  "same_boot_health_verified": true,
+  "systemui_live_service_verified": true,
+  "rear_sensor_registered": true,
+  "learning_reset_during_ui_deployment": false,
+  "short_term_learning_point_in_test_boot": null,
+  "auto_left_enabled": true,
+  "torch_left_off": true,
+  "quick_settings_left_collapsed": true,
+  "temporary_stay_awake_restored": true,
+  "android_compose_regressions_executed": false,
+  "broader_lighting_and_photometric_validation": "Not performed in this UI trial",
+  "runtime_scope": "Unlocked phone; earlier interrupted timeout/keyguard/PIN runs retained separately",
+  "rejected_trial3_reason": "A consuming pointer modifier remained until recomposition after release",
+  "fix": "Stable touch handler samples live drag state at first DOWN and latches it through UP; UI brightness conversions and repository mode writes preserve event order."
+}

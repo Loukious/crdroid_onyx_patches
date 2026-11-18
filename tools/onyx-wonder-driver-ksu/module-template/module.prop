@@ -1,0 +1,6 @@
+id=onyx_wonder_driver
+name=Onyx Wonder AWDL driver companion
+version=2026.11.18.15
+versionCode=2026111815
+author=Loukious
+description=Handles compact AWDL replies, unassociated startup, peer-compatible rates and native WMI multicast. Uses boot-scoped reload locks and stock rollback; requires the matching installed kernel.

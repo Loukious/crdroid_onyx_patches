@@ -1,3 +1,11 @@
+# Retired home double-tap shade experiment
+
+Former patch `frameworks_base/0015-exclude-shade-from-home-double-tap-sleep.patch`
+is removed from the active patch set. `apply.sh` and `gen-patches.sh` no longer
+apply or emit it. The following diagnosis, implementation description and host
+test results describe the retired experiment; they do not describe a currently
+carried ROM change.
+
 Rapidly pressing the Caffeine Quick Settings tile with the launcher underneath
 can put the phone to sleep. The device log identifies the caller as
 `DT2SController: DT2S: goToSleep`, immediately followed by PowerManager's

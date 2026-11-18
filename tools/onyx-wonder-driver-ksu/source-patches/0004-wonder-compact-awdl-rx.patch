@@ -1,0 +1,142 @@
+--- a/qca-wifi-host-cmn/dp/wifi3.0/monitor/dp_rx_mon.c
++++ b/qca-wifi-host-cmn/dp/wifi3.0/monitor/dp_rx_mon.c
+@@ -38,6 +38,10 @@
+ #include "qdf_mem.h"   /* qdf_mem_malloc,free */
+ #include "dp_htt.h"
+ #include "dp_mon.h"
++#if defined(QCA_WIFI_WCN7750) && defined(CONFIG_WORD_BASED_TLV) && \
++    defined(BE_NON_AP_COMPACT_TLV) && defined(NO_RX_PKT_HDR_TLV)
++#include "hal_be_rx.h"
++#endif
+ #include "dp_rx_mon.h"
+ #include "cdp_txrx_injection.h"
+ #include "cdp_txrx_mon.h"
+@@ -716,11 +720,128 @@
+ }
+ 
+ #else
++
++#if defined(QCA_WIFI_WCN7750) && defined(CONFIG_WORD_BASED_TLV) && \
++    defined(BE_NON_AP_COMPACT_TLV) && defined(NO_RX_PKT_HDR_TLV) && \
++    !defined(BIG_ENDIAN_HOST)
++/* The compact MPDU descriptor retains the complete 24-byte non-QoS header.
++ * Its 802.3 MSDU retains LLC/SNAP, including AWDL's vendor encapsulation.
++ * No header, sequence, address, LLC or payload byte is synthesized here.
++ */
++static bool
++dp_sta_mon_awdl_span(const uint8_t *header, const uint8_t *ether,
++                    uint32_t length, const uint8_t *helper_mac,
++                    uint32_t *payload_len)
++{
++    static const uint8_t awdl_bssid[] = { 0x00, 0x25, 0x00, 0xff, 0x94, 0x73 };
++    static const uint8_t awdl_llc[] = { 0xaa, 0xaa, 0x03, 0x00, 0x17, 0xf2, 0x08, 0x00 };
++    uint32_t body_len;
++
++    if (!header || !ether || !helper_mac || !payload_len ||
++        length < 14 + sizeof(awdl_llc) + 8 || length > 1514 ||
++        header[0] != 0x08 ||
++        (header[1] & (IEEE80211_FC1_DIR_MASK | IEEE80211_FC1_WEP |
++                      IEEE80211_FC1_MORE_FRAG | IEEE80211_FC1_ORDER)) ||
++        (header[22] & 0x0f) ||
++        qdf_mem_cmp(header + 4, helper_mac, QDF_MAC_ADDR_SIZE) ||
++        qdf_mem_cmp(header + 16, awdl_bssid, sizeof(awdl_bssid)) ||
++        qdf_mem_cmp(ether, header + 4, QDF_MAC_ADDR_SIZE) ||
++        qdf_mem_cmp(ether + 6, header + 10, QDF_MAC_ADDR_SIZE) ||
++        qdf_mem_cmp(ether + 14, awdl_llc, sizeof(awdl_llc)))
++        return false;
++    body_len = ((uint32_t)ether[12] << 8) | ether[13];
++    /* A complete nonaggregated MSDU; Ethernet padding is not an air payload. */
++    if (body_len != length - 14 || body_len > 1500)
++        return false;
++    *payload_len = body_len;
++    return true;
++}
++
++void dp_mon_sta_coex_copy_shared(struct dp_soc *soc, uint32_t mac_id,
++                               qdf_nbuf_t nbuf, uint32_t buffer_size,
++                               uint32_t msdu_flags, void *ring_desc)
++{
++    struct dp_sta_mon_helper_binding *binding;
++    struct dp_sta_mon_radiotap_flags *rtap;
++    struct dp_mon_mac *mon_mac;
++    struct dp_pdev *pdev;
++    struct rx_pkt_tlvs *tlvs;
++    hal_rx_mpdu_start_t *mpdu;
++    qdf_nbuf_t copy = NULL;
++    uint8_t *tlv, *header, *ether;
++    uint32_t capacity, offset, length, payload_len, out_len;
++    uint32_t single_msdu = HAL_MSDU_F_FIRST_MSDU_IN_MPDU |
++                           HAL_MSDU_F_LAST_MSDU_IN_MPDU;
++
++    BUILD_BUG_ON(sizeof(hal_rx_mpdu_start_t) != 56);
++    BUILD_BUG_ON(sizeof(struct rx_pkt_tlvs) != 120);
++    if (!soc || !nbuf || !dp_mon_is_sta_coex(soc) ||
++        dp_mon_sta_coex_is_paused(soc) || qdf_nbuf_is_frag(nbuf) ||
++        (msdu_flags & (single_msdu | HAL_MSDU_F_MSDU_CONTINUATION)) != single_msdu)
++        return;
++    pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
++    if (!pdev || !pdev->monitor_pdev)
++        return;
++    mon_mac = dp_get_mon_mac(pdev, mac_id);
++    /* Shared-ring caller holds mon_lock through copy and publication. */
++    rcu_read_lock();
++    binding = dp_sta_mon_find_shared_binding(soc, mon_mac);
++    if (!dp_sta_mon_shared_binding_live(soc, mon_mac, binding, mac_id))
++        goto out;
++    capacity = dp_sta_mon_rx_capacity(nbuf, buffer_size);
++    if (soc->rx_pkt_tlv_size != sizeof(*tlvs) || capacity < sizeof(*tlvs))
++        goto out;
++    tlv = qdf_nbuf_data(nbuf);
++    tlvs = (struct rx_pkt_tlvs *)tlv;
++    mpdu = &HAL_RX_MPDU_START(tlvs);
++    if (!hal_rx_attn_msdu_done_get(soc->hal_soc, tlv) ||
++        !hal_rx_msdu_end_first_msdu_get(soc->hal_soc, tlv) ||
++        !hal_rx_msdu_end_last_msdu_get(soc->hal_soc, tlv) ||
++        hal_rx_get_filter_category(soc->hal_soc, tlv) != 0 ||
++        hal_rx_tlv_decap_format_get(soc->hal_soc, tlv) != HAL_HW_RX_DECAP_FORMAT_8023 ||
++        hal_rx_tlv_mpdu_fcs_err_get(soc->hal_soc, tlv) ||
++        hal_rx_tlv_mpdu_len_err_get(soc->hal_soc, tlv) ||
++        !mpdu->mpdu_frame_control_valid || !mpdu->mpdu_duration_valid ||
++        !mpdu->mac_addr_ad1_valid || !mpdu->mac_addr_ad2_valid ||
++        !mpdu->mac_addr_ad3_valid || !mpdu->mpdu_sequence_control_valid ||
++        mpdu->mpdu_fragment_number || mpdu->more_fragment_flag ||
++        mpdu->encrypted || mpdu->amsdu_present)
++        goto out;
++    header = (uint8_t *)&tlvs->mpdu_start_tlv + 32;
++    if ((header[22] | ((uint16_t)header[23] << 8)) >> 4 != mpdu->mpdu_sequence_number)
++        goto out;
++    offset = sizeof(*tlvs) + hal_rx_msdu_end_l3_hdr_padding_get(soc->hal_soc, tlv);
++    length = hal_rx_msdu_start_msdu_len_get(soc->hal_soc, tlv);
++    if (offset > capacity || length > capacity - offset)
++        goto out;
++    ether = tlv + offset;
++    if (!dp_sta_mon_awdl_span(header, ether, length, binding->helper_mac, &payload_len))
++        goto out;
++    out_len = sizeof(*rtap) + sizeof(struct ieee80211_frame) + payload_len;
++    copy = qdf_nbuf_alloc(NULL, out_len, 0, 4, false);
++    if (!copy || !qdf_nbuf_put_tail(copy, out_len))
++        goto out;
++    rtap = (struct dp_sta_mon_radiotap_flags *)qdf_nbuf_data(copy);
++    qdf_mem_zero(rtap, sizeof(*rtap));
++    rtap->len = cpu_to_le16(sizeof(*rtap));
++    rtap->present = cpu_to_le32(BIT(IEEE80211_RADIOTAP_FLAGS));
++    qdf_mem_copy(rtap + 1, header, sizeof(struct ieee80211_frame));
++    qdf_mem_copy((uint8_t *)(rtap + 1) + sizeof(struct ieee80211_frame), ether + 14, payload_len);
++    if (dp_sta_mon_publish(soc, mon_mac, binding, copy, NULL, 0))
++        copy = NULL;
++out:
++    if (copy)
++        qdf_nbuf_free(copy);
++    rcu_read_unlock();
++}
++#else
+ void dp_mon_sta_coex_copy_shared(struct dp_soc *soc, uint32_t mac_id,
+ 			       qdf_nbuf_t nbuf, uint32_t buffer_size,
+ 			       uint32_t msdu_flags, void *ring_desc)
+ {
+ }
++
++#endif
+ 
+ void dp_mon_sta_coex_copy_unknown_raw(struct dp_soc *soc, uint32_t mac_id,
+ 				    qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr,

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Parsed after the bundled mosey.rc. The launcher has the existing daemon's
+# executable label, so init keeps its normal secure SELinux transition.
+service mosey_server /system_ext/bin/onyx_mosey_launcher
+    override
+    class main
+    user system
+    group system inet
+    disabled
+    capabilities NET_ADMIN NET_RAW

@@ -1,0 +1,6 @@
+/build/
+/.deps/
+/.private/
+/.work/
+__pycache__/
+*.py[cod]

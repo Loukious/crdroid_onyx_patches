@@ -1,0 +1,12 @@
+diff --git a/product/packages/privileged_apps/DevicePersonalizationAiAiPrebuiltPixel2026/Android.mk b/product/packages/privileged_apps/DevicePersonalizationAiAiPrebuiltPixel2026/Android.mk
+--- a/product/packages/privileged_apps/DevicePersonalizationAiAiPrebuiltPixel2026/Android.mk
++++ b/product/packages/privileged_apps/DevicePersonalizationAiAiPrebuiltPixel2026/Android.mk
+@@ -26,5 +26,8 @@ LOCAL_MODULE_TAGS := optional
+ LOCAL_SRC_FILES := DevicePersonalizationAiAiPrebuiltPixel2026.apk
+ LOCAL_CERTIFICATE := PRESIGNED
++# The calendar correction is a trusted system prebuilt. Preserve its original
++# certificate metadata and APK layout instead of transforming it during install.
++LOCAL_SDK_VERSION := 37
+ LOCAL_MODULE_CLASS := APPS
+ LOCAL_PRODUCT_MODULE := true
+ LOCAL_PRIVILEGED_MODULE := true

@@ -1,0 +1,80 @@
+{
+  "date": "2026-11-14",
+  "trial": "2026.11.14-trial.2",
+  "exact_manual_1_to_auto": {
+    "passes": 3,
+    "attempts": 3,
+    "wait_seconds": 3,
+    "manual_framework_brightness": 0.0,
+    "auto_framework_brightness": 0.008805807
+  },
+  "slider_then_mode_tap": [
+    {
+      "additional_delay_ms": 0,
+      "attempts": 2,
+      "enabled_on_first_tap": 0
+    },
+    {
+      "additional_delay_ms": 100,
+      "attempts": 2,
+      "enabled_on_first_tap": 1
+    },
+    {
+      "additional_delay_ms": 250,
+      "attempts": 2,
+      "enabled_on_first_tap": 2
+    },
+    {
+      "additional_delay_ms": 500,
+      "attempts": 2,
+      "enabled_on_first_tap": 2
+    },
+    {
+      "additional_delay_ms": 1000,
+      "attempts": 2,
+      "enabled_on_first_tap": 2
+    }
+  ],
+  "timing_caveat": "Additional shell delay after input swipe; Android command dispatch adds overhead.",
+  "learned_point_preserved": {
+    "lux": 4.58075,
+    "brightness": 0.00044028836
+  },
+  "rear_assistance": {
+    "selected_samples": 12,
+    "total_samples": 12,
+    "front_lux": 0.0,
+    "rear_lux": 6.0913796,
+    "auto_framework_brightness": 0.008805807,
+    "torch": false
+  },
+  "source_cause": "QS blocks new pointer events until delayed brightness-mirror fade completes.",
+  "limitations": [
+    "Luminance was not measured.",
+    "Delayed manual-commit learning race was not reproduced.",
+    "SystemUI source fix requires a rebuilt SystemUI and device validation."
+  ],
+  "final_device_state": {
+    "auto": true,
+    "torch": false,
+    "quick_settings_expanded": false,
+    "auto_brightness_debug_logging": false
+  },
+  "source_fix": {
+    "patch": "0019-fix-brightness-mode-tap-after-drag.patch",
+    "patch_sha256": "fdd7ef32c8334d7862a34f906090db91c4a6942315d42315e2579a557ff70021",
+    "production_compile_passed": true,
+    "cached_dependency_count": 767,
+    "patch_checks": {
+      "original_stock_patches_unchanged": true,
+      "deterministic_regeneration": true,
+      "real_index_unchanged": true,
+      "ordinary_apply_with_whitespace_check": true,
+      "replayed_sources_match": true,
+      "ordinary_reverse": true,
+      "reverse_check_on_actual_source": true
+    },
+    "android_compose_tests_executed": false,
+    "installed_on_device": false
+  }
+}

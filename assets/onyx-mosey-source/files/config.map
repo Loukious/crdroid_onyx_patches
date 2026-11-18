@@ -1,0 +1,7 @@
+{
+    global:
+        dlsym;
+        AIBinder_Class_define;
+    local:
+        *;
+};

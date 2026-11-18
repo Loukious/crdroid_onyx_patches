@@ -1,0 +1,781 @@
+--- a/qcacld-3.0/components/mlme/dispatcher/inc/wlan_mlme_sta_mon.h
++++ b/qcacld-3.0/components/mlme/dispatcher/inc/wlan_mlme_sta_mon.h
+@@ -114,6 +114,9 @@
+ uint64_t wlan_mlme_sta_mon_epoch(struct wlan_objmgr_psoc *psoc);
+ /* HDD passes the actual adapter's Wonder ownership. Arm and host scan admission
+  * atomically select either the new session lease or the existing scan work.
++ * A fresh exclusive Wonder arm uses the native RESTART transaction, with no
++ * STA/monitor ID yet. HDD must verify the started monitor with handoff_ready,
++ * then complete, or cancel before proven native/DP teardown releases the lease.
+  */
+ bool wlan_mlme_sta_mon_arm(struct wlan_objmgr_psoc *psoc,
+ 			  struct wlan_mlme_sta_mon_snapshot *snapshot,
+--- a/qcacld-3.0/components/mlme/dispatcher/src/wlan_mlme_api.c
++++ b/qcacld-3.0/components/mlme/dispatcher/src/wlan_mlme_api.c
+@@ -210,11 +210,17 @@
+ 	      snapshot->companion_sta_vdev_id == snapshot->mon_vdev_id ||
+ 	      snapshot->sta_vdev_id == snapshot->mon_vdev_id)))
+ 		return false;
++	if (snapshot->exclusive &&
++	    (!wonder_owned || snapshot->ap_owner ||
++	     snapshot->sta_vdev_id != WLAN_INVALID_VDEV_ID ||
++	     snapshot->mon_vdev_id != WLAN_INVALID_VDEV_ID))
++		return false;
+ 	if (!snapshot->sta_ap_coexist)
+ 		snapshot->companion_sta_vdev_id = WLAN_INVALID_VDEV_ID;
+ 	spin_lock_irqsave(&sta_mon_lock, flags);
+ 	if (ctrl->stop && ctrl->attached && !ctrl->updates && !ctrl->admissions &&
+-	    !ctrl->scan_reserved &&
++	    !ctrl->scan_reserved && !ctrl->exclusive_lease &&
++	    !ctrl->handoff_generation &&
+ 	    !ctrl->fw_uncertain && !(snapshot->ap_owner && snapshot->exclusive) &&
+ 	    ctrl->state == WLAN_STA_MON_QUIESCED &&
+ 	    ctrl->snapshot.generation == snapshot->generation) {
+@@ -225,6 +231,17 @@
+ 		snapshot->generation++;
+ 		ctrl->snapshot = *snapshot;
+ 		ctrl->wonder_scan_lease = wonder_owned;
++		if (snapshot->exclusive) {
++			/* Claim before native CREATE; reconnect/scan/ROC admission and
++			 * this arm share the same lock. Reuse the typed RESTART proof,
++			 * never manufacture an associated STA or disconnect completion.
++			 */
++			ctrl->exclusive_lease = true;
++			ctrl->handoff_generation = snapshot->generation;
++			ctrl->handoff_phase = WLAN_STA_MON_HANDOFF_RESTART;
++			ctrl->handoff_sta_vdev_id = WLAN_INVALID_VDEV_ID;
++			ctrl->handoff_disconnect_seen = false;
++		}
+ 		ctrl->state = WLAN_STA_MON_ARMING;
+ 		ok = true;
+ 	}
+--- a/qcacld-3.0/core/hdd/inc/wlan_hdd_wonder.h
++++ b/qcacld-3.0/core/hdd/inc/wlan_hdd_wonder.h
+@@ -9,6 +9,7 @@
+ struct net_device;
+ struct sk_buff;
+ struct cdp_tx_injection_params;
++struct wlan_channel;
+ 
+ #ifdef FEATURE_WLAN_WONDER
+ void hdd_wonder_register(struct hdd_context *hdd_ctx);
+@@ -23,7 +24,13 @@
+ bool hdd_wonder_vdev_admission(struct hdd_adapter *adapter);
+ int hdd_wonder_add_monitor(struct hdd_context *hdd_ctx,
+ 			   struct hdd_adapter **adapter, const char *name,
+-			   unsigned char *mac);
++			   unsigned char *mac, bool *exclusive);
++/* Init-only: caller holds RTNL, which pins the private provider session. */
++bool hdd_wonder_get_init_channel(struct hdd_adapter *adapter,
++				u32 *frequency, u32 *bandwidth);
++int hdd_wonder_build_exclusive_channel(struct hdd_adapter *adapter,
++				u32 frequency, u32 bandwidth,
++				struct wlan_channel *channel);
+ #else
+ static inline void hdd_wonder_register(struct hdd_context *hdd_ctx) { }
+ static inline void hdd_wonder_unregister(struct hdd_context *hdd_ctx) { }
+--- a/qcacld-3.0/core/hdd/inc/wlan_hdd_wonder_peer.h
++++ b/qcacld-3.0/core/hdd/inc/wlan_hdd_wonder_peer.h
+@@ -9,6 +9,7 @@
+ struct wlan_objmgr_psoc;
+ struct set_rx_mac_filter;
+ struct wma_wonder_helper_snapshot;
++struct cdp_tx_injection_params;
+ 
+ #ifdef FEATURE_WLAN_WONDER
+ #include <wondertap.h>
+@@ -38,6 +39,8 @@
+ 			       struct hdd_wonder_peer_limits *limits);
+ int hdd_wonder_peer_validate_rate(struct hdd_wonder_peer_state *state,
+ 				 const struct wondertap_fixed_tx_rate_params *rate);
++void hdd_wonder_peer_tx_rate(struct hdd_wonder_peer_state *state,
++		const u8 *destination, struct cdp_tx_injection_params *rate);
+ int hdd_wonder_peer_station(struct hdd_wonder_peer_state *state,
+ 			    enum wondertap_station_action action,
+ 			    struct wondertap_station_info *info);
+--- /dev/null
++++ b/qcacld-3.0/core/hdd/inc/wlan_hdd_wonder_rate.h
+@@ -0,0 +1,104 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef WLAN_HDD_WONDER_RATE_H
++#define WLAN_HDD_WONDER_RATE_H
++
++#include <cdp_txrx_injection.h>
++#include <wondertap.h>
++
++/* Wonder's fixed rate is shared by destinations. Its raw self-peer helper
++ * cannot negotiate rates, so constrain each data packet to the destination's
++ * advertised receive capabilities. No radio/session setting is changed.
++ */
++static inline void hdd_wonder_basic_data_rate(struct cdp_tx_injection_params *rate)
++{
++	rate->preamble = CDP_INJECTION_OFDM;
++	rate->mcs_mask = BIT(4); /* mandatory 6 Mbps OFDM */
++	rate->nss_mask = BIT(0);
++	rate->bw_mask = BIT(2);
++	rate->rate_valid = true;
++	rate->bandwidth_valid = true;
++	rate->gi_valid = false;
++	rate->guard_interval = 0;
++	rate->he_ltf = 0;
++}
++
++static inline void hdd_wonder_peer_constrain_rate(
++		const struct wondertap_station_info *peer,
++		struct cdp_tx_injection_params *rate)
++{
++	u16 mcs, supported, map;
++	u32 capability;
++	unsigned int nss, max_mcs, width;
++	bool short_gi;
++
++	if (!rate->is_data || !rate->rate_valid ||
++	    rate->preamble == CDP_INJECTION_OFDM ||
++	    rate->preamble == CDP_INJECTION_CCK)
++		return;
++	/* OFDM is not legal on 6 GHz. The station ABI contains no HE receive
++ * MCS map, so leave that explicit configuration to existing validation.
++ */
++	if (rate->chanfreq >= 5925)
++		return;
++	if (!peer || !rate->mcs_mask || !rate->nss_mask) {
++		hdd_wonder_basic_data_rate(rate);
++		return;
++	}
++	max_mcs = fls(rate->mcs_mask) - 1;
++	nss = min_t(unsigned int, fls(rate->nss_mask), 2);
++	if (rate->preamble == CDP_INJECTION_HT &&
++	    (peer->capability_mask & BIT(WONDERTAP_STATION_CAP_HT))) {
++		capability = le16_to_cpu(peer->ht_capa.cap_info);
++		width = capability & IEEE80211_HT_CAP_SUP_WIDTH_20_40 ? 3 : 2;
++		for (; nss; nss--) {
++			supported = peer->ht_capa.mcs.rx_mask[nss - 1];
++			mcs = supported & rate->mcs_mask;
++			if (!mcs)
++				mcs = supported & GENMASK(min_t(unsigned int, max_mcs, 7), 0);
++			if (mcs)
++				break;
++		}
++		short_gi = capability &
++			((rate->bw_mask & BIT(3)) && width == 3 ?
++			 IEEE80211_HT_CAP_SGI_40 : IEEE80211_HT_CAP_SGI_20);
++	} else if (rate->preamble == CDP_INJECTION_VHT &&
++		   (peer->capability_mask & BIT(WONDERTAP_STATION_CAP_VHT))) {
++		capability = le32_to_cpu(peer->vht_capa.vht_cap_info);
++		map = le16_to_cpu(peer->vht_capa.supp_mcs.rx_mcs_map);
++		width = 4; /* supported VHT baseline is 80 MHz */
++		for (; nss; nss--) {
++			unsigned int limit = (map >> (2 * (nss - 1))) & 3;
++
++			if (limit == IEEE80211_VHT_MCS_NOT_SUPPORTED)
++				continue;
++			supported = GENMASK(7 + limit, 0);
++			mcs = supported & rate->mcs_mask;
++			if (!mcs)
++				mcs = supported & GENMASK(min_t(unsigned int, max_mcs, 9), 0);
++			if (mcs)
++				break;
++		}
++		/* VHT uses HT capability bits for short GI at 20/40 MHz. */
++		short_gi = rate->bw_mask & BIT(4) ?
++			capability & IEEE80211_VHT_CAP_SHORT_GI_80 :
++			(peer->capability_mask & BIT(WONDERTAP_STATION_CAP_HT)) &&
++			(le16_to_cpu(peer->ht_capa.cap_info) &
++			 (rate->bw_mask & BIT(3) ? IEEE80211_HT_CAP_SGI_40 :
++						IEEE80211_HT_CAP_SGI_20));
++	} else {
++		hdd_wonder_basic_data_rate(rate);
++		return;
++	}
++	if (!nss) {
++		hdd_wonder_basic_data_rate(rate);
++		return;
++	}
++	rate->nss_mask = BIT(nss - 1);
++	rate->mcs_mask = mcs;
++	if (rate->bandwidth_valid && (rate->bw_mask & ~GENMASK(width, 2)))
++		rate->bw_mask = BIT(width);
++	if (rate->gi_valid && !rate->guard_interval && !short_gi)
++		rate->guard_interval = 1; /* long GI: 0.8 us */
++}
++
++#endif /* WLAN_HDD_WONDER_RATE_H */
+--- a/qcacld-3.0/core/hdd/src/wlan_hdd_main.c
++++ b/qcacld-3.0/core/hdd/src/wlan_hdd_main.c
+@@ -3942,6 +3942,8 @@
+ 	ucfg_pmo_set_wow_enable(hdd_ctx->psoc, PMO_WOW_DISABLE_BOTH);
+ }
+ 
++static int hdd_sta_mon_idle_preflight(struct hdd_context *hdd_ctx);
++
+ static int
+ hdd_sta_mon_start_channel(struct hdd_adapter *adapter,
+ 			  struct wlan_mlme_sta_mon_snapshot *snapshot)
+@@ -4021,9 +4023,50 @@
+ 	ret = !mon_chan ||
+ 		QDF_IS_STATUS_ERROR(wlan_vdev_is_up_active_state(mon_vdev)) ||
+ 		!hdd_sta_mon_channel_equal(mon_chan, chan) ? -EBUSY : 0;
++	if (!ret && snapshot->exclusive) {
++		live = *snapshot;
++		/* Preserve the firmware's complete channel, including phymode
++		 * and flags used by the native helper's exact power-owner check.
++		 */
++		live.channel = *mon_chan;
++		if (wlan_objmgr_pdev_get_pdev_id(wlan_vdev_get_pdev(mon_vdev)) !=
++		    snapshot->pdev_id)
++			ret = -EBUSY;
++	}
+ 	hdd_objmgr_put_vdev_by_user(mon_vdev, WLAN_INIT_DEINIT_ID);
+ 	if (ret)
+ 		return ret;
++
++	if (snapshot->exclusive) {
++		/* No associated owner exists. Validate the monitor itself after
++		 * its real native START, including the complete channel and lmac.
++		 */
++		ret = hdd_sta_mon_idle_preflight(hdd_ctx);
++		if (ret)
++			return ret;
++		live.mon_vdev_id = adapter->deflink->vdev_id;
++		live.mac_id = wlan_mlme_get_vdev_mac_id(hdd_ctx->pdev,
++						      live.mon_vdev_id);
++		if (live.mac_id >= MAX_MAC ||
++		    !wlan_mlme_sta_mon_handoff_ready(hdd_ctx->psoc, &live))
++			return -EBUSY;
++		/* The helper takes actual monitor ext-TPC and real objmgr IDs. */
++		ucfg_dp_sta_mon_coex_pause(hdd_ctx->psoc);
++		wma_injection_pre_stop_cleanup();
++		if (!wma_injection_handoff_is_quiesced())
++			return -EBUSY;
++		status = wma_injection_exclusive_resume(live.mon_vdev_id,
++					live.generation, adapter->dev->dev_addr);
++		if (QDF_IS_STATUS_ERROR(status))
++			return qdf_status_to_os_return(status);
++		if (!wlan_mlme_sta_mon_handoff_complete(hdd_ctx->psoc,
++						       live.generation))
++			return -EBUSY;
++		hdd_info("AP-free native monitor ready: monitor=%u generation=%llu freq=%u width=%u mac=%u",
++			 live.mon_vdev_id, live.generation, live.channel.ch_freq,
++			 live.channel.ch_width, live.mac_id);
++		return 0;
++	}
+ 
+ 	ret = hdd_sta_mon_snapshot(hdd_ctx, &live);
+ 	if (ret || live.sta_vdev_id != snapshot->sta_vdev_id ||
+@@ -4143,16 +4186,82 @@
+ 	return ret;
+ }
+ 
++/* An enabled Android STA is an owner even when unassociated. Only an
++ * explicit Wonder native-exclusive lease may borrow its idle radio. The
++ * preflight runs again after arm; longer-lived work owns MLME update refs.
++ */
++static int hdd_sta_mon_idle_preflight(struct hdd_context *hdd_ctx)
++{
++	struct wlan_mlme_sta_mon_snapshot idle = { .exclusive = true };
++	struct hdd_adapter *adapter, *next;
++	struct wlan_hdd_link_info *link;
++	struct wlan_objmgr_vdev *vdev;
++	bool have_open_sta = false;
++	int ret;
++	wlan_net_dev_ref_dbgid dbg = NET_DEV_HOLD_GET_ADAPTER;
++
++	if (hdd_is_connection_in_progress(NULL, NULL) ||
++	    policy_mgr_mode_specific_connection_count(hdd_ctx->psoc,
++						     PM_STA_MODE, NULL))
++		return -EBUSY;
++	ret = hdd_sta_mon_exclusive_preflight(hdd_ctx, &idle);
++	if (ret)
++		return ret;
++	hdd_for_each_adapter_dev_held_safe(hdd_ctx, adapter, next, dbg) {
++		if (ret)
++			goto next_adapter;
++		if (adapter->device_mode == QDF_P2P_CLIENT_MODE ||
++		    adapter->delete_in_progress) {
++			ret = -EBUSY;
++			goto next_adapter;
++		}
++		if (adapter->device_mode != QDF_STA_MODE)
++			goto next_adapter;
++		if ((adapter->dev->flags & IFF_UP) &&
++		    test_bit(DEVICE_IFACE_OPENED, &adapter->event_flags))
++			have_open_sta = true;
++		hdd_adapter_for_each_active_link_info(adapter, link) {
++			vdev = hdd_objmgr_get_vdev_by_user(link, WLAN_OSIF_CM_ID);
++			if (!vdev) {
++				ret = -EBUSY;
++				break;
++			}
++			/* A CM-disconnected link must also be physically down.
++			 * This checks every active MLO link without issuing a
++			 * fan-out disconnect or touching Android's STA flags.
++			 */
++			if (!ucfg_cm_is_vdev_disconnected(vdev) ||
++			    QDF_IS_STATUS_SUCCESS(wlan_vdev_is_up_active_state(vdev)))
++				ret = -EBUSY;
++			hdd_objmgr_put_vdev_by_user(vdev, WLAN_OSIF_CM_ID);
++			if (ret)
++				break;
++		}
++next_adapter:
++		hdd_adapter_dev_put_debug(adapter, dbg);
++	}
++	return ret ? ret : have_open_sta ? 0 : -EBUSY;
++}
++
+ static int
+ hdd_sta_mon_validate_exclusive_channel(struct hdd_adapter *adapter,
+ 				       const struct wlan_channel *channel,
+ 				       struct ch_params *params)
+ {
+ 	struct hdd_context *hdd_ctx = adapter->hdd_ctx;
++	struct ieee80211_channel *cfg_channel;
+ 	uint32_t width, first, freq, secondary = 0;
+ 	enum channel_state state;
+ 	uint8_t power;
+ 
++	/* This path validates a native monitor before its objmgr vdev exists. */
++	if (adapter->device_mode != QDF_MONITOR_MODE)
++		return -EINVAL;
++	cfg_channel = ieee80211_get_channel(hdd_ctx->wiphy, channel->ch_freq);
++	if (!cfg_channel || cfg_channel->flags &
++	    (IEEE80211_CHAN_DISABLED | IEEE80211_CHAN_NO_IR |
++	     IEEE80211_CHAN_RADAR))
++		return -EOPNOTSUPP;
+ 	if ((!WLAN_REG_IS_24GHZ_CH_FREQ(channel->ch_freq) &&
+ 	     !WLAN_REG_IS_5GHZ_CH_FREQ(channel->ch_freq)) || channel->ch_cfreq2)
+ 		return -EOPNOTSUPP;
+@@ -4203,9 +4312,49 @@
+ 		    power == REG_INVALID_TXPOWER || power > 127)
+ 			return -EOPNOTSUPP;
+ 	}
+-	return hdd_validate_channel_and_bandwidth(adapter, channel->ch_freq,
+-						0, channel->ch_width);
+-}
++	/* All monitor channel checks are complete. The generic validator also
++	 * requires a live vdev solely for P2P GO DFS-assist policy, while this
++	 * native bootstrap runs before hdd_start_adapter creates that vdev.
++	 */
++	return 0;
++}
++
++#ifdef FEATURE_WLAN_WONDER
++int hdd_wonder_build_exclusive_channel(struct hdd_adapter *adapter,
++				u32 frequency, u32 bandwidth,
++				struct wlan_channel *channel)
++{
++	struct hdd_context *hdd_ctx = adapter->hdd_ctx;
++	struct ieee80211_channel *cfg_channel;
++	struct ch_params params = {0};
++	int ret;
++
++	if (!channel || frequency > U16_MAX ||
++	    (bandwidth != CH_WIDTH_20MHZ && bandwidth != CH_WIDTH_40MHZ &&
++	     bandwidth != CH_WIDTH_80MHZ))
++		return -EOPNOTSUPP;
++	cfg_channel = ieee80211_get_channel(hdd_ctx->wiphy, frequency);
++	if (!cfg_channel || cfg_channel->flags &
++	    (IEEE80211_CHAN_DISABLED | IEEE80211_CHAN_NO_IR |
++	     IEEE80211_CHAN_RADAR))
++		return -EOPNOTSUPP;
++	params.ch_width = bandwidth;
++	wlan_reg_set_channel_params_for_pwrmode(hdd_ctx->pdev, frequency,
++					       0, &params, REG_CURRENT_PWR_MODE);
++	if (params.ch_width != bandwidth)
++		return -EOPNOTSUPP;
++	qdf_mem_zero(channel, sizeof(*channel));
++	channel->ch_freq = frequency;
++	channel->ch_ieee = wlan_reg_freq_to_chan(hdd_ctx->pdev, frequency);
++	channel->ch_width = bandwidth;
++	channel->ch_cfreq1 = params.mhz_freq_seg0;
++	channel->ch_cfreq2 = params.mhz_freq_seg1;
++	channel->ch_freq_seg1 = params.center_freq_seg0;
++	channel->ch_freq_seg2 = params.center_freq_seg1;
++	ret = hdd_sta_mon_validate_exclusive_channel(adapter, channel, &params);
++	return ret;
++}
++#endif
+ 
+ int hdd_sta_mon_set_channel(struct hdd_adapter *adapter,
+ 			    const struct wlan_channel *requested)
+@@ -4485,6 +4634,10 @@
+ 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+ 	struct bbm_params param = {0};
+ 	struct wlan_mlme_sta_mon_snapshot coex;
++	bool exclusive = false;
++#ifdef FEATURE_WLAN_WONDER
++	u32 frequency, bandwidth;
++#endif
+ 
+ 	hdd_enter_dev(dev);
+ 
+@@ -4507,7 +4660,24 @@
+ 	if (ret)
+ 		return ret;
+ 	if (adapter->sta_mon_coexist) {
+-		ret = hdd_sta_mon_snapshot(hdd_ctx, &coex);
++#ifdef FEATURE_WLAN_WONDER
++		exclusive = hdd_wonder_get_init_channel(adapter, &frequency,
++						      &bandwidth);
++		if (exclusive) {
++			qdf_mem_zero(&coex, sizeof(coex));
++			coex.exclusive = true;
++			coex.sta_vdev_id = WLAN_INVALID_VDEV_ID;
++			coex.mon_vdev_id = WLAN_INVALID_VDEV_ID;
++			coex.companion_sta_vdev_id = WLAN_INVALID_VDEV_ID;
++			coex.pdev_id = wlan_objmgr_pdev_get_pdev_id(hdd_ctx->pdev);
++			coex.generation = wlan_mlme_sta_mon_epoch(hdd_ctx->psoc);
++			ret = hdd_sta_mon_idle_preflight(hdd_ctx);
++			if (!ret)
++				ret = hdd_wonder_build_exclusive_channel(adapter,
++						frequency, bandwidth, &coex.channel);
++		} else
++#endif
++			ret = hdd_sta_mon_snapshot(hdd_ctx, &coex);
+ 		if (ret)
+ 			return ret;
+ 		if (coex.sta_ap_coexist) {
+@@ -4533,6 +4703,11 @@
+ 		}
+ 		adapter->sta_mon_module_held = true;
+ 		adapter->sta_mon_stop_failed = false;
++		if (exclusive && (hdd_sta_mon_idle_preflight(hdd_ctx) ||
++		    !wlan_mlme_sta_mon_start_valid(hdd_ctx->psoc, coex.generation))) {
++			ret = -EBUSY;
++			goto open_fail;
++		}
+ 	}
+ 
+ 	hdd_mon_mode_ether_setup(dev);
+@@ -4611,6 +4786,9 @@
+ 
+ open_fail:
+ 	if (adapter->sta_mon_coexist) {
++		if (exclusive)
++			wlan_mlme_sta_mon_handoff_cancel(hdd_ctx->psoc,
++						       coex.generation);
+ 		wlan_mlme_sta_mon_invalidate(hdd_ctx->psoc,
+ 					     WLAN_INVALID_VDEV_ID);
+ 		if (QDF_IS_STATUS_SUCCESS(hdd_stop_adapter(hdd_ctx, adapter)))
+@@ -24740,7 +24918,8 @@
+ 	       ucfg_pkt_capture_get_mode(hdd_ctx->psoc) ==
+ 						PACKET_CAPTURE_MODE_DISABLE &&
+ 	       (hdd_monitor_can_start_standalone(hdd_ctx) ||
+-		!hdd_sta_mon_snapshot(hdd_ctx, &coex));
++		!hdd_sta_mon_snapshot(hdd_ctx, &coex) ||
++		!hdd_sta_mon_idle_preflight(hdd_ctx));
+ }
+ #endif
+ 
+@@ -24749,7 +24928,7 @@
+ 			   struct hdd_adapter **adapter,
+ 			   const char *name, bool rtnl_held,
+ 			   unsigned char name_assign_type, bool is_rx_mon,
+-			   unsigned char *wonder_mac)
++			   unsigned char *wonder_mac, bool *exclusive)
+ {
+ 	struct hdd_adapter *sta_adapter;
+ 	struct hdd_adapter *mon_adapter;
+@@ -24758,13 +24937,20 @@
+ 	struct hdd_adapter_create_param params = {0};
+ 	struct wlan_mlme_sta_mon_snapshot coex;
+ 	bool use_coex = hdd_monitor_coexist_enabled() && is_rx_mon;
++	bool use_exclusive = false;
+ 	int ret;
+ 	struct iface_combination_params combo = {
+ 		.radio_idx = -1,
+ 		.num_different_channels = 1,
+ 	};
+ 
++	if (exclusive)
++		*exclusive = false;
+ 	sta_adapter = hdd_get_adapter(hdd_ctx, QDF_STA_MODE);
++	if (use_coex && wonder_mac && exclusive &&
++	    hdd_sta_mon_snapshot(hdd_ctx, &coex) &&
++	    !hdd_sta_mon_idle_preflight(hdd_ctx))
++		use_exclusive = true;
+ 	if (use_coex && hdd_monitor_can_start_standalone(hdd_ctx))
+ 		use_coex = false;
+ 	/* Wonder cannot repurpose a live Android STA as standalone monitor. */
+@@ -24788,7 +24974,12 @@
+ 			return -EOPNOTSUPP;
+ 		wlan_mlme_sta_mon_register(hdd_ctx->psoc,
+ 					  hdd_sta_mon_queue_stop, hdd_ctx);
+-		ret = hdd_sta_mon_snapshot(hdd_ctx, &coex);
++		if (use_exclusive) {
++			qdf_mem_zero(&coex, sizeof(coex));
++			ret = hdd_sta_mon_idle_preflight(hdd_ctx);
++		} else {
++			ret = hdd_sta_mon_snapshot(hdd_ctx, &coex);
++		}
+ 		if (ret)
+ 			return ret;
+ 		combo.iftype_num[coex.ap_owner ? NL80211_IFTYPE_AP :
+@@ -24853,6 +25044,8 @@
+ 		hdd_set_idle_ps_config(hdd_ctx, false);
+ 
+ 	*adapter = mon_adapter;
++	if (exclusive)
++		*exclusive = use_exclusive;
+ 	return 0;
+ }
+ 
+@@ -24862,16 +25055,16 @@
+ 			      bool is_rx_mon)
+ {
+ 	return hdd_add_monitor_check(hdd_ctx, adapter, name, rtnl_held,
+-				    name_assign_type, is_rx_mon, NULL);
++				    name_assign_type, is_rx_mon, NULL, NULL);
+ }
+ 
+ #ifdef FEATURE_WLAN_WONDER
+ int hdd_wonder_add_monitor(struct hdd_context *hdd_ctx,
+ 			   struct hdd_adapter **adapter, const char *name,
+-			   unsigned char *mac)
++			   unsigned char *mac, bool *exclusive)
+ {
+ 	return hdd_add_monitor_check(hdd_ctx, adapter, name, true,
+-				    NET_NAME_USER, true, mac);
++				    NET_NAME_USER, true, mac, exclusive);
+ }
+ #endif
+ 
+--- a/qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c
++++ b/qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c
+@@ -41,6 +41,8 @@
+ 	bool airtime_enabled;
+ 	bool suspended;
+ 	bool failed;
++	/* Only the init transaction reads this before the RCU session is live. */
++	bool exclusive_bootstrap;
+ };
+ 
+ struct hdd_wonder_provider {
+@@ -193,6 +195,30 @@
+ 	kfree(session);
+ }
+ 
++bool hdd_wonder_get_init_channel(struct hdd_adapter *adapter,
++				u32 *frequency, u32 *bandwidth)
++{
++	struct hdd_wonder_provider *provider = READ_ONCE(hdd_wonder_provider);
++	struct hdd_wonder_session *session;
++
++	ASSERT_RTNL();
++	if (!provider || !frequency || !bandwidth ||
++	    !READ_ONCE(adapter->wonder_owned))
++		return false;
++	session = provider->session;
++	if (!session || session->adapter != adapter ||
++	    !session->exclusive_bootstrap)
++		return false;
++	*frequency = session->channel.freq;
++	switch (session->channel.bandwidth) {
++	case WONDERTAP_RATE_BW_20: *bandwidth = CH_WIDTH_20MHZ; break;
++	case WONDERTAP_RATE_BW_40: *bandwidth = CH_WIDTH_40MHZ; break;
++	case WONDERTAP_RATE_BW_80: *bandwidth = CH_WIDTH_80MHZ; break;
++	default: return false;
++	}
++	return true;
++}
++
+ static int hdd_wonder_bandwidth(enum wondertap_rate_bw bandwidth)
+ {
+ 	switch (bandwidth) {
+@@ -228,6 +254,12 @@
+ 		ret = hdd_sta_mon_get_channel(adapter, &shared);
+ 		if (ret)
+ 			return ret;
++		if (session->exclusive_bootstrap) {
++			struct wlan_channel requested;
++
++			return hdd_wonder_build_exclusive_channel(adapter,
++						params->freq, width, &requested);
++		}
+ 		/* Shared ownership retains the real STA/AP's operating channel.
+ 		 * No intentional-disconnect handoff is allowed from Wonder.
+ 		 */
+@@ -295,7 +327,7 @@
+ 		ret = hdd_wonder_peer_prepare(session->peer, shared.ch_freq, generation);
+ 		if (ret)
+ 			goto failed;
+-		if (!snapshot.ap_owner && !session->coex) {
++		if (!snapshot.ap_owner && !snapshot.exclusive && !session->coex) {
+ 			ret = hdd_wonder_peer_get_helper(session->peer, &helper);
+ 			if (ret)
+ 				goto failed;
+@@ -307,7 +339,37 @@
+ 				goto failed;
+ 			}
+ 		}
+-		if (shared.ch_freq != params->freq) {
++		if (snapshot.exclusive) {
++			struct wlan_channel requested;
++			bool retuned = false;
++
++			ret = hdd_wonder_build_exclusive_channel(adapter, params->freq,
++					hdd_wonder_bandwidth(params->bandwidth), &requested);
++			if (ret)
++				return ret;
++			if (shared.ch_freq != requested.ch_freq ||
++			    shared.ch_width != requested.ch_width ||
++			    shared.ch_cfreq1 != requested.ch_cfreq1 ||
++			    shared.ch_cfreq2 != requested.ch_cfreq2) {
++				hdd_wonder_sched_unbind_tsf(session->sched);
++				ret = hdd_wonder_peer_clear(session->peer);
++				if (ret)
++					goto failed;
++				ret = hdd_sta_mon_set_channel(adapter, &requested);
++				if (ret)
++					goto failed;
++				generation = wlan_mlme_sta_mon_epoch(hdd_ctx->psoc);
++				ret = hdd_wonder_peer_prepare(session->peer,
++						params->freq, generation);
++				if (ret)
++					goto failed;
++				retuned = true;
++			}
++			*completed_ns = retuned ?
++				READ_ONCE(adapter->wonder_channel_complete_ns) : ktime_get_ns();
++			if (!*completed_ns)
++				*completed_ns = ktime_get_ns();
++		} else if (shared.ch_freq != params->freq) {
+ 			status = wma_wonder_offchan_prepare(adapter->deflink->vdev_id,
+ 				shared.ch_freq, adapter->mac_addr.bytes, generation,
+ 				hdd_wonder_coex_helper(session->coex));
+@@ -488,6 +550,7 @@
+ 		const struct cdp_tx_injection_params *params)
+ {
+ 	struct hdd_wonder_session *session;
++	struct cdp_tx_injection_params constrained = *params;
+ 	QDF_STATUS status = QDF_STATUS_E_AGAIN;
+ 	void *token;
+ 
+@@ -496,21 +559,23 @@
+ 	if (!session || session->adapter != adapter ||
+ 	    smp_load_acquire(&session->suspended) || READ_ONCE(session->failed))
+ 		goto out;
++	hdd_wonder_peer_tx_rate(session->peer,
++		((struct ieee80211_hdr *)skb->data)->addr1, &constrained);
+ 	if (!session->coex) {
+-		status = wma_injection_tx(skb, adapter->deflink->vdev_id, params);
++		status = wma_injection_tx(skb, adapter->deflink->vdev_id, &constrained);
+ 		goto out;
+ 	}
+-	token = hdd_wonder_coex_tx_token(session->coex, params->chanfreq);
++	token = hdd_wonder_coex_tx_token(session->coex, constrained.chanfreq);
+ 	if (IS_ERR(token)) {
+ 		if (PTR_ERR(token) == -EALREADY)
+-			status = wma_injection_tx(skb, adapter->deflink->vdev_id, params);
++			status = wma_injection_tx(skb, adapter->deflink->vdev_id, &constrained);
+ 		goto out;
+ 	}
+ 	status = wma_wonder_offchan_tx(skb, adapter->deflink->vdev_id,
+ 			hdd_wonder_coex_home_frequency(session->coex),
+ 			hdd_wonder_coex_generation(session->coex),
+ 			hdd_wonder_coex_helper(session->coex),
+-			hdd_wonder_coex_tx_frequency(token), params,
++			hdd_wonder_coex_tx_frequency(token), &constrained,
+ 			hdd_wonder_coex_tx_begin, hdd_wonder_coex_tx_end,
+ 			hdd_wonder_coex_tx_release, token);
+ 	if (QDF_IS_STATUS_ERROR(status))
+@@ -701,7 +766,8 @@
+ 	}
+ 	wiphy_lock(hdd_ctx->wiphy);
+ 	ret = hdd_wonder_add_monitor(hdd_ctx, &session->adapter,
+-				     HDD_WONDER_NETDEV, mac);
++				     HDD_WONDER_NETDEV, mac,
++				     &session->exclusive_bootstrap);
+ 	wiphy_unlock(hdd_ctx->wiphy);
+ 	wlan_mlme_sta_mon_admission_end(hdd_ctx->psoc);
+ 	if (ret)
+@@ -712,6 +778,8 @@
+ 	osif_vdev_sync_register(session->adapter->dev, create_sync);
+ 	osif_vdev_sync_trans_stop(create_sync);
+ 	provider->session = session;
++	if (session->exclusive_bootstrap)
++		session->channel = params->channel;
+ 	WRITE_ONCE(session->adapter->wonder_owned, true);
+ 	WRITE_ONCE(hdd_wonder_standalone_active,
+ 		   !session->adapter->sta_mon_coexist);
+--- a/qcacld-3.0/core/hdd/src/wlan_hdd_wonder_peer.c
++++ b/qcacld-3.0/core/hdd/src/wlan_hdd_wonder_peer.c
+@@ -9,6 +9,7 @@
+ #include <linux/spinlock.h>
+ #include <wlan_hdd_main.h>
+ #include <wlan_hdd_wonder_peer.h>
++#include <wlan_hdd_wonder_rate.h>
+ #include <wlan_vdev_mgr_tgt_if_tx_defs.h>
+ #include <wma_api.h>
+ #include <wondertap_monitor.h>
+@@ -25,6 +26,7 @@
+ 
+ struct hdd_wonder_peer_state {
+ 	struct mutex operation_lock;
++	spinlock_t peers_lock;
+ 	struct completion reply_done;
+ 	struct hdd_adapter *adapter;
+ 	struct wlan_objmgr_psoc *psoc;
+@@ -83,6 +85,7 @@
+ 	if (!state)
+ 		return ERR_PTR(-ENOMEM);
+ 	mutex_init(&state->operation_lock);
++	spin_lock_init(&state->peers_lock);
+ 	init_completion(&state->reply_done);
+ 	state->adapter = adapter;
+ 	state->psoc = adapter->hdd_ctx->psoc;
+@@ -487,11 +490,38 @@
+ 	kfree(state);
+ }
+ 
++/* Called in the packet path under the provider RCU lifetime. Never sleep. */
++void hdd_wonder_peer_tx_rate(struct hdd_wonder_peer_state *state,
++		const u8 *destination, struct cdp_tx_injection_params *rate)
++{
++	struct wondertap_station_info peer;
++	unsigned long flags;
++	bool found = false;
++	int i;
++
++	if (!state || !destination || !rate || !rate->is_data)
++		return;
++	if (!is_multicast_ether_addr(destination)) {
++		spin_lock_irqsave(&state->peers_lock, flags);
++		for (i = 0; i < ARRAY_SIZE(state->peers); i++) {
++			if (state->peers[i].used &&
++			    ether_addr_equal(state->peers[i].info.mac, destination)) {
++				peer = state->peers[i].info;
++				found = true;
++				break;
++			}
++		}
++		spin_unlock_irqrestore(&state->peers_lock, flags);
++	}
++	hdd_wonder_peer_constrain_rate(found ? &peer : NULL, rate);
++}
++
+ int hdd_wonder_peer_station(struct hdd_wonder_peer_state *state,
+ 			    enum wondertap_station_action action,
+ 			    struct wondertap_station_info *info)
+ {
+ 	struct hdd_wonder_peer_entry *entry = NULL, *free_entry = NULL;
++	unsigned long flags;
+ 	int i, error = 0;
+ 
+ 	if (!state || !info || !is_valid_ether_addr(info->mac) ||
+@@ -507,6 +537,7 @@
+ 		error = -ESHUTDOWN;
+ 		goto out;
+ 	}
++	spin_lock_irqsave(&state->peers_lock, flags);
+ 	for (i = 0; i < ARRAY_SIZE(state->peers); i++) {
+ 		if (!state->peers[i].used && !free_entry)
+ 			free_entry = &state->peers[i];
+@@ -549,6 +580,7 @@
+ 	default:
+ 		error = -EINVAL;
+ 	}
++	spin_unlock_irqrestore(&state->peers_lock, flags);
+ out:
+ 	mutex_unlock(&state->operation_lock);
+ 	return error;

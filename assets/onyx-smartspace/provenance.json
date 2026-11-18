@@ -1,0 +1,10 @@
+{
+  "package": "com.google.android.as",
+  "original_version_code": 17000140,
+  "original_version_name": "C.9.playstore.pixel11.1009419057",
+  "original_apk_sha256": "417c0a7aa18f7c54174bba33bf02fba623ead200f4a54cd0ce66c57d6c8fdc1a",
+  "compressed_sha256": "0e4fb3e01347b9b655b3561c7f2229dc9df2777d72a3fd7847ffd9997d5c9f51",
+  "compressed_bytes": 40354792,
+  "source": "Unmodified Google-signed installed APK read with Windows adb.exe from the user device; no app data",
+  "signer_certificate_sha256": "3af39ab967aaa5d279e49b5f769cb66e40799838bc8799343ee57ae435d2455b"
+}

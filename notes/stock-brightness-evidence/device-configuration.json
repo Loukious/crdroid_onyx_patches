@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-14",
+  "scope": "Read-only dumps from the currently installed Android 17 ROM, before installing this port",
+  "main_light_sensor_type": 5,
+  "rear_assistance_sensor_type": 33171055,
+  "non_ui_sensor_type": 33171027,
+  "active_panel_id": "4630947173316895379",
+  "pre_port_nits_brightness_interpolation": "monotone_cubic",
+  "pre_port_ramp_fast_increase": 1.0,
+  "pre_port_ramp_fast_decrease": 1.0,
+  "pre_port_ramp_slow_increase": 1.0,
+  "pre_port_ramp_slow_decrease": 1.0,
+  "port_installed": false,
+  "luminance_measured": false
+}

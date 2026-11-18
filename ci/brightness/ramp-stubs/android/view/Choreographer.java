@@ -1,0 +1,1 @@
+package android.view; public class Choreographer { public static Choreographer getInstance(){return new Choreographer();} public void postVsyncCallback(VsyncCallback c){} public void removeVsyncCallback(VsyncCallback c){} public interface VsyncCallback {void onVsync(FrameData d);} public static class FrameData {public long getFrameTimeNanos(){return 0;}} }

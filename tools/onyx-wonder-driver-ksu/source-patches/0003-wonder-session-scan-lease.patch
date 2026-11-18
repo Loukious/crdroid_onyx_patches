@@ -1,0 +1,143 @@
+--- a/modules/qcacld-3.0/components/mlme/dispatcher/inc/wlan_mlme_sta_mon.h
++++ b/modules/qcacld-3.0/components/mlme/dispatcher/inc/wlan_mlme_sta_mon.h
+@@ -78,7 +78,8 @@
+ 		const struct wlan_mlme_sta_mon_scan_reservation *reservation,
+ 		wlan_mlme_sta_mon_scan_cb callback, void *arg);
+ /* @reserved selects a distinct scheduler callback that does not revoke this
+- * one reservation. All unmatched scans retain normal invalidation semantics.
++ * one reservation. A Wonder-owned monitor rejects unmatched scans until native
++ * teardown is proven; ordinary monitors retain normal invalidation semantics.
+  */
+ bool wlan_mlme_sta_mon_scan_admission_begin(struct wlan_objmgr_psoc *psoc,
+ 		uint32_t vdev_id, uint32_t scan_id, uint32_t requester,
+@@ -111,8 +112,12 @@
+ bool wlan_mlme_sta_mon_attach(struct wlan_objmgr_psoc *psoc);
+ void wlan_mlme_sta_mon_detach(struct wlan_objmgr_psoc *psoc);
+ uint64_t wlan_mlme_sta_mon_epoch(struct wlan_objmgr_psoc *psoc);
++/* HDD passes the actual adapter's Wonder ownership. Arm and host scan admission
++ * atomically select either the new session lease or the existing scan work.
++ */
+ bool wlan_mlme_sta_mon_arm(struct wlan_objmgr_psoc *psoc,
+-			  struct wlan_mlme_sta_mon_snapshot *snapshot);
++			  struct wlan_mlme_sta_mon_snapshot *snapshot,
++			  bool wonder_owned);
+ /* Record native ownership before CREATE can start an asynchronous cleanup. */
+ void wlan_mlme_sta_mon_vdev_created(struct wlan_objmgr_psoc *psoc,
+ 				   uint8_t mon_vdev_id);
+--- a/modules/qcacld-3.0/components/mlme/dispatcher/src/wlan_mlme_api.c
++++ b/modules/qcacld-3.0/components/mlme/dispatcher/src/wlan_mlme_api.c
+@@ -68,6 +68,20 @@
+ 		  ctrl->state != WLAN_STA_MON_QUIESCED));
+ }
+ 
++/* Wonder has no restart path after an unrelated STA scan closes its monitor.
++ * Hold host scan admission from atomic arm through proven native/DP teardown, even
++ * during suspend or asynchronous invalidation. An uncertain firmware teardown
++ * cannot release radio ownership. This does not change non-scan admission.
++ */
++static bool sta_mon_wonder_scan_lease_locked(
++		struct wlan_mlme_sta_mon_control *ctrl)
++{
++	return ctrl->wonder_scan_lease &&
++		(ctrl->fw_uncertain ||
++		 (ctrl->attached && ctrl->state != WLAN_STA_MON_OFF &&
++		  ctrl->state != WLAN_STA_MON_QUIESCED));
++}
++
+ static bool sta_mon_real_owner_matches(struct wlan_mlme_sta_mon_control *ctrl,
+ 				       uint8_t vdev_id)
+ {
+@@ -112,6 +126,8 @@
+ 	if (!stop) {
+ 		ctrl->attached = false;
+ 		ctrl->state = WLAN_STA_MON_OFF;
++		if (!ctrl->fw_uncertain)
++			ctrl->wonder_scan_lease = false;
+ 	}
+ 	spin_unlock_irqrestore(&sta_mon_lock, flags);
+ }
+@@ -136,6 +152,7 @@
+ 		ctrl->snapshot.ap_owner = false;
+ 		ctrl->snapshot.sta_ap_coexist = false;
+ 		ctrl->snapshot.companion_sta_vdev_id = WLAN_INVALID_VDEV_ID;
++		ctrl->wonder_scan_lease = false;
+ 		ok = true;
+ 	}
+ 	spin_unlock_irqrestore(&sta_mon_lock, flags);
+@@ -157,6 +174,7 @@
+ 		ctrl->snapshot.ap_owner = false;
+ 		ctrl->snapshot.sta_ap_coexist = false;
+ 		ctrl->snapshot.companion_sta_vdev_id = WLAN_INVALID_VDEV_ID;
++		ctrl->wonder_scan_lease = false;
+ 	}
+ 	spin_unlock_irqrestore(&sta_mon_lock, flags);
+ }
+@@ -176,7 +194,8 @@
+ }
+ 
+ bool wlan_mlme_sta_mon_arm(struct wlan_objmgr_psoc *psoc,
+-			  struct wlan_mlme_sta_mon_snapshot *snapshot)
++			  struct wlan_mlme_sta_mon_snapshot *snapshot,
++			  bool wonder_owned)
+ {
+ 	struct wlan_mlme_sta_mon_control *ctrl = sta_mon_control(psoc);
+ 	unsigned long flags;
+@@ -205,6 +224,7 @@
+ 		dp_mon_sta_coex_unpause(wlan_psoc_get_dp_handle(psoc));
+ 		snapshot->generation++;
+ 		ctrl->snapshot = *snapshot;
++		ctrl->wonder_scan_lease = wonder_owned;
+ 		ctrl->state = WLAN_STA_MON_ARMING;
+ 		ok = true;
+ 	}
+@@ -307,6 +327,7 @@
+ 		ctrl->snapshot.ap_owner = false;
+ 		ctrl->snapshot.sta_ap_coexist = false;
+ 		ctrl->snapshot.companion_sta_vdev_id = WLAN_INVALID_VDEV_ID;
++		ctrl->wonder_scan_lease = false;
+ 	}
+ 	spin_unlock_irqrestore(&sta_mon_lock, flags);
+ 	return ok;
+@@ -679,9 +700,13 @@
+ 			ctrl->admissions++;
+ 		}
+ 	} else {
+-		/* Keep the normal admission behavior for every unrelated scan. */
++		/* Refuse before update_begin can revoke a live Wonder generation.
++		 * Generic STA monitors retain ordinary scan invalidation behavior.
++		 */
+ 		ok = !ctrl->exclusive_lease && !ctrl->handoff_generation &&
+-			!sta_mon_ap_lease_locked(ctrl) && ctrl->admissions != U32_MAX;
++			!sta_mon_ap_lease_locked(ctrl) &&
++			!sta_mon_wonder_scan_lease_locked(ctrl) &&
++			ctrl->admissions != U32_MAX;
+ 		if (ok)
+ 			ctrl->admissions++;
+ 	}
+--- a/modules/qcacld-3.0/core/hdd/src/wlan_hdd_main.c
++++ b/modules/qcacld-3.0/core/hdd/src/wlan_hdd_main.c
+@@ -4522,7 +4522,12 @@
+ 		}
+ 		if (!try_module_get(THIS_MODULE))
+ 			return -EBUSY;
+-		if (!wlan_mlme_sta_mon_arm(hdd_ctx->psoc, &coex)) {
++		/* Arm and scan admission share the MLME control lock. A scan which
++		 * wins first changes the generation/counts and makes arm fail; one
++		 * arriving later sees the Wonder-only lease before invalidation.
++		 */
++		if (!wlan_mlme_sta_mon_arm(hdd_ctx->psoc, &coex,
++					   READ_ONCE(adapter->wonder_owned))) {
+ 			module_put(THIS_MODULE);
+ 			return -EBUSY;
+ 		}
+--- a/modules/qcacld-3.0/components/mlme/core/inc/wlan_mlme_main.h
++++ b/modules/qcacld-3.0/components/mlme/core/inc/wlan_mlme_main.h
+@@ -174,6 +174,8 @@
+ 	bool scan_submission_started;
+ 	bool scan_fw_pending;
+ 	bool scan_fw_observed;
++	/* Fits the control tail padding; snapshot layout remains unchanged. */
++	bool wonder_scan_lease;
+ };
+ 
+ /**

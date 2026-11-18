@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "reviewed": false,
+  "reviewed_by": "",
+  "scope": "qca-module-only",
+  "stock_sha256": "0a2eba04b57ccdc0ae9e57258b91b38440e4b983fa9e151fe5acf36a3d915969",
+  "replacement_sha256": "REVIEWED_COMPILED_MODULE_SHA256",
+  "replacement_symvers_sha256": "REVIEWED_QCA_MODULE_SYMVERS_SHA256",
+  "kernel_release": "6.18.63-android17-6-maybe-dirty-4k",
+  "source_lifecycle_fix_reviewed": false,
+  "ordinary_module_unload_path_reviewed": false,
+  "synchronous_post_fs_data_reload_reviewed": false,
+  "kernel_and_dependencies_unchanged": false,
+  "reviewed_scaffold_sha256": {
+    "module-template/common.sh": "REVIEWED_SOURCE_SHA256",
+    "module-template/customize.sh": "REVIEWED_SOURCE_SHA256",
+    "module-template/post-fs-data.sh": "REVIEWED_SOURCE_SHA256",
+    "module-template/module.prop": "REVIEWED_SOURCE_SHA256",
+    "build-module.py": "REVIEWED_SOURCE_SHA256"
+  },
+  "reviewed_source_sha256": {
+    "modules/qcacld-3.0/core/hdd/src/wlan_hdd_main.c": "REVIEWED_SOURCE_SHA256",
+    "modules/qcacld-3.0/core/hdd/src/wlan_hdd_wonder.c": "REVIEWED_SOURCE_SHA256"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "stuck_state": {
+    "mode": "automatic",
+    "lux": 3.861375,
+    "target": 0.49951124,
+    "user_point_lux": 3.8613749,
+    "user_point_brightness": 0.49951124,
+    "temporary_brightness": "NaN"
+  },
+  "controlled_existing_point": {
+    "settled_manual_max_then_auto": "returns existing .49951124 point",
+    "settled_manual_half_then_auto": "returns existing .49951124 point"
+  },
+  "after_reboot": {
+    "short_term_point_absent": true,
+    "saved_auto_adjustment_retained": 0.48476738
+  },
+  "fresh_framework_setter_max_then_auto": {
+    "attempts": 3,
+    "passed": 3,
+    "target_and_actual_at_1s": 0.015280787,
+    "lux": 4.0150003,
+    "manual_point_created": false
+  },
+  "normal_slider_test": {
+    "immediate_manual_max_then_auto": "passed at 1s",
+    "settled_manual_128_actual_0_5_then_auto": "passed",
+    "target_and_actual": 0.015280787,
+    "lux": 4.0150003,
+    "new_user_point": false
+  },
+  "source_provenance_race": "Possible asynchronous write-origin ambiguity identified statically; not reproduced in fresh framework tests; no source patch installed for this follow-up",
+  "learning_reset_issued": false,
+  "full_auto_manual_max_auto_sequence": {
+    "passed": 6,
+    "attempts": 6,
+    "no_added_pause_between_gestures": true,
+    "target_at_1s": 0.015280787,
+    "new_user_point": false
+  },
+  "original_anchor_recorded": {
+    "device_time": "21:08:42.667",
+    "framework_mode": "Auto",
+    "event": "user_set brightness adjustment",
+    "next_manual_mode_event": "21:08:43.250",
+    "physical_input_origin": "Not established from existing logs"
+  },
+  "post_activation_auto_adjustment": 0.0,
+  "new_source_or_module_update_in_followup": false,
+  "left_auto_enabled": true
+}

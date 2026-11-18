@@ -109,6 +109,7 @@ declare -A PROJECT=(
     [vendor_gms]="vendor/gms"
     [vendor_lineage]="vendor/lineage"
     [vendor_qcom_opensource_interfaces]="vendor/qcom/opensource/interfaces"
+    [vendor_unbundled_google_packages_SystemUIGoogle]="vendor/unbundled_google/packages/SystemUIGoogle"
     [vendor_xiaomi_onyx]="vendor/xiaomi/onyx"
 )
 
@@ -169,7 +170,7 @@ apply_patches() {
                 frameworks_base/0012-fix-notification-blur-inflation-thread.patch|\
                 frameworks_base/0013-fix-wifi-data-usage-query.patch|\
                 frameworks_base/0014-pool-notification-history-strings.patch|\
-                frameworks_base/0015-exclude-shade-from-home-double-tap-sleep.patch|\
+                vendor_unbundled_google_packages_SystemUIGoogle/0001-separate-now-playing-from-keyguard-indications.patch|\
                 frameworks_opt_telephony/0001-apply-lte-ca-override-before-state-comparison.patch|\
                 device_xiaomi_onyx/0022-label-radio-customized-region-property.patch|\
                 packages_apps_Settings/0002-secure-spaces-management.patch|\

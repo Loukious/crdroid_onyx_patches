@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# The FFI's NETLINK_ROUTE socket binds and installs socket options when it
+# creates mosey0 and manages addresses/neighbors. Other socket permissions and
+# the device ioctl allowlist are supplied by Lineage's existing Mosey policy.
+allow mosey_server self:netlink_route_socket { bind setopt };
+
+# Linux >= 6.13 checks route messages through nlmsg extended permissions. The
+# FFI sends RTM_GETLINK to query interfaces, RTM_SETLINK to bring wonder0 up
+# before pcap, RTM_NEWNEIGH/RTM_DELNEIGH to add/remove neighbors, and RTM_GETNEIGH
+# to query them. All five message types were denied live.
+allow mosey_server self:netlink_route_socket nlmsg;
+allowxperm mosey_server self:netlink_route_socket nlmsg { RTM_GETLINK RTM_SETLINK RTM_NEWNEIGH RTM_DELNEIGH RTM_GETNEIGH };
+
+# The launcher already entered mosey_server via init_daemon_domain. It executes
+# the unchanged daemon within that domain, retaining UID/groups/ambient caps.
+allow mosey_server mosey_server_exec:file execute_no_trans;

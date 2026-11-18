@@ -1,0 +1,1 @@
+package com.android.server.display; public abstract class BrightnessMappingStrategy { public static final float INVALID_LUX=-1; public abstract float convertToAdjustedNits(float b); public abstract float getBrightnessFromAdjustedNits(float n); }

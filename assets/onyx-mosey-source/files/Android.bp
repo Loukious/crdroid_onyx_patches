@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: Apache-2.0
+
+soong_namespace {}
+
+cc_binary {
+    name: "onyx_mosey_launcher",
+    srcs: ["launcher.c"],
+    shared_libs: ["liblog"],
+    system_ext_specific: true,
+    compile_multilib: "64",
+    c_std: "gnu11",
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}
+
+cc_library_shared {
+    name: "libmosey_onyx_config",
+    srcs: ["config.c", "wonder-cap-query.c", "wonder-capability-bridge.c"],
+    shared_libs: ["libbinder_ndk", "libdl", "liblog"],
+    system_ext_specific: true,
+    compile_multilib: "64",
+    c_std: "gnu11",
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+    version_script: "config.map",
+}

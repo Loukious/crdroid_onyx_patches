@@ -1,0 +1,4 @@
+__pycache__/
+
+# Compiled KernelSU payloads and package receipts remain local artifacts.
+out/

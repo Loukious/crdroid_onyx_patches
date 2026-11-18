@@ -1,0 +1,11 @@
+out/
+__pycache__/
+
+# Captured policies, compiled helpers and their local build evidence.
+policy-helper/verification/
+policy-helper/onyx-mosey-nlmsg-arm64
+policy-helper/build-receipt.json
+native/onyx-mosey-cache*-arm64
+native/build-cache*receipt.json
+native/build-cache*receipt.tests.*.log
+native/.onyx-mosey-cache-build-*

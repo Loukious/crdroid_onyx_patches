@@ -1,0 +1,16 @@
+{
+  "files": {
+    "Android.bp": "ad183c079c74ea623b8d74eb474db1dcc6a2c5aab73df704a544cc80d5c4580c",
+    "README.md": "6ee2f047d9123370f73ec2a7de96fdaaf45ba87ccf1381a942b59a6f0939e14a",
+    "config.c": "c87149aa334bba23111ae346f79e1bbb083a3d239f92b5c0aeb0bc8fc67f248b",
+    "config.map": "410289c7b3f0db08a715b1ff050939b582c00d54dd853945ef50a7ac21a259fd",
+    "launcher.c": "cae25733b012ff8971126c6e571cd8817acc7ed317083dd52f94bffb78121904",
+    "onyx-mosey.rc": "a46b60ce31c8aea66817ddcad586a3206ed79f7fe6cae83430faefada8bf8176",
+    "product.mk": "58f990c52403ff9f542d4d6349f862527f0b4d8de0fee8c68ca2b1441b7f9213",
+    "sepolicy/file_contexts": "1643466bfc2d051fbb727bf84889469e4e8a907a02d82016bee07727d65b8434",
+    "sepolicy/mosey.te": "7f37f67c55ef9be53fe046b40d62c57e262bfe58a681751e7b3a4e7613a0a09e",
+    "wonder-cap-query.c": "6b8d0b248cdf1e7572d55be891e57263bce70fa21b6e272b82e24d028e4c1bec",
+    "wonder-cap-query.h": "73ba156710e5d07fba4ddbb71482ff134c7e2521c36ed2cc13f9545973ecc95a",
+    "wonder-capability-bridge.c": "8c6030b2c13f7cb58315be47786b50bfb7ccd64bfefc267d5445f2d7a8f47845"
+  }
+}

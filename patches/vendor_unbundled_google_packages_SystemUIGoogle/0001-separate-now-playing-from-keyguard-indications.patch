@@ -1,0 +1,86 @@
+diff --git a/res/values/custom_dimens.xml b/res/values/custom_dimens.xml
+index 5954a7d..41c0a7e 100644
+--- a/res/values/custom_dimens.xml
++++ b/res/values/custom_dimens.xml
+@@ -51,6 +51,7 @@
+     <dimen name="ambient_indication_first_recognition_animation_translation_y">21.5dp</dimen>
+     <dimen name="ambient_indication_icon_size">20dp</dimen>
+     <dimen name="ambient_indication_margin_bottom">71dp</dimen>
++    <dimen name="ambient_indication_row_spacing">8dp</dimen>
+     <dimen name="ambient_indication_udfps_min_height">100dp</dimen>
+     <dimen name="ambient_indication_note_icon_size">14dp</dimen>
+     <dimen name="ambient_indication_song_change_animation_translation_y">21.5dp</dimen>
+diff --git a/src/com/google/android/systemui/keyguard/ui/sections/DefaultAmbientIndicationAreaSection.kt b/src/com/google/android/systemui/keyguard/ui/sections/DefaultAmbientIndicationAreaSection.kt
+index d8941e1..a25723d 100644
+--- a/src/com/google/android/systemui/keyguard/ui/sections/DefaultAmbientIndicationAreaSection.kt
++++ b/src/com/google/android/systemui/keyguard/ui/sections/DefaultAmbientIndicationAreaSection.kt
+@@ -3,6 +3,7 @@ package com.google.android.systemui.keyguard.ui.sections
+ import android.content.Context
+ import android.view.LayoutInflater
+ import android.view.View
++import androidx.constraintlayout.widget.Barrier
+ import androidx.constraintlayout.widget.ConstraintLayout
+ import androidx.constraintlayout.widget.ConstraintSet
+ import com.android.keyguard.KeyguardUpdateMonitor
+@@ -56,6 +57,12 @@ constructor(
+             LayoutInflater.from(constraintLayout.context)
+                 .inflate(R.layout.ambient_indication, constraintLayout, false)
+         constraintLayout.addView(view)
++        constraintLayout.addView(
++            Barrier(constraintLayout.context).apply {
++                id = R.id.ambient_indication_top_barrier
++                setAllowsGoneWidget(false)
++            }
++        )
+     }
+ 
+     override fun applyConstraints(constraintSet: ConstraintSet) {
+@@ -105,6 +112,18 @@ constructor(
+                 ConstraintSet.END,
+             )
+         } else {
++            // Charging and other indications can sit above a low fingerprint sensor. Reserve
++            // whichever view starts higher so the ambient icon/text never shares their row.
++            constraintSet.createBarrier(
++                R.id.ambient_indication_top_barrier,
++                Barrier.TOP,
++                0,
++                *intArrayOf(AR.id.device_entry_icon_view, AR.id.keyguard_indication_area),
++            )
++            constraintSet.getConstraint(R.id.ambient_indication_top_barrier)
++                .layout.mBarrierAllowsGoneWidgets = false
++            constraintSet.clear(R.id.ambient_indication_container, ConstraintSet.TOP)
++            constraintSet.constrainMinHeight(R.id.ambient_indication_container, 0)
+             constraintSet.constrainHeight(
+                 R.id.ambient_indication_container,
+                 ConstraintSet.WRAP_CONTENT,
+@@ -112,8 +131,9 @@ constructor(
+             constraintSet.connect(
+                 R.id.ambient_indication_container,
+                 ConstraintSet.BOTTOM,
+-                AR.id.device_entry_icon_view,
++                R.id.ambient_indication_top_barrier,
+                 ConstraintSet.TOP,
++                context.resources.getDimensionPixelSize(R.dimen.ambient_indication_row_spacing),
+             )
+             constraintSet.connect(
+                 R.id.ambient_indication_container,
+@@ -156,5 +176,8 @@ constructor(
+         if (view != null) {
+             constraintLayout.removeView(view)
+         }
++        constraintLayout.findViewById<View>(R.id.ambient_indication_top_barrier)?.let {
++            constraintLayout.removeView(it)
++        }
+     }
+ }
+diff --git a/res/values/custom_ids.xml b/res/values/custom_ids.xml
+new file mode 100644
+index 0000000..a97aefa
+--- /dev/null
++++ b/res/values/custom_ids.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <item name="ambient_indication_top_barrier" type="id" />
++</resources>

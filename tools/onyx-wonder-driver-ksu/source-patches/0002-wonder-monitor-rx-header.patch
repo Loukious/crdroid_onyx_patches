@@ -1,0 +1,15 @@
+--- a/qcacld-3.0/components/dp/core/src/wlan_dp_txrx.c
++++ b/qcacld-3.0/components/dp/core/src/wlan_dp_txrx.c
+@@ -925,6 +925,12 @@
+ #endif
+ 		qdf_nbuf_set_dev(nbuf, dp_intf->dev);
+ 
++		/* Radiotap is the link header. Packet taps run before Wonder's RX
++		 * handler and require a valid MAC header even on fresh raw copies.
++		 */
++		skb_reset_mac_header(nbuf);
++		qdf_nbuf_set_protocol(nbuf, htons(ETH_P_802_2));
++
+ 		++stats->per_cpu[cpu_index].rx_packets;
+ 		qdf_net_stats_add_rx_pkts(&dp_intf->stats, 1);
+ 		qdf_net_stats_add_rx_bytes(&dp_intf->stats,

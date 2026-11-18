@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-14",
+  "trial": "2026.11.14-trial.5",
+  "stock_variant": "Global 3.0.303",
+  "installed": true,
+  "accepted": true,
+  "zip_sha256": "e63e02aa123f10d483952ea3ea4b317e48e7dacb3407feeb772cce4d477d227e",
+  "payload": {
+    "/system/framework/services.jar": "15c593b6e318144b4fc4ff6b786a1f72be5c3ca57282e4f3759d2190bc2a5a74",
+    "/vendor/etc/displayconfig/display_id_4630947173316895379.xml": "77ed812b114c9475f914a31c20239a71d2ebd29d4700dd36e7fe59b3cc030d06",
+    "/vendor/etc/displayconfig/display_id_4630947258895476883.xml": "77ed812b114c9475f914a31c20239a71d2ebd29d4700dd36e7fe59b3cc030d06",
+    "/system_ext/priv-app/SystemUIGoogle/SystemUIGoogle.apk": "b5b425b4288205bb001a586253b357a9d0987e21176e25029f84d434c0fdb56b"
+  },
+  "source_sha256": "560367d78409186689d0c225d44929cb49970d8beb6e45a2842880e889d7e4c7",
+  "stock_reference_validation": {
+    "control_point_vectors": 61,
+    "mapped_samples": 636,
+    "bitwise_equal": true
+  },
+  "android_test_source_compiled": true,
+  "android_instrumentation_run": false,
+  "selinux": "Enforcing",
+  "same_boot_framework_and_systemui_health": true,
+  "framework_preference_and_manual_auto_round_trip_passed": true,
+  "qs_preference_test": "passed",
+  "physical_light_response_test": "passed",
+  "learning_explicitly_reset": false,
+  "auto_left_enabled": true,
+  "stay_awake_restored": true,
+  "rejected_affine_installed": false,
+  "qs_auto_slider_changed_preference": true,
+  "qs_manual_auto_retained_preference": true,
+  "lighting_results": {
+    "passed": true,
+    "anchor_lux": 6.82575,
+    "saved_preference": 0.077828355,
+    "baseline_lux": 6.82575,
+    "baseline_brightness": 0.077828355,
+    "lamp_lux": 30.687443,
+    "lamp_brightness": 0.12190067,
+    "shade_lux": 0.0,
+    "shade_brightness": 0.0040913476,
+    "anchor_and_preference_unchanged": true,
+    "temporary_override_used": false,
+    "learning_explicitly_reset": false,
+    "scope": "Real front-sensor lighting after an Auto slider adjustment and Manual/Auto round trip; Android-reported current screen brightness, not an external photometer."
+  },
+  "quick_settings_left_collapsed": true,
+  "torch_left_off": true,
+  "no_framework_or_systemui_crash_in_current_boot": true
+}
