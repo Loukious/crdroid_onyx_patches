@@ -1,10 +1,19 @@
-# Retired home double-tap shade experiment
+# Home double-tap shade fix merged upstream
 
 Former patch `frameworks_base/0015-exclude-shade-from-home-double-tap-sleep.patch`
 is removed from the active patch set. `apply.sh` and `gen-patches.sh` no longer
 apply or emit it. The following diagnosis, implementation description and host
-test results describe the retired experiment; they do not describe a currently
-carried ROM change.
+test results describe the former local patch. Evolution X merged its home
+shade/QS exclusion in [frameworks_base PR #97](https://github.com/Evolution-X/frameworks_base/pull/97)
+into `cnb` on November 16, 2026. [PR #98](https://github.com/Evolution-X/frameworks_base/pull/98)
+also fixes lockscreen/QS sleep gesture ownership and the small-clock Smartspace
+anchor. The active patch set carries no duplicate changes to those files.
+
+The stock brightness port, System Intelligence calendar/prebuilt correction,
+and SystemUIGoogle Now Playing row separation are separate local changes kept
+in this repository. The Now Playing patch changes
+`DefaultAmbientIndicationAreaSection`, whereas PR #98's Smartspace placement
+fix changes the framework's `ClockSection`.
 
 Rapidly pressing the Caffeine Quick Settings tile with the launcher underneath
 can put the phone to sleep. The device log identifies the caller as

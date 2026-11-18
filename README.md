@@ -43,6 +43,13 @@ Framework patch `0019` also accepts brightness-mode taps immediately after a
 slider drag, while the shade's return animation finishes. This SystemUI fix
 requires a rebuilt SystemUI; it is separate from the installed KernelSU trial.
 
+**Smartspace calendar and Now Playing** — the retained GMS prebuilt and
+[calendar helper](tools/onyx-smartspace-fix/README.md) correct event timing in
+Android System Intelligence. The SystemUIGoogle patch gives Now Playing its own
+row above charging/fingerprint indications. These existing local ROM edits are
+recorded here for reproducible builds, alongside the [Mosey native provider and
+boot helper](tools/onyx-mosey-gms-ksu/README.md).
+
 **Gesture navigation space** — an extra settable inset below the gesture pill.
 `frameworks/base` (`Settings.java`, `DisplayPolicy.java`) plus a UI half that is
 split across two projects for a reason that is not obvious: the `ListPreference`
@@ -146,10 +153,14 @@ notification path. This fixes duplicate completion without changing fingerprint
 routing or authentication policy. It requires a rebuilt fingerprint service/ROM;
 see [the HAL contract and regression checks](notes/fingerprint-cancellation.md).
 
-**Retired home double-tap shade experiment** — former framework patch `0015`
-is removed from the active patch set, application rules and generator. Its
-shade-exclusion behavior is no longer carried. The original diagnosis and host
-regression results remain in [the historical note](notes/home-double-tap-shade.md).
+**Upstream double-tap and Smartspace placement fixes** — Evolution X `cnb`
+merged [PR #97](https://github.com/Evolution-X/frameworks_base/pull/97) and
+[PR #98](https://github.com/Evolution-X/frameworks_base/pull/98) on November 16,
+2026. They cover home/lockscreen sleep gestures during QS interaction and the
+small-clock Smartspace anchor. Former framework patch `0015` is removed from
+the active patch set, application rules and generator; these upstream fixes
+need no duplicate local patch. The original diagnosis and host regression
+results remain in [the historical note](notes/home-double-tap-shade.md).
 
 **Lockscreen keypad cancellation** — the legacy bouncer bridge in framework
 patch `0009` checks the current manual transition and swipe position before
