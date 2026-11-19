@@ -17,24 +17,28 @@ index 3d03e90009f34..1a7653812380a 100644
 +    visibility: ["//frameworks/base/packages/SystemUI:__pkg__"],
 +}
 diff --git a/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt b/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt
-index eb50005411726..f867083a13b09 100644
+index 9437290df6905..9962ac1dc7477 100644
 --- a/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt
 +++ b/packages/SystemUI/compose/features/src/com/android/systemui/bouncer/ui/composable/BouncerOverlay.kt
-@@ -27,8 +27,13 @@ import androidx.compose.foundation.layout.union
+@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.union
  import androidx.compose.foundation.layout.windowInsetsPadding
  import androidx.compose.foundation.overscroll
  import androidx.compose.material3.MaterialTheme
 +import androidx.compose.runtime.collectAsState
-+import androidx.compose.runtime.getValue
 +import androidx.compose.ui.zIndex
  import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.CompositionLocalProvider
  import androidx.compose.runtime.DisposableEffect
+@@ -36,6 +38,8 @@ import androidx.compose.runtime.LaunchedEffect
+ import androidx.compose.runtime.derivedStateOf
+ import androidx.compose.runtime.getValue
+ import androidx.compose.runtime.remember
 +import androidx.compose.ui.viewinterop.AndroidView
 +import androidx.constraintlayout.widget.ConstraintLayout
  import androidx.compose.ui.Modifier
  import androidx.compose.ui.graphics.Color
  import androidx.compose.ui.graphics.RectangleShape
-@@ -105,6 +110,7 @@ private fun ContentScope.BouncerOverlay(
+@@ -131,6 +135,7 @@ private fun ContentScope.BouncerOverlay(
      modifier: Modifier = Modifier,
  ) {
      val backgroundColor = viewModel.backgroundColor
@@ -42,7 +46,7 @@ index eb50005411726..f867083a13b09 100644
  
      DisposableEffect(Unit) { onDispose { viewModel.onUiDestroyed() } }
      val containerLayout = calculateContainerLayout()
-@@ -149,6 +155,15 @@ private fun ContentScope.BouncerOverlay(
+@@ -175,6 +180,15 @@ private fun ContentScope.BouncerOverlay(
                      // No-op if containerization is enabled as insets will be already consumed.
                      .windowInsetsPadding(insets),
              )

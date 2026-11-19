@@ -94,6 +94,7 @@ declare -A PROJECT=(
     [hardware_nxp_nfc]="hardware/nxp/nfc"
     [hardware_qcom-caf_sm8750_audio_primary-hal]="hardware/qcom-caf/sm8750/audio/primary-hal"
     [hardware_xiaomi]="hardware/xiaomi"
+    [kernel_platform_kernel-6.18]="kernel/platform/kernel-6.18"
     [kernel_xiaomi_sm8735]="kernel/xiaomi/sm8735"
     [kernel_xiaomi_sm8735-modules]="kernel/xiaomi/sm8735-modules"
     [kernel_xiaomi_onyx-wlan]="kernel/xiaomi/onyx-wlan"
@@ -167,6 +168,7 @@ apply_patches() {
             esac
             case "$key/$n" in
                 frameworks_base/000[3-9]-*|frameworks_base/0010-*|\
+                kernel_platform_kernel-6.18/0001-sandbox-feature-rom-builds.patch|\
                 frameworks_base/0012-fix-notification-blur-inflation-thread.patch|\
                 frameworks_base/0013-fix-wifi-data-usage-query.patch|\
                 frameworks_base/0014-pool-notification-history-strings.patch|\
@@ -212,7 +214,7 @@ apply_patches() {
             # than failing outright, which is the #1 cause of build breakage
             # when upstream adds/removes lines above a hunk.
             local pout
-            if pout="$(patch -d "$ROM/$proj" -p1 --fuzz=3 --no-backup-if-mismatch < "$patch" 2>&1)"; then
+            if pout="$(patch -d "$ROM/$proj" -p1 --fuzz=3 --no-backup-if-mismatch --reject-file=- < "$patch" 2>&1)"; then
                 # Report any fuzz/offset so it shows in CI logs as a heads-up.
                 # Captured instead of piped: see the pipeline note up top.
                 local fuzz_match

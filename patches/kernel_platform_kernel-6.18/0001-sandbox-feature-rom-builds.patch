@@ -1,0 +1,51 @@
+--- a/port/rom/build.py
++++ b/port/rom/build.py
+@@ -221,10 +221,16 @@
+         for command in commands:
+             subprocess.run([sys.executable, *map(str, command)], env=env, check=True)
+         previous = set((workspace / 'artifacts').glob('*'))
++        # Feature builds use the persistent Bazel output/action cache directly.
++        # Kleaf local mode duplicates kernel preparation for each module target
++        # and previously added about 49 GiB to these ROM builds.
++        cache_flags = []
++        if not (source / 'port/features/manifest.json').is_file():
++            cache_flags = ['--cache-dir', str(workspace_root / 'kleaf-cache')]
+         subprocess.run([sys.executable, str(source / 'port/build.py'), str(workspace),
+                         '--variant', variant,
+                         '--jobs', str(jobs), '--memory-mb', str(memory_mb),
+-                        '--cache-dir', str(workspace_root / 'kleaf-cache')], env=env, check=True)
++                        *cache_flags], env=env, check=True)
+         created = set((workspace / 'artifacts').glob('*')) - previous
+         if len(created) != 1 or source_state(source) != before:
+             raise ValueError('Source changed during build or build artifact selection is ambiguous')
+--- a/port/rom/test_rom.py
++++ b/port/rom/test_rom.py
+@@ -96,6 +96,28 @@
+         self.assertTrue(old.exists())
+         self.assertEqual((self.output / 'previous').read_text(), 'preserve')
+ 
++    def test_feature_builds_use_sandbox_cache_and_selected_variant(self):
++        for features in (False, True):
++            with self.subTest(features=features):
++                manifest = self.source / 'port/features/manifest.json'
++                if features:
++                    manifest.parent.mkdir(parents=True)
++                    manifest.write_text('{}')
++                def run(command, **kwargs):
++                    if str(self.source / 'port/build.py') in command:
++                        self.assertEqual(command[command.index('--variant') + 1], 'balanced')
++                        self.assertEqual('--cache-dir' in command, not features)
++                        raise subprocess.CalledProcessError(1, command)
++                with patch.object(build, 'recipe_key', return_value='recipe'), \
++                     patch.object(build, 'source_state', return_value={'revision': 'fixed'}), \
++                     patch.object(build.shutil, 'which', return_value='/usr/bin/repo'), \
++                     patch.object(build.subprocess, 'run', side_effect=run), \
++                     patch.object(build, 'package') as package:
++                    with self.assertRaises(subprocess.CalledProcessError):
++                        build.build(self.source, self.output, self.root / 'workspace', 2, 4096, 'balanced')
++                    package.assert_not_called()
++                self.assertEqual((self.output / 'previous').read_text(), 'preserve')
++
+     def test_success_without_new_artifact_is_rejected(self):
+         with patch.object(build, 'recipe_key', return_value='recipe'), \
+              patch.object(build, 'source_state', return_value={'revision': 'fixed'}), \

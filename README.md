@@ -13,6 +13,16 @@ The repo name still says `crdroid` because renaming it would break every URL
 that references it; the contents target Evolution X `cnb` / Android 17. The
 crDroid-era set is preserved on the `crdroid-16.0` branch.
 
+The source-build hook ships the matched SUSFS LKM after normal module dependency
+validation, keeping it available for KernelSU Next's special loader and out of
+the ordinary autoload list. All regular driver symbol checks remain active.
+
+The native 6.18 ROM build uses the Balanced variant by default. The carried
+kernel-adapter patch keeps feature builds in Kleaf sandbox mode and reuses the
+persistent Bazel output/action cache, avoiding the extra local Kbuild cache tree
+that previously consumed roughly 49 GiB. Legacy source builds retain their
+existing local-cache behavior.
+
 `apply.sh` is **idempotent** — it reverse-checks each patch first and skips ones
 already applied — and exits non-zero on a genuine failure so a build stops
 rather than shipping a half-patched ROM.

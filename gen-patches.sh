@@ -622,6 +622,13 @@ emit vendor/unbundled_google/packages/SystemUIGoogle \
 # staging the actual firmware images in apply.sh. A static Android.mk patch
 # would be incorrect whenever the upstream radio list or blobs change.
 
+# Feature kernels keep persistent Bazel outputs without an additional local
+# Kbuild cache tree, which otherwise duplicates tens of GiB of intermediates.
+if [ -f "$ROM/kernel/platform/kernel-6.18/port/rom/build.py" ]; then
+    emit kernel/platform/kernel-6.18 0001-sandbox-feature-rom-builds.patch \
+        port/rom/build.py port/rom/test_rom.py
+fi
+
 # Keep stock brightness changes isolated from the shared display/resources edits.
 # This generator uses temporary indexes and can also be run on its own.
 python3 "$HERE/ci/gen-stock-brightness-patches.py" "$ROM" --out "$OUT"

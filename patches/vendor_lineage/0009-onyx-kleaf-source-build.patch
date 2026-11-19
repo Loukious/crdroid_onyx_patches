@@ -1,8 +1,8 @@
 diff --git a/build/tasks/kernel.mk b/build/tasks/kernel.mk
-index 343e4361f35ed01827663c67225d5129c13fbcec..cedb0e00db78c050c7514e054b82524ae59facb0 100644
+index 343e4361f35ed01827663c67225d5129c13fbcec..03f48bc03cfdd8cd7547862b66261108d63729cb 100644
 --- a/build/tasks/kernel.mk
 +++ b/build/tasks/kernel.mk
-@@ -756,7 +756,31 @@ else
+@@ -756,7 +756,41 @@
  KERNEL_REPO_MANIFEST := $(abspath $(KERNEL_PATH)):$(abspath $(KERNEL_OUT)/manifest.xml)
  endif
  
@@ -25,16 +25,26 @@ index 343e4361f35ed01827663c67225d5129c13fbcec..cedb0e00db78c050c7514e054b82524a
 +	done
 +	$(hide) sed -i -E '/^lib\/modules\/(.*\.ko|modules\.(alias|dep|load|softdep))$$/d' $(KERNEL_MODULES_PARTITION_FILE_LIST) $(SYSTEM_KERNEL_MODULES_PARTITION_FILE_LIST)
 +	$(call build-image-kernel-modules-lineage,$$(sed 's|^|$(KERNEL_OUT)/|' $(KERNEL_OUT)/system_dlkm.modules),$(SYSTEM_KERNEL_MODULES_OUT),$(SYSTEM_KERNEL_MODULE_MOUNTPOINT)/,$(SYSTEM_KERNEL_DEPMOD_STAGING_DIR),$$(cat $(KERNEL_OUT)/system_dlkm.modules.load),,$(SYSTEM_KERNEL_MODULES_PARTITION_FILE_LIST),)
-+	$(call build-image-kernel-modules-lineage,$$(sed 's|^|$(KERNEL_OUT)/|' $(KERNEL_OUT)/vendor_dlkm.modules),$(KERNEL_MODULES_OUT),$(KERNEL_MODULE_MOUNTPOINT)/,$(KERNEL_DEPMOD_STAGING_DIR),$$(cat $(KERNEL_OUT)/vendor_dlkm.modules.load),,$(KERNEL_MODULES_PARTITION_FILE_LIST),$(SYSTEM_KERNEL_DEPMOD_STAGING_DIR)/lib/modules/0.0/$(SYSTEM_KERNEL_MODULE_MOUNTPOINT))
++	$(call build-image-kernel-modules-lineage,$$(grep -Fxv 'susfs_guard_lkm.ko' $(KERNEL_OUT)/vendor_dlkm.modules | sed 's|^|$(KERNEL_OUT)/|'),$(KERNEL_MODULES_OUT),$(KERNEL_MODULE_MOUNTPOINT)/,$(KERNEL_DEPMOD_STAGING_DIR),$$(cat $(KERNEL_OUT)/vendor_dlkm.modules.load),,$(KERNEL_MODULES_PARTITION_FILE_LIST),$(SYSTEM_KERNEL_DEPMOD_STAGING_DIR)/lib/modules/0.0/$(SYSTEM_KERNEL_MODULE_MOUNTPOINT))
 +	$(call build-image-kernel-modules-lineage,$$(sed 's|^|$(KERNEL_OUT)/|' $(KERNEL_OUT)/vendor_ramdisk.modules),$(KERNEL_VENDOR_RAMDISK_MODULES_OUT),,$(KERNEL_VENDOR_RAMDISK_DEPMOD_STAGING_DIR),$$(cat $(KERNEL_OUT)/vendor_ramdisk.modules.load),,,)
 +	$(call build-image-kernel-modules-lineage,$$(sed 's|^|$(KERNEL_OUT)/|' $(KERNEL_OUT)/vendor_ramdisk.modules),$(KERNEL_RECOVERY_MODULES_OUT),,$(KERNEL_RECOVERY_DEPMOD_STAGING_DIR),$$(cat $(KERNEL_OUT)/vendor_ramdisk.modules.load.recovery),,,)
 +	$(hide) cp $(KERNEL_OUT)/vendor_ramdisk.modules.load.recovery $(KERNEL_VENDOR_RAMDISK_MODULES_OUT)/lib/modules/modules.load.recovery
 +	$(hide) cp $(KERNEL_OUT)/vendor_ramdisk.modules.load.recovery $(KERNEL_RECOVERY_MODULES_OUT)/lib/modules/modules.load.recovery
++# SUSFS resolves private kernel symbols through KernelSU Next's special loader.
++# Ship its verified bytes after ordinary depmod; never put it in modules.load.
++	$(hide) if grep -Fxq 'susfs_guard_lkm.ko' $(KERNEL_OUT)/vendor_dlkm.modules; then \
++		if grep -Eq '^susfs_guard_lkm(\.ko)?$$' $(KERNEL_OUT)/vendor_dlkm.modules.load; then \
++			echo "SUSFS LKM must use the KernelSU Next special loader" >&2; exit 1; \
++		fi; \
++		cp $(KERNEL_OUT)/susfs_guard_lkm.ko $(KERNEL_MODULES_OUT)/lib/modules/susfs_guard_lkm.ko; \
++		printf '%s\n' 'lib/modules/susfs_guard_lkm.ko' >> $(KERNEL_MODULES_PARTITION_FILE_LIST); \
++		sort -u $(KERNEL_MODULES_PARTITION_FILE_LIST) -o $(KERNEL_MODULES_PARTITION_FILE_LIST); \
++	fi
 +else
  	@echo "Building $(BOARD_KERNEL_IMAGE_NAME)"
  	$(hide) rm -rf $(KERNEL_OUT)
  	@mkdir -p $(KERNEL_OUT) $(KERNEL_BAZEL_OUT)
-@@ -788,6 +812,8 @@ $(TARGET_PREBUILT_INT_KERNEL): $(DEPMOD) $(KERNEL_MODULES_PARTITION_FILE_LIST) $
+@@ -788,6 +822,8 @@
  	vendor_modules=$$(comm -23 <(find $(KERNEL_OUT) -maxdepth 1 -type f -name '*.ko' | awk -F'/' '{ print $$NF }' | sort) <(awk -F'/' '{ print $$NF }' $(KERNEL_OUT)/system_dlkm.modules.load | sort) | sed 's|^|$(KERNEL_OUT)/|'); \
  	($(call build-image-kernel-modules-lineage,$$vendor_modules,$(KERNEL_MODULES_OUT),$(KERNEL_MODULE_MOUNTPOINT)/,$(KERNEL_DEPMOD_STAGING_DIR),$(BOARD_VENDOR_KERNEL_MODULES_LOAD),,$(KERNEL_MODULES_PARTITION_FILE_LIST),$(SYSTEM_KERNEL_DEPMOD_STAGING_DIR)/lib/modules/0.0/$(SYSTEM_KERNEL_MODULE_MOUNTPOINT)))
  
