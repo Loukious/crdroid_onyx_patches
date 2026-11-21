@@ -1,6 +1,16 @@
 Evolution X 17.0 — POCO F7 (onyx) — unofficial builds by Loukious
 https://github.com/Loukious/crave_aosp_builder/discussions
 
+2026-11-20 (12.4)
+- Update the kernel to Linux 6.18.63 with KernelSU Next and
+  built-in WildKernels SUSFS; no separate SUSFS module is needed.
+- Fix kernel crashes when restarting audio services.
+- Allow removing the owner screen-lock PIN while Secure Spaces
+  are configured.
+- Remove owner fingerprints when clearing the owner PIN, while
+  preserving fingerprint enrollments in other profiles.
+- Prevent Settings crashes when screen-lock removal is rejected.
+
 2026-11-16 (12.4)
 - Fix Global charging voltage protection stopping charging near 94%.
 - Show a countdown for upcoming At a Glance calendar events, then
